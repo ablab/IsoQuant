@@ -15,10 +15,10 @@ import numpy as np
 def load_counts(inf, tpm_col=2, id_col=1):
     print("Loading TPM values from " + inf)
     tpm_dict = {}
-    for l in open(inf):
-        if l.startswith("#") or l.startswith("__") or l.startswith("feature_id"):
+    for line in open(inf):
+        if line.startswith("#") or line.startswith("__") or line.startswith("feature_id"):
             continue
-        v = l.strip().split()
+        v = line.strip().split()
         tpm_dict[v[id_col-1]] = float(v[tpm_col-1])
     print("TPMs loadede, checksum %.2f" % sum(tpm_dict.values()))
     return tpm_dict
@@ -29,10 +29,10 @@ def load_ref_ids_from_gtf(gtf, ref_keyword="reference_transcript_id"):
     total_transcripts = 0
     known_transcripts = 0
     id_dict = {}
-    for l in open(gtf):
-        if l.startswith("#"):
+    for line in open(gtf):
+        if line.startswith("#"):
             continue
-        v = l.strip().split()
+        v = line.strip().split()
         if v[2] != "transcript":
             continue
         total_transcripts += 1
@@ -54,10 +54,10 @@ def load_ref_ids_from_gtf(gtf, ref_keyword="reference_transcript_id"):
 def load_counts_from_gtf(gtf):
     print("Loading counts from " + gtf)
     tpm_dict = {}
-    for l in open(gtf):
-        if l.startswith("#"):
+    for line in open(gtf):
+        if line.startswith("#"):
             continue
-        v = l.strip().split()
+        v = line.strip().split()
         if v[2] != "transcript":
             continue
         tid_index = v.index("transcript_id", 7)
@@ -71,8 +71,8 @@ def load_tracking(inf):
     id_dict = {}
     total_transcripts = 0
     novel_transcripts = 0
-    for l in open(inf):
-        v = l.strip().split()
+    for line in open(inf):
+        v = line.strip().split()
         tid = v[4].split('|')[1]
         total_transcripts += 1
         if v[3] == '=':

@@ -275,7 +275,7 @@ class TestGrouped:
         with open(c.output_counts_file_name) as f:
             lines = f.read().strip().split("\n")
         assert lines[0] == "region_gene_candidate\tn_full\tn_left\tn_right\tgroup_id"
-        rows = {(r[0], r[4]): r for r in (l.split("\t") for l in lines[1:])}
+        rows = {(r[0], r[4]): r for r in (line.split("\t") for line in lines[1:])}
         feat = "chr1_100_200_+__gene1__chr1_100_200_+"
         assert rows[(feat, "cell1")][1] == "2"
         assert rows[(feat, "cell2")][1] == "1"
@@ -293,7 +293,7 @@ class TestOutput:
         with open(c.output_counts_file_name) as f:
             lines = f.read().strip().split("\n")
         assert lines[0] == "region_gene_candidate\tn_full\tn_left\tn_right\tgroup_id"
-        rows = {l.split("\t")[0]: l.split("\t") for l in lines[1:]}
+        rows = {line.split("\t")[0]: line.split("\t") for line in lines[1:]}
         inc = rows["chr1_100_200_+__gene1__chr1_100_200_+"]
         assert inc[1:5] == ["1", "0", "0", "NA"]
         exc = rows["chr1_100_200_+__gene1__exclusion"]
@@ -349,7 +349,7 @@ class TestConversionScript:
             lines = f.read().strip().split("\n")
         assert lines[0] == ("region_gene_candidate\tn_full\tn_left\tn_right"
                             "\tgroups_full\tgroups_left\tgroups_right")
-        rows = {l.split("\t")[0]: l.split("\t") for l in lines[1:]}
+        rows = {line.split("\t")[0]: line.split("\t") for line in lines[1:]}
         inc = rows["F__inc"]
         assert inc[1:4] == ["3", "0", "0"]
         assert inc[4] == "cell1;cell1;cell2"

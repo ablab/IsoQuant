@@ -452,8 +452,8 @@ def _process_single_file_in_parallel(input_file, output_tsv, out_fasta, args, ba
             shutil.copyfileobj(open(tmp_file, "r"), final_output_tsv)
             if tmp_fasta and final_output_fasta:
                 shutil.copyfileobj(open(tmp_fasta, "r"), final_output_fasta)
-            for l in open(stats_file_name(tmp_file), "r"):
-                v = l.strip().split("\t")
+            for line in open(stats_file_name(tmp_file), "r"):
+                v = line.strip().split("\t")
                 if len(v) != 2:
                     continue
                 stat_dict[v[0]] += int(v[1])

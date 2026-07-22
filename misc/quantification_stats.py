@@ -14,10 +14,10 @@ import numpy as np
 def load_counts(inf, tpm_col=2, id_col=1, novel=True):
     print("Loading TPM values from " + inf)
     tpm_dict = {}
-    for l in open(inf):
-        if l.startswith("#") or l.startswith("__") or l.startswith("feature_id"):
+    for line in open(inf):
+        if line.startswith("#") or line.startswith("__") or line.startswith("feature_id"):
             continue
-        v = l.strip().split()
+        v = line.strip().split()
         t_id = v[id_col-1]
         if not novel and t_id.find("nic") != -1:
             continue
@@ -31,8 +31,8 @@ def load_tracking(inf):
     id_dict = {}
     total_transcripts = 0
     novel_transcripts = 0
-    for l in open(inf):
-        v = l.strip().split()
+    for line in open(inf):
+        v = line.strip().split()
         tid = v[4].split('|')[1]
         total_transcripts += 1
         if v[3] == '=':

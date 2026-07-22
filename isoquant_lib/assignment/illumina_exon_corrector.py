@@ -130,8 +130,8 @@ class IlluminaExonCorrector:
                 right = IlluminaExonCorrector.ABSENT_INTRON
                 for k in range(0, len(overlapping) -1):
                     x = overlapping[k]
-                    for l in range(k, len(overlapping)):
-                        y = overlapping[l]
+                    for j in range(k, len(overlapping)):
+                        y = overlapping[j]
                         # it is important that the exons are in the right order
                         # so there is two cases that might be a skipped exon
                         # It can only be a skipped exon if the gap between the introns has the right length

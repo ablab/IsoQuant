@@ -67,8 +67,8 @@ def merge_counts(counter, label, chr_ids, unaligned_reads=0):
     if counter.output_stats_file_name and counter.ignore_read_groups:
         stats_file_names = merge_file_list(counter.output_stats_file_name, label, chr_ids)
         for file_name in stats_file_names:
-            for l in open(file_name):
-                v = l.strip().split()
+            for line in open(file_name):
+                v = line.strip().split()
                 stat_dict[v[0]] += int(v[1])
             os.remove(file_name)
 

@@ -66,11 +66,11 @@ def load_tsv_config(config_file):
         log.error("Config file %s was not found" % config_file)
         return {}
     config_dict = {}
-    for l in open(config_file):
-        if l.startswith("#"):
+    for line in open(config_file):
+        if line.startswith("#"):
             continue
 
-        tokens = l.strip().split('\t')
+        tokens = line.strip().split('\t')
         if len(tokens) < 2:
             continue
 
@@ -249,9 +249,9 @@ def find_bam(output_folder, label):
     if bam:
         return bam[0]
 
-    for l in open(os.path.join(output_folder, "isoquant.log")):
-        if l.find("BAM file: ") != -1:
-            return l.strip().split()[-1]
+    for line in open(os.path.join(output_folder, "isoquant.log")):
+        if line.find("BAM file: ") != -1:
+            return line.strip().split()[-1]
 
     return None
 
@@ -406,10 +406,10 @@ def run_tss_prediction(args, config_dict, baselines=None):
 
 
 def parse_gffcomapre(stats_file):
-    for l in open(stats_file):
-        if l.find("Transcript level") == -1:
+    for line in open(stats_file):
+        if line.find("Transcript level") == -1:
             continue
-        v = l.split()
+        v = line.split()
         assert len(v) > 4
         return float(v[2]), float(v[4])
     return -1, -1

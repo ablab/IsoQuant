@@ -182,7 +182,7 @@ class TestJointExonCounter:
         # header + at least 3 data rows: exon 10 inclusion, overlap exclusion, exon 13 inclusion
         assert lines[0] == ("chr\tregion_start\tregion_end\tstrand\texon_start\texon_end"
                             "\tgene_id\tfeature_kind\tgroup_id\tcount")
-        data = [l.split("\t") for l in lines[1:]]
+        data = [line.split("\t") for line in lines[1:]]
         kinds = {(row[0], int(row[1]), int(row[2]), row[7]) for row in data}
         assert ("chr1", 100, 350, "inclusion") in kinds
         assert ("chr1", 100, 350, "exclusion") in kinds

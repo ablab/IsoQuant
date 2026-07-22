@@ -103,9 +103,9 @@ def list_to_str(element_list, element_delim=','):
     return element_delim.join(list(map(str, element_list)))
 
 
-def rindex(l, el):
-    for i in range(len(l) - 1, -1, -1):
-        if l[i] == el:
+def rindex(lst, el):
+    for i in range(len(lst) - 1, -1, -1):
+        if lst[i] == el:
             return i
     raise ValueError(str(el) + " is not in list")
 
@@ -167,14 +167,14 @@ def genes_contain(gene_db1, gene_db2):
     return contains((gene_db1.start, gene_db1.end), (gene_db2.start, gene_db2.end))
 
 
-def argmin(l):
-    if len(l) == 0:
+def argmin(lst):
+    if len(lst) == 0:
         return -1
-    min_v = l[0]
+    min_v = lst[0]
     min_i = 0
-    for i in range(len(l)):
-        if l[i] < min_v:
-            min_v = l[i]
+    for i in range(len(lst)):
+        if lst[i] < min_v:
+            min_v = lst[i]
             min_i = i
     return min_i
 

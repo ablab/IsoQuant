@@ -24,10 +24,10 @@ class IsoQuantSeparator:
     def __init__(self, _):
         pass
 
-    def separate(self, l):
-        if l.find(".nic") != -1 or l.find(".nnic") != -1:
+    def separate(self, line):
+        if line.find(".nic") != -1 or line.find(".nnic") != -1:
             return TranscriptType.novel
-        elif l.find('transcript_id "SIRV') != -1 or l.find('transcript_id "ENS') != -1:
+        elif line.find('transcript_id "SIRV') != -1 or line.find('transcript_id "ENS') != -1:
             return TranscriptType.known
         return TranscriptType.undefined
 
@@ -36,10 +36,10 @@ class IsaToolsSeparator:
     def __init__(self, _):
         pass
 
-    def separate(self, l):
-        if l.find("_Gene") != -1 or l.find("_Tr") != -1:
+    def separate(self, line):
+        if line.find("_Gene") != -1 or line.find("_Tr") != -1:
             return TranscriptType.novel
-        elif l.find('transcript_id "SIRV') != -1 or l.find('transcript_id "ENS') != -1:
+        elif line.find('transcript_id "SIRV') != -1 or line.find('transcript_id "ENS') != -1:
             return TranscriptType.known
         return TranscriptType.undefine
 
@@ -48,8 +48,8 @@ class StringTieSeparator:
     def __init__(self, _):
         pass
 
-    def separate(self, l):
-        if l.find("reference_id") != -1:
+    def separate(self, line):
+        if line.find("reference_id") != -1:
             return TranscriptType.known
         else:
             return TranscriptType.novel
@@ -59,10 +59,10 @@ class TranscriptIdSeparator:
     def __init__(self, _):
         pass
 
-    def separate(self, l):
-        if l.find('transcript_id "SIRV') != -1: # for SIRVs
+    def separate(self, line):
+        if line.find('transcript_id "SIRV') != -1: # for SIRVs
             return TranscriptType.known
-        elif l.find('transcript_id "ENS') != -1 and l.find("aligned_") == -1 and l.find("PB.") == -1: # for simulated data
+        elif line.find('transcript_id "ENS') != -1 and line.find("aligned_") == -1 and line.find("PB.") == -1: # for simulated data
             return TranscriptType.known
         else:
             return TranscriptType.novel
@@ -72,8 +72,8 @@ class FlamesSeparator:
     def __init__(self, _):
         pass
 
-    def separate(self, l):
-        if l.split('\t')[1] == "known":
+    def separate(self, line):
+        if line.split('\t')[1] == "known":
             return TranscriptType.known
         else:
             return TranscriptType.novel
@@ -83,23 +83,23 @@ class CountTranscriptIdSeparator:
     def __init__(self, gtf_path):
         print("Reading counts")
         self.count_dict = defaultdict(float)
-        for l in open(gtf_path + ".counts"):
-            if l.startswith("#") or l.startswith("TXNAME") or l.startswith("feature_id\t"):
+        for line in open(gtf_path + ".counts"):
+            if line.startswith("#") or line.startswith("TXNAME") or line.startswith("feature_id\t"):
                 continue
-            t = l.strip().split()
+            t = line.strip().split()
             tid = t[0]
             self.count_dict[tid] = max(self.count_dict[tid], float(t[2]))
 
-    def separate(self, l):
-        tpos = l.find('transcript_id')
+    def separate(self, line):
+        tpos = line.find('transcript_id')
         if tpos == -1:
             return TranscriptType.undefined
         idpos = tpos + len('transcript_id') + 2
-        endpos = l.find(";", idpos)
+        endpos = line.find(";", idpos)
         if endpos == -1:
             print("Warning, unable to find ;")
             return TranscriptType.undefined
-        tid = l[idpos:endpos-1]
+        tid = line[idpos:endpos-1]
 
         if tid not in self.count_dict or self.count_dict[tid] == 0:
             return TranscriptType.undefined
@@ -122,17 +122,17 @@ def split_gtf(ingtf_path, seaprator, out_full_path, out_known_path, out_novel_pa
     out_full = open(out_full_path, "w")
     out_known = open(out_known_path, "w")
     out_novel = open(out_novel_path, "w")
-    for l in open(ingtf_path):
-        if l.startswith("#"):
+    for line in open(ingtf_path):
+        if line.startswith("#"):
             continue
-        ttype = seaprator.separate(l)
+        ttype = seaprator.separate(line)
         if ttype == TranscriptType.undefined:
             continue
-        out_full.write(l)
+        out_full.write(line)
         if ttype == TranscriptType.novel:
-            out_novel.write(l)
+            out_novel.write(line)
         elif ttype == TranscriptType.known:
-            out_known.write(l)
+            out_known.write(line)
     out_full.close()
     out_novel.close()
     out_known.close()

@@ -642,8 +642,8 @@ class SqantiTSVPrinter(TextFileAssignmentPrinter):
                       ref_cds_start, ref_cds_end, predicted_NMD, perc_A_downstreamTTS, seq_A_downstream_TTS,
                       dist_to_cage_peak, within_cage_peak, dist_to_polya_site,
                       within_polya_site, polyA_motif, polyA_dist, polyA_motif_found, ORF_seq, ratio_TSS]
-        l = "\t".join([str(x) for x in value_list])
-        self.output_file.write(l + "\n")
+        line = "\t".join([str(x) for x in value_list])
+        self.output_file.write(line + "\n")
 
     def __del__(self):
         self.output_file.close()

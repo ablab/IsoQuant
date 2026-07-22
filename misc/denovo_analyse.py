@@ -27,23 +27,23 @@ def filter_gtf(ingtf_path, isoform_ids, out_full_path):
     #print(list(isoform_ids)[:10])
     out_full = open(out_full_path, "w")
     count = 0
-    for l in open(ingtf_path):
-        if l.startswith("#"):
+    for line in open(ingtf_path):
+        if line.startswith("#"):
             continue
 
-        tpos = l.find(' transcript_id')
+        tpos = line.find(' transcript_id')
         if tpos == -1:
             continue
         idpos = tpos + len(' transcript_id') + 2
-        endpos = l.find(";", idpos)
+        endpos = line.find(";", idpos)
 
         if endpos == -1:
             print("Warning, unable to find ;")
-        tid = l[idpos:endpos-1]
+        tid = line[idpos:endpos-1]
         count += 1
         if tid not in isoform_ids:
             continue
-        out_full.write(l)
+        out_full.write(line)
     out_full.close()
 
 
@@ -52,8 +52,8 @@ def process_tracking(gtfs, tracking, outdir):
     unique_transcripts = [set() for i in range(gtf_num)]
     missed_transcripts = [set() for i in range(gtf_num)]
 
-    for l in open(tracking, "r"):
-        vals = l.strip().split()[4:]
+    for line in open(tracking, "r"):
+        vals = line.strip().split()[4:]
         assert len(vals) == gtf_num
         equality_vector = [0 if vals[i] == '-' else 1 for i in range(gtf_num)]
         matches_transcripts = equality_vector.count(1)
@@ -95,8 +95,8 @@ def main():
         os.makedirs(args.output)
 
     gtfs = []
-    for l in open(args.gtf_list):
-        v = l.strip().split()
+    for line in open(args.gtf_list):
+        v = line.strip().split()
 
         if len(v) < 2:
             continue

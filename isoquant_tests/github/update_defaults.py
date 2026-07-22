@@ -21,11 +21,11 @@ from error_codes import IsoQuantExitCode
 
 def load_tsv_config(config_file):
     config_dict = {}
-    for l in open(config_file):
-        if l.startswith("#"):
+    for line in open(config_file):
+        if line.startswith("#"):
             continue
 
-        tokens = l.strip().split('\t')
+        tokens = line.strip().split('\t')
         if len(tokens) < 2:
             continue
 
