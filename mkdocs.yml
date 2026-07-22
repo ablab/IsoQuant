@@ -6,7 +6,7 @@ nav:
   - Installation: installation.md
   - Supported data: data.md
   - Running IsoQuant:
-    - Ways of providing input data: input.md
+    - Providing input data: input.md
     - Command line options: cmd.md
     - Examples: examples.md
     - Single-cell analysis: single_cell.md

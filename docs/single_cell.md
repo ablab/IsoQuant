@@ -1,6 +1,6 @@
 # Single-cell and spatial transcriptomics
 
-IsoQuant supports single-cell and spatial transcriptomics data from multiple platforms.
+IsoQuant supports single-cell and spatial long-read data obtained using various protocols.
 When a single-cell or spatial mode is selected, IsoQuant automatically performs
 barcode calling and UMI-based PCR deduplication as part of the pipeline.
 
@@ -8,10 +8,10 @@ barcode calling and UMI-based PCR deduplication as part of the pipeline.
 
 The single-cell/spatial pipeline extends the standard bulk pipeline with these additional steps:
 
-1. **Barcode calling** -- extract cell/spot barcodes and UMIs from raw reads
-2. **Standard IsoQuant processing** -- alignment, read-to-isoform assignment
-3. **UMI deduplication** -- remove PCR/RT duplicates within each barcode group
-4. **Grouped quantification** -- produce per-cell/per-spot count matrices
+1. **Barcode calling** -- extract cell/spot barcodes and UMIs from raw reads;
+2. **Standard IsoQuant processing** -- alignment, read-to-isoform assignment;
+3. **UMI deduplication** -- remove PCR/RT duplicates;
+4. **Grouped quantification** -- produce per-cell/per-spot gene and transcript counts.
 
 Note: UMI deduplication relies on read-to-gene assignment. Reads that are not assigned to any gene are discarded.
 Hence, novel gene discovery will not be performed in single-cell/spatial mode. 
@@ -20,7 +20,7 @@ We recommend using `bulk` mode for novel gene and transcript discovery.
 Barcode calling is handled by the built-in [barcode calling module](barcode_calling.md),
 which can also be used as a standalone tool.
 
-## Supported platforms
+## Supported protocols
 
 | Mode                | Platform               | Barcode whitelist files | UMI length | Notes                                                                     |
 |---------------------|------------------------|-------------------------|------------|---------------------------------------------------------------------------|
@@ -33,7 +33,7 @@ which can also be used as a standalone tool.
 | `curio`             | Curio Bioscience       | 1                       | 9          | Double barcode (8bp + 6bp) with linker                                    |
 | `stereoseq`         | Stereo-seq             | 1                       | 10         | 25bp barcode, read splitting mode                                         |
 | `stereoseq_nosplit` | Stereo-seq             | 1                       | 10         | 25bp barcode, no read splitting                                           |
-| `custom_sc`         | Any platform           | 0 (uses MDF)            | varies     | User-defined molecule structure via [MDF file](#molecule-definition-file-mdf-format)                       |
+| `custom_sc`         | Any protocol           | 0 (uses MDF)            | varies     | User-defined molecule structure via [MDF file](#molecule-definition-file-mdf-format)                       |
 
 ## Quick start examples
 
@@ -41,7 +41,7 @@ which can also be used as a standalone tool.
 ```bash
 isoquant.py --reference genome.fa --genedb genes.gtf --complete_genedb \
   --fastq reads.fastq.gz --data_type nanopore \
-  --mode tenX_v3 --barcode_whitelist 3M-february-2018.txt.gz \
+  --mode tenX_v3 --barcode_whitelist barcodes.txt.gz \
   -o sc_output
 ```
 
@@ -53,7 +53,7 @@ isoquant.py --reference genome.fa --genedb genes.gtf --complete_genedb \
   -o stereo_output
 ```
 
-Custom platform with molecule definition file:
+Custom protocol with molecule definition file:
 ```bash
 isoquant.py --reference genome.fa --genedb genes.gtf --complete_genedb \
   --fastq reads.fastq.gz --data_type nanopore \
@@ -83,7 +83,7 @@ IsoQuant processing mode. Available modes:
 * `curio` -- Curio Bioscience single-cell
 * `visium_hd` -- 10x Genomics Visium HD spatial transcriptomics
 * `visium_5prime` -- 10x Genomics Visium 5' spatial transcriptomics
-* `stereoseq` -- Stereo-seq spatial transcriptomics (BGI), with read splitting
+* `stereoseq` -- Stereo-seq spatial transcriptomics, with read splitting
 * `stereoseq_nosplit` -- Stereo-seq without read splitting
 * `custom_sc` -- custom single-cell/spatial mode using a molecule definition file (MDF)
 
@@ -91,6 +91,7 @@ All modes except `bulk` enable automatic barcode calling and UMI-based deduplica
 
 
 `--barcode_whitelist`
+
 Path to file(s) with barcode whitelist(s) for barcode calling.
 Required for single-cell/spatial modes unless `--barcoded_reads` or `--barcoded_bam` is provided.
 
@@ -101,8 +102,7 @@ Supports plain text and gzipped files.
 _Notes:_
 - Barcode calling is performed much better if the whitelist contains a small number of barcodes. 
 If you have a subset of barcodes from short-read data, provide them instead of the full whitelist;
-- IsoQuant will perform per-barcode quantification automatically **only** if no barcode-related
-grouping (`barcode`, `barcode_spot`, or `barcode_barcode`) is specified. 
+- IsoQuant will perform per-barcode quantification automatically unless `--barcoded_reads` or  `--barcode2spot` are set.
 Use `--read_group barcode` to group reads by barcode explicitly. In case of a large number of barcodes, it may take a lot of time. 
 
 The number of whitelist files depends on the mode:
@@ -112,25 +112,26 @@ The number of whitelist files depends on the mode:
 * Not needed: `custom_sc` (barcode lists are specified inside the MDF file)
 
 `--barcoded_reads`
+
 Path to TSV file(s) with pre-called barcoded reads.
 Format: `read_id<TAB>barcode<TAB>umi` (one read per line).
 If provided, IsoQuant skips barcode calling and uses these assignments directly.
 More than 3 columns are allowed, but only the first 3 will be used.
+Mutually exclusive with `--barcode_whitelist` and `--barcoded_bam`.
 
-_Notes:_
-- IsoQuant does not read barcodes or UMIs from BAM file tags;
-- IsoQuant will perform per-barcode quantification automatically **only** if no barcode-related
-grouping (`barcode`, `barcode_spot`, or `barcode_barcode`) is specified. 
+Note that IsoQuant will perform per-barcode quantification automatically unless `--barcoded_reads` or  `--barcode2spot` are set.
 Use `--read_group barcode` to group reads by barcode explicitly. In case of a large number of barcodes, it may take a lot of time. 
 
 
 `--barcoded_bam`
-Extract barcodes and UMIs from BAM tags instead of calling barcodes.
-Uses `CB` (cell barcode) and `UB` (UMI) tags by default (standard 10x Genomics / cellranger tags).
+
+Extract barcodes and UMIs from BAM tags.
+Uses `CB` (cell barcode) and `UB` (UMI) tags by default.
 Mutually exclusive with `--barcode_whitelist` and `--barcoded_reads`.
 This option is a flag, not a way to provide the file (use `--bam` to set the input BAM).
 
-Note: IsoQuant will perform per-barcode quantification automatically.
+Note that IsoQuant will perform per-barcode quantification automatically unless `--barcoded_reads` or  `--barcode2spot` are set.
+Use `--read_group barcode` to group reads by barcode explicitly. In case of a large number of barcodes, it may take a lot of time. 
 
 `--barcode_tag`
 BAM tag for cell barcode (default: CB), requires `--barcoded_bam` flag.
@@ -142,6 +143,7 @@ BAM tag for UMI (default: UB), requires `--barcoded_bam` flag.
 Remove suffix after dash from barcodes extracted from BAM tag (e.g. ACGT-1 -> ACGT), requires `--barcoded_bam` flag.
 
 `--barcode2spot`
+
 Path to a TSV file mapping barcodes to cell types, spatial spots, or other barcode properties.
 By default, barcode is in the first column, cell type in the second.
 However, you can specify one or more columns via colon symbol (similar to `--read_group`): 
@@ -149,8 +151,10 @@ However, you can specify one or more columns via colon symbol (similar to `--rea
 
 When `--barcode2spot` is set, `--read_group barcode_spot` will be set automatically
 to group counts by cell type, spatial regions, or other provided properties.
+This will also turn off automatic per-barcode grouping (set `--read_group barcode` to enable).
 
 `--barcode2barcode`
+
 Path to TSV file mapping barcodes to spot IDs for spot-level UMI deduplication.
 When multiple barcodes map to the same physical spot (e.g. at lower spatial resolution),
 this option groups them together during UMI deduplication, collapsing duplicates across the entire spot.
@@ -160,19 +164,21 @@ When multiple spot columns are provided, a separate UMI deduplication round is p
 However, only the main (sequence-based) UMI-deduplicated reads will be used for quantification.
 
 When `--barcode2barcode` is set, `--read_group barcode_barcode` will be set automatically.
+This will also turn off automatic per-barcode grouping (set `--read_group barcode` to enable).
 
 For Visium HD composite barcodes, use `isoquant_lib/scripts/prepare_visium_spot_ids.py` to generate the mapping file.
 
 `--molecule`
+
 Path to a molecule description format (MDF) file for `custom_sc` mode.
 This file defines the structure of the sequencing molecule (barcodes, UMIs, linkers, polyT, cDNA)
-and allows IsoQuant to process reads from any single-cell or spatial platform.
+and allows IsoQuant to process reads from any single-cell or spatial protocol.
 See the [MDF format](#molecule-definition-file-mdf-format) section below for details.
 
 ## Molecule description format (MDF)
 
 The MDF format allows users to describe the structure of their sequencing molecule
-so that IsoQuant can extract barcodes and UMIs from any platform.
+so that IsoQuant can extract barcodes and UMIs from arbitrary protocol.
 The molecule is described in the 3' to 5' direction (primer end first, cDNA last).
 
 An MDF file has two parts:
@@ -193,7 +199,8 @@ An MDF file has two parts:
 | `PolyT`                   | PolyT tail                                                                    | (none)                   |
 | `cDNA`                    | cDNA region                                                                   | (none)                   |
 
-At the moment, only a single `cDNA` and a single `PolyT` are supported. 
+Currently, only a single `cDNA` and a single `PolyT` are supported. 
+Protocols that concatenate multiple cDNAs (like Kinnex) will be supported in one of the next releases.
 
 Variable elements are expected to have a fixed length (`VAR_FILE` and `VAR_LIST`).
 Using variable-length barcodes may result in suboptimal performance.
@@ -261,43 +268,18 @@ TSO       CONST      CCCATGTACTCTGCGTTGATACCACTGCTT
 
 ## Read splitting modes
 
-### 10x split modes (`tenX_v3_split`, `tenX_v2_split`)
-
-Oxford Nanopore long reads from 10x single-cell libraries often contain multiple cDNA molecules
-ligated end-to-end during library preparation. In a standard `tenX_v3` run, only the first
-barcode is detected and the rest of the read is treated as a single cDNA.
+Oxford Nanopore long reads often contain 2 or more cDNA molecules.
+Usual non-split modes (`tenX_v3`, `tenX_v2`, `stereoseq_nosplit`) detect only the first
+barcode and the rest of the read is treated as a single cDNA.
 The split modes detect multiple barcode/UMI patterns within each read,
 split the read at molecule boundaries, and produce a new FASTA file
 with one record per cDNA molecule.
 
-**When to use**: when your ONT reads contain concatenated 10x molecules
-(e.g. R2C2-style or natural ligation artifacts). If your reads contain
-a single cDNA molecule each, use `tenX_v3` instead.
-
-The expected molecule structure for a single molecule on the + strand is:
-```
-[R1 primer] [Barcode (16bp)] [UMI (12bp)] [PolyT] [cDNA] [TSO]
-```
-
-In concatenated reads, the TSO of one molecule is followed by the R1 of the next.
-Molecules can alternate orientation within a single read.
-
-**Example**:
-```bash
-isoquant.py --reference genome.fa --genedb genes.gtf --complete_genedb \
-  --fastq reads.fastq.gz --data_type nanopore \
-  --mode tenX_v3_split --barcode_whitelist barcodes.txt \
-  -o split_output
-```
-
-The split modes produce an additional output file (`*.split_reads`)
+The split modes produce an additional output file (`*.split_reads.fa`)
 containing the extracted cDNA segments. Each segment is named with
 the original read ID plus coordinates and strand: `{read_id}_{start}_{end}_{strand}`.
 
-### Stereo-seq split mode
-
-See the `stereoseq` mode above — it also splits concatenated reads at TSO boundaries,
-similar to the 10x split modes.
+These modes are recommended to use with ONT reads.
 
 ## UMI deduplication
 
@@ -311,13 +293,13 @@ The representative read is selected based on:
 3. Longer transcript alignment
 
 The resulting reads after UMI-deduplication are used for the subsequent analysis such as quantification and
-are stored in an [`.allinfo` file](formats.md#umi-filtering-allinfo-format).
+are stored in an [`read_info.tsv` file](formats.md#read-info-default-output).
 
 ### Spot-level UMI deduplication
 
-For spatial transcriptomics at higher resolution than the capture spots
-(e.g. Visium HD 2um barcodes mapping to 8um or 16um spots), use
-`--barcode2barcode` to deduplicate UMIs at the spot level:
+When multiple barcodes correspond to the same spatial spot, UMI deduplication can be performed using 
+these spots instead of individual barcodes. 
+In this case, use `--barcode2barcode` option to provide barcode to spot mapping (see details above).
 
 ```bash
 isoquant.py --reference genome.fa --genedb genes.gtf --complete_genedb \
@@ -333,8 +315,6 @@ For Visium HD, generate the mapping file from per-part coordinate files:
 python isoquant_lib/scripts/prepare_visium_spot_ids.py part1_to_y.tsv part2_to_x.tsv -o barcode2spot.tsv
 ```
 
-See `python isoquant_lib/scripts/prepare_visium_spot_ids.py --help` for custom prefix/delimiter options.
-
 ## Output
 
 ### Count matrices
@@ -342,10 +322,10 @@ See `python isoquant_lib/scripts/prepare_visium_spot_ids.py --help` for custom p
 Single-cell/spatial modes produce grouped count matrices in addition to the standard IsoQuant output.
 Use `--counts_format` to control the output format:
 
-* `default` -- automatic selection: matrix format for small numbers of groups (<=100), MTX for larger datasets
-* `matrix` -- standard matrix format with genes/transcripts as rows and barcodes as columns
-* `mtx` -- Matrix Market (MTX) format compatible with Seurat and Scanpy
-* `none` -- no conversion (only internal linear format is produced)
+* `default` - automatic selection: matrix format for small numbers of groups (<=100), MTX for larger datasets;
+* `matrix` - standard matrix format with genes/transcripts as rows and barcodes as columns (may take a lot of space for large group numbers);
+* `mtx` - Matrix Market (MTX) format compatible with Seurat and Scanpy;
+* `none` - no conversion (only internal linear format is produced);
 
 Grouped counts can also be converted after the run using `isoquant_lib/quantification/convert_grouped_counts.py`.
 
@@ -355,8 +335,9 @@ Use `--read_group` to control how reads are grouped for quantification.
 Multiple grouping strategies can be combined (space-separated), producing separate count tables for each.
 
 In single-cell/spatial modes, IsoQuant automatically adds `--read_group barcode`
-**only** if no barcode-related grouping (`barcode`, `barcode_spot`, or `barcode_barcode`) is specified.
-Use `--read_group none` to disable automatic grouping.
+**only** `--barcoded_reads` or `--barcode2spot` are not set.
+Use `--read_group barcode` to group reads by barcode explicitly. In case of a large number of barcodes, it may take a lot of time. 
+Use `--read_group no_auto` to disable automatic grouping.
 
 The most common use-cases for single-cell/spatial data are grouping by barcode property (cell type, spot):
 
@@ -366,7 +347,6 @@ The most common use-cases for single-cell/spatial data are grouping by barcode p
 
 or grouping by individual barcode (not recommended for datasets with many barcodes):
 
-`--read_group barcode file_name`
-
+`--read_group barcode`
 
 See the [read grouping options](cmd.md#other-input-options) for the full list of grouping strategies.

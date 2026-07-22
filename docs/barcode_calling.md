@@ -1,8 +1,8 @@
 # Barcode calling
 
-IsoQuant includes a built-in barcode calling module (`isoquant_detect_barcodes.py`) that extracts
- barcodes and UMIs from raw long reads. This module supports multiple single-cell and
-spatial transcriptomics platforms and can also be used as a standalone tool.
+IsoQuant includes a built-in barcode calling module (`isoquant_detect_barcodes.py`) that can be used as
+a standalone tool. It extracts barcodes and UMIs from raw long reads and supports multiple single-cell and
+spatial protocols.
 
 See [single-cell and spatial transcriptomics](single_cell.md) for supported platforms,
 pipeline integration, MDF format, and UMI deduplication.
@@ -11,27 +11,27 @@ pipeline integration, MDF format, and UMI deduplication.
 
 The barcode calling module processes each read by:
 
-1. Searching for known constant sequences (linkers, primers, TSO) on the read
-2. Locating the polyT tail to determine read orientation
-3. Extracting the barcode region based on its expected position relative to the anchoring constant sequences
-4. Matching the extracted barcode against a whitelist
-5. Extracting the UMI sequence from its expected position
+1. Searching for known anchoring constant sequences (linkers, primers, TSO) in the read;
+2. Locating the polyT stretch to determine read orientation;
+3. Extracting the barcode region based on its expected position relative to the anchoring sequences;
+4. Matching the extracted barcode against a whitelist;
+5. Extracting the UMI sequence from its expected position.
 
 Each read is assigned:
 - A **barcode** (cell/spot identity) corrected against the whitelist, or `*` if no match is found
 - A **UMI** (unique molecular identifier), or `*` if not detected
 - A **strand** orientation (`+`, `-`, or `.` if unknown)
-- Platform-specific features (polyT position, linker positions, etc.)
+- Protocol-specific features (polyT position, linker positions, etc.)
 
 ## Integration with IsoQuant
 
-When running IsoQuant with any single-cell or spatial mode, 
+When running IsoQuant in any single-cell or spatial mode (see [`--mode` option](cmd.md#single-cell-and-spatial-transcriptomics-options)), 
 barcode calling is performed automatically as the first pipeline step.
 The barcode detection output is a TSV file with one line per read, which is then used
 throughout the rest of the pipeline for grouping and UMI deduplication.
 
-If barcodes have already been called externally (e.g., by Cell Ranger),
-use `--barcoded_reads` to skip the barcode calling step.
+If barcodes have already been called by another software,
+use `--barcoded_reads` or `--barcoded_bam` flag to skip the barcode calling step.
 
 ## Standalone usage
 
@@ -41,7 +41,7 @@ use `--barcoded_reads` to skip the barcode calling step.
 python isoquant_detect_barcodes.py \
   --input reads.fastq.gz \
   --barcodes barcode_whitelist.txt \
-  --mode tenX_v3 \
+  --mode <mode> \
   --output output_prefix \
   --threads 16
 ```
@@ -138,7 +138,7 @@ The columns depend on the platform mode.
 
 ### Additional columns by mode
 
-**10x Genomics** (`tenX_v3`, `visium_5prime`, `visium_hd`):
+**10x Genomics** (`tenX_v3`, `visium_5prime`):
 
 | Column | Description |
 |--------|-------------|
@@ -184,11 +184,11 @@ Each variable element produces a column with its detected sequence and score.
 A statistics file (`*.barcoded_reads.tsv.stats`) is generated alongside the TSV output,
 reporting the total number of reads processed, barcodes detected, and UMIs found.
 
-## Supported platforms
+## Supported protocols
 
 ### 10x Genomics (`tenX_v3`, `visium_5prime`)
 
-Molecule structure (3' to 5'):
+Molecule structure:
 ```
 [R1 primer] [Barcode (16bp)] [UMI (12bp)] [PolyT] [cDNA] [TSO]
 ```
@@ -197,7 +197,7 @@ Requires 1 barcode whitelist file (e.g., the 10x `3M-february-2018.txt.gz`).
 
 ### 10x Genomics split modes (`tenX_v3_split`, `tenX_v2_split`)
 
-For concatenated ONT reads containing multiple 10x cDNA molecules ligated end-to-end.
+For concatenated ONT reads containing multiple 10x cDNA moleculesd.
 Uses the same molecule structure as `tenX_v3` but scans the entire read for multiple
 barcode/UMI/TSO patterns on both strands.
 
@@ -205,11 +205,11 @@ The output includes one line per detected molecule (not per read), plus a split 
 file with extracted cDNA segments. See [read splitting modes](single_cell.md#read-splitting-modes)
 for details.
 
-Requires 1 barcode whitelist file. Use `tenX_v2_split` for v2 chemistry (10bp UMI, different TSO sequence).
+Requires 1 barcode whitelist file. Use `tenX_v2_split` for v2 chemistry (10bp UMI).
 
 ### Visium HD (`visium_hd`)
 
-Molecule structure (3' to 5'):
+Molecule structure:
 ```
 [R1 primer] [UMI (9bp)] [BC_part1 (15-16bp)] [BC_part2 (14-15bp)] VV [PolyT] [cDNA] [TSO]
 ```
@@ -219,7 +219,7 @@ The final barcode is the concatenation of both parts.
 
 ### Curio Bioscience (`curio`)
 
-Molecule structure (3' to 5'):
+Molecule structure:
 ```
 [PCR primer] [Left BC (8bp)] [Linker] [Right BC (6bp)] [UMI (9bp)] [PolyT] [cDNA]
 ```
@@ -229,7 +229,7 @@ Accepts 1 combined whitelist file (14bp barcodes).
 
 ### Stereo-seq (`stereoseq`, `stereoseq_nosplit`)
 
-Molecule structure (3' to 5'):
+Molecule structure:
 ```
 [Primer] [Barcode (25bp)] [Linker] [UMI (10bp)] [PolyT] [cDNA] [TSO]
 ```
@@ -237,7 +237,7 @@ Molecule structure (3' to 5'):
 - `stereoseq` mode: splits concatenated reads at TSO boundaries, producing a new FASTA with individual subreads
 - `stereoseq_nosplit` mode: processes reads without splitting
 
-### Custom platform (`custom_sc`)
+### Custom protocols (`custom_sc`)
 
 Uses a molecule definition file (MDF) to describe arbitrary molecule structures.
 See [MDF format](single_cell.md#molecule-definition-file-mdf-format).

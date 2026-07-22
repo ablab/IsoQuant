@@ -66,7 +66,8 @@ expression tables with "per-file" columns will be computed. See more about [inpu
 ### Providing input reads via YAML configuration file:
 
 `--yaml`
-    Path to the dataset description file in [YAML](https://www.redhat.com/en/topics/automation/what-is-yaml) format. The file should contain a list with `data format` property,
+
+Path to the dataset description file in [YAML](https://www.redhat.com/en/topics/automation/what-is-yaml) format. The file should contain a list with `data format` property,
 which can be `fastq` or `bam` and an individual entry for experiment.
 Each experiment is represented as a set of parameters (e.g. in curly brackets):
 
@@ -86,7 +87,8 @@ See more in [examples](examples.md).
     Input sequences represent full-length transcripts; both ends of the sequence are considered to be reliable.
 
 `--polya_trimmed`
-    Indicate that reads were poly-A trimmed. Possible values are:
+
+Indicate that reads were poly-A trimmed. Possible values are:
 
   - `none`: poly-A tails were not trimmed and will be detected automatically based on reads sequences (default);
   - `stranded`: reads that have an assigned strand (based on splice sites and assigned gene) will be marked 
@@ -104,6 +106,7 @@ See more in [examples](examples.md).
 Input file names are used as labels if not set.
 
 `--read_group`
+
  Sets one or more rules to group feature counts (e.g. by cell type, file name, BAM tag, or barcode).
  Multiple grouping strategies can be combined (space-separated).
  Available grouping options:
@@ -199,7 +202,8 @@ Note that large output files are gzipped by default unless `--no_gzip` is specif
 ## Pipeline options
 
 `--analysis`
-    Space-separated list of analyses to run. Supported values (short aliases in brackets):
+
+Space-separated list of analyses to run. Supported values (short aliases in brackets):
 
 * `quantification` (or `quant`): reference-based quantification (requires gene annotation), produces:
   - Gene and transcript quantification (`*.gene_counts.tsv`, `*.transcript_counts.tsv`, etc);
@@ -259,9 +263,10 @@ Feeding you data as pseudo-bulk (`--mode bulk`) is recommended for full transcri
 ## Single-cell and spatial transcriptomics options
 
 See [single-cell and spatial transcriptomics](single_cell.md) for a detailed guide on
-supported platforms, examples, molecule description format, and UMI deduplication.
+supported protocols, examples, molecule description format, and UMI deduplication.
 
 `--mode` or `-m`
+
 IsoQuant mode for processing single-cell or spatial transcriptomics data. Available modes:
 
 * `bulk` - standard bulk RNA-seq mode (default)
@@ -279,6 +284,7 @@ IsoQuant mode for processing single-cell or spatial transcriptomics data. Availa
 Single-cell and spatial modes enable automatic barcode calling and UMI-based deduplication.
 
 `--barcode_whitelist`
+
 Path to file(s) with barcode whitelist(s) for barcode calling.
 Required for single-cell/spatial modes unless `--barcoded_reads` or `--barcoded_bam` is provided.
 
@@ -292,6 +298,7 @@ If you have a subset of barcodes, for example, from short-read data, provide the
 - IsoQuant will perform per-barcode quantification automatically unless `--barcoded_reads` or  `--barcode2spot` are set.
 
 `--barcoded_reads`
+
 Path to TSV file(s) with pre-called barcoded reads.
 Format: `read_id<TAB>barcode<TAB>umi` (one read per line).
 If provided, IsoQuant skips barcode calling and uses these assignments directly.
@@ -301,6 +308,7 @@ Note that IsoQuant will perform per-barcode quantification automatically unless 
 
 
 `--barcoded_bam`
+
 Extract barcodes and UMIs from BAM tags instead of calling barcodes.
 Uses `CB` (cell barcode) and `UB` (UMI) tags by default (standard 10x Genomics / cellranger tags).
 Mutually exclusive with `--barcode_whitelist` and `--barcoded_reads`.
@@ -318,6 +326,7 @@ BAM tag for UMI (default: UB), requires `--barcoded_bam` flag.
 Remove suffix after dash from barcodes extracted from BAM tag (e.g. ACGT-1 -> ACGT), requires `--barcoded_bam` flag.
 
 `--barcode2spot`
+
 Path to a TSV file with mapping barcodes to cell types, spatial spots, or other barcode properties.
 By default, barcode is in the first column, cell type in the second.
 However, you can specify one or more columns via colon symbol (similar to `--read_group`): 
@@ -328,6 +337,7 @@ to group counts by cell type, spatial regions, or other provided properties.
 Grouping by raw barcode sequences will be disabled in this case, use `--read_group barcode` to enable it.
 
 `--barcode2barcode`
+
 Path to a TSV file with mapping barcodes to spot IDs for spot-level UMI deduplication.
 When multiple barcodes map to the same physical spot (e.g. at lower spatial resolution),
 this option groups them together during UMI deduplication, collapsing duplicates across the entire spot (not just the barcode).
@@ -342,8 +352,9 @@ Grouping by raw barcode sequences will be disabled in this case, use `--read_gro
 For Visium HD composite barcodes, use `isoquant_lib/scripts/prepare_visium_spot_ids.py` to generate the mapping file.
 
 `--molecule`
+
 Path to a molecule description file (MDF) for `custom_sc` mode.
-Defines molecule structure for universal barcode extraction from any platform.
+Defines molecule structure for universal barcode extraction from any protocol.
 See [MDF format](single_cell.md#molecule-definition-file-mdf-format) for details.
 
 
