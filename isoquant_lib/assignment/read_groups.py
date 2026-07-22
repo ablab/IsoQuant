@@ -340,6 +340,67 @@ def prepare_read_groups(args, sample):
                                   delim=delim)
 
 
+def _spec_value(values, index, default):
+    """Return values[index] if present, otherwise the default."""
+    return values[index] if len(values) > index else default
+
+
+def _require_barcoded_reads(args, sample, grouping_name):
+    """Exit if the sample does not provide barcoded reads for the given grouping."""
+    if (not hasattr(sample, 'barcodes_split_reads') or not sample.barcodes_split_reads) \
+            and not getattr(args, 'barcoded_bam', False):
+        logger.critical("%s grouping requires barcoded reads (use --barcoded_reads or --barcoded_bam)" % grouping_name)
+        sys.exit(IsoQuantExitCode.MISSING_REQUIRED_OPTION)
+
+
+def _barcode_spot_groupers(shared_data):
+    """Return a single BarcodeSpotGrouper, or one per column when the table has several."""
+    if shared_data.num_columns == 1:
+        # Single column - return single grouper (backward compatible)
+        return BarcodeSpotGrouper(shared_data, column_index=0)
+    # Multiple columns - return list of groupers sharing same data
+    return [BarcodeSpotGrouper(shared_data, column_index=col_idx)
+            for col_idx in range(shared_data.num_columns)]
+
+
+def _make_barcode_mapping_groupers(mapping_spec, mapping_arg_name, grouping_name, args, sample):
+    """Build barcode->spot/barcode groupers from a --barcode2spot / --barcode2barcode spec."""
+    if not mapping_spec:
+        logger.critical("%s grouping requires --%s" % (grouping_name, mapping_arg_name))
+        sys.exit(IsoQuantExitCode.MISSING_REQUIRED_OPTION)
+    _require_barcoded_reads(args, sample, grouping_name)
+    filename, barcode_col, spot_cols = parse_barcode2spot_spec(mapping_spec)
+    shared_data = SharedTableData(filename, read_id_column_index=barcode_col,
+                                  group_id_column_indices=spot_cols, delim='\t')
+    return _barcode_spot_groupers(shared_data)
+
+
+def _make_file_groupers(values, spec_string, sample, chr_id, spec_index):
+    """Build ReadTableGrouper(s) from a file:filename:read_col:group_cols:delim spec."""
+    if len(values) < 2:
+        logger.critical("group specification %s is too short, specifiy at least a file name" % spec_string)
+        sys.exit(IsoQuantExitCode.INVALID_PARAMETER)
+
+    read_id_column_index = int(values[2]) if len(values) > 2 else 0
+    delim = values[4] if len(values) > 4 else '\t'
+    group_col_spec = values[3] if len(values) > 3 else "1"
+    read_group_chr_filename = sample.read_group_file + "_spec" + str(spec_index) + "_" + chr_id
+
+    if ',' in group_col_spec:
+        # Multiple columns - create separate groupers sharing the same table data
+        # This makes file:table.tsv:0:1,2,3 equivalent to three separate --read_group arguments
+        group_id_column_indices = [int(x) for x in group_col_spec.split(',')]
+        shared_data = SharedTableData(read_group_chr_filename, read_id_column_index,
+                                      group_id_column_indices, delim)
+        return [ReadTableGrouper(shared_data, i) for i in range(len(group_id_column_indices))]
+
+    # Single column - use ReadTableGrouper
+    group_id_column_index = int(group_col_spec)
+    shared_data = SharedTableData(read_group_chr_filename, read_id_column_index,
+                                  [group_id_column_index], delim)
+    return ReadTableGrouper(shared_data, 0)
+
+
 def parse_grouping_spec(spec_string, args, sample, chr_id, spec_index=0):
     """
     Parse a single grouping specification and return the appropriate grouper(s).
@@ -356,109 +417,29 @@ def parse_grouping_spec(spec_string, args, sample, chr_id, spec_index=0):
         - List of groupers for multi-column file specifications (to create separate grouped counts)
     """
     values = spec_string.split(':')
+    key = values[0]
 
-    if values[0] == "file_name":
+    if key == "file_name":
         return FileNameGrouper(args, sample)
-    elif values[0] == "no_auto":
+    elif key == "no_auto":
         return None
-    elif values[0] == 'barcode_spot':
-        # Always uses --barcode2spot (single argument)
-        if not hasattr(args, 'barcode2spot') or not args.barcode2spot:
-            logger.critical("barcode_spot grouping requires --barcode2spot")
-            sys.exit(IsoQuantExitCode.MISSING_REQUIRED_OPTION)
-
-        if (not hasattr(sample, 'barcodes_split_reads') or not sample.barcodes_split_reads) and not getattr(args, 'barcoded_bam', False):
-            logger.critical("barcode_spot grouping requires barcoded reads (use --barcoded_reads or --barcoded_bam)")
-            sys.exit(IsoQuantExitCode.MISSING_REQUIRED_OPTION)
-
-        # Parse barcode2spot spec
-        filename, barcode_col, spot_cols = parse_barcode2spot_spec(args.barcode2spot)
-
-        # Load shared data using SharedTableData
-        shared_data = SharedTableData(filename, read_id_column_index=barcode_col,
-                                      group_id_column_indices=spot_cols, delim='\t')
-
-        if shared_data.num_columns == 1:
-            # Single column - return single grouper (backward compatible)
-            return BarcodeSpotGrouper(shared_data, column_index=0)
-        else:
-            # Multiple columns - return list of groupers sharing same data
-            groupers = []
-            for col_idx in range(shared_data.num_columns):
-                groupers.append(BarcodeSpotGrouper(shared_data, column_index=col_idx))
-            return groupers
-    elif values[0] == 'barcode_barcode':
-        # Uses --barcode2barcode (identical logic to barcode_spot but with different arg)
-        if not hasattr(args, 'barcode2barcode') or not args.barcode2barcode:
-            logger.critical("barcode_barcode grouping requires --barcode2barcode")
-            sys.exit(IsoQuantExitCode.MISSING_REQUIRED_OPTION)
-
-        if (not hasattr(sample, 'barcodes_split_reads') or not sample.barcodes_split_reads) and not getattr(args, 'barcoded_bam', False):
-            logger.critical("barcode_barcode grouping requires barcoded reads (use --barcoded_reads or --barcoded_bam)")
-            sys.exit(IsoQuantExitCode.MISSING_REQUIRED_OPTION)
-
-        filename, barcode_col, spot_cols = parse_barcode2spot_spec(args.barcode2barcode)
-        shared_data = SharedTableData(filename, read_id_column_index=barcode_col,
-                                      group_id_column_indices=spot_cols, delim='\t')
-
-        if shared_data.num_columns == 1:
-            return BarcodeSpotGrouper(shared_data, column_index=0)
-        else:
-            groupers = []
-            for col_idx in range(shared_data.num_columns):
-                groupers.append(BarcodeSpotGrouper(shared_data, column_index=col_idx))
-            return groupers
-    elif values[0] == 'barcode':
+    elif key == 'barcode_spot':
+        return _make_barcode_mapping_groupers(getattr(args, 'barcode2spot', None),
+                                              'barcode2spot', 'barcode_spot', args, sample)
+    elif key == 'barcode_barcode':
+        return _make_barcode_mapping_groupers(getattr(args, 'barcode2barcode', None),
+                                              'barcode2barcode', 'barcode_barcode', args, sample)
+    elif key == 'barcode':
         # Direct barcode grouping - uses barcode from read_assignment
-        if (not hasattr(sample, 'barcodes_split_reads') or not sample.barcodes_split_reads) and not getattr(args, 'barcoded_bam', False):
-            logger.critical("barcode grouping requires barcoded reads (use --barcoded_reads or --barcoded_bam)")
-            sys.exit(IsoQuantExitCode.MISSING_REQUIRED_OPTION)
-
+        _require_barcoded_reads(args, sample, "barcode")
         return BarcodeGrouper()
-    elif values[0] == 'tag':
-        if len(values) < 2:
-            return AlignmentTagReadGrouper(tag="RG")
-        return AlignmentTagReadGrouper(tag=values[1])
-    elif values[0] == 'read_id':
-        if len(values) < 2:
-            return ReadIdSplitReadGrouper(delim="_")
-        return ReadIdSplitReadGrouper(delim=values[1])
-    elif values[0] == 'file':
-        # Format: file:filename:read_col:group_cols:delim
-        # group_cols can be comma-separated like "1,2,3"
-        if len(values) < 2:
-            logger.critical("group specification %s is too short, specifiy at least a file name" % spec_string)
-            sys.exit(IsoQuantExitCode.INVALID_PARAMETER)
-
-        read_id_column_index = int(values[2]) if len(values) > 2 else 0
-        delim = values[4] if len(values) > 4 else '\t'
-        group_col_spec = values[3] if len(values) > 3 else "1"
-
-        if ',' in group_col_spec:
-            # Multiple columns - create separate groupers sharing the same table data
-            # This makes file:table.tsv:0:1,2,3 equivalent to three separate --read_group arguments
-            group_id_column_indices = [int(x) for x in group_col_spec.split(',')]
-            read_group_chr_filename = sample.read_group_file + "_spec" + str(spec_index) + "_" + chr_id
-
-            # Create shared table data once
-            shared_data = SharedTableData(read_group_chr_filename, read_id_column_index,
-                                          group_id_column_indices, delim)
-
-            # Create a separate grouper for each column
-            groupers = []
-            for i in range(len(group_id_column_indices)):
-                groupers.append(ReadTableGrouper(shared_data, i))
-
-            return groupers  # Return list of groupers
-        else:
-            # Single column - use ReadTableGrouper
-            group_id_column_index = int(group_col_spec)
-            read_group_chr_filename = sample.read_group_file + "_spec" + str(spec_index) + "_" + chr_id
-
-            # Create shared data with single column for consistency
-            shared_data = SharedTableData(read_group_chr_filename, read_id_column_index,
-                                          [group_id_column_index], delim)
-            return ReadTableGrouper(shared_data, 0)
+    elif key == 'tag':
+        return AlignmentTagReadGrouper(tag=_spec_value(values, 1, "RG"))
+    elif key == 'read_id':
+        return ReadIdSplitReadGrouper(delim=_spec_value(values, 1, "_"))
+    elif key == 'file':
+        # Format: file:filename:read_col:group_cols:delim (group_cols may be "1,2,3")
+        return _make_file_groupers(values, spec_string, sample, chr_id, spec_index)
     else:
         logger.critical("Unsupported read grouping option: %s" % values[0])
         sys.exit(IsoQuantExitCode.INVALID_PARAMETER)
