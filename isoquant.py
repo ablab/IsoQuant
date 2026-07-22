@@ -466,33 +466,40 @@ def get_bam_files_from_samples(input_data) -> list:
     return [f for f in bam_files if os.path.isfile(f)]
 
 
-def run_fusion_detection_on_bams(fd, bam_files: list, output_dir: str) -> dict:
-    """Run fusion detection on a list of BAM files using a shared FusionDetector.
+def run_fusion_detection_on_samples(fd, samples: list) -> dict:
+    """Run fusion detection per sample using a shared FusionDetector.
+
+    The report is written alongside the other per-sample outputs as
+    ``<sample.out_dir>/<sample.prefix>.fusions.tsv``.
 
     Args:
         fd: FusionDetector instance (initialized with first BAM, will be reused)
-        bam_files: List of BAM file paths to process
-        output_dir: Directory to write fusion_*.tsv files
+        samples: List of SampleData objects to process
 
     Returns:
         Dictionary with summary: {"total": int, "successful": int, "failed": int, "skipped": list}
     """
-    summary = {"total": len(bam_files), "successful": 0, "failed": 0, "skipped": []}
-    for bam_path in bam_files:
+    summary = {"total": 0, "successful": 0, "failed": 0, "skipped": []}
+    for sample in samples:
+        sample_bams = [f for lib in sample.file_list for f in lib if os.path.isfile(f)]
+        if not sample_bams:
+            continue
+        summary["total"] += 1
+        out_fname = os.path.join(sample.out_dir, sample.prefix + ".fusions.tsv")
         try:
-            logger.info("Running fusion detection on %s" % bam_path)
-            fd.bam_path = bam_path  # Switch BAM
-            fd.clear_state()  # Clear state for new BAM
-            fd.detect_fusions()
-            out_fname = os.path.join(output_dir, "fusion_" + os.path.basename(bam_path) + ".tsv")
+            fd.clear_state()  # Accumulate all of this sample's BAMs into one report
+            for bam_path in sample_bams:
+                logger.info("Running fusion detection on %s" % bam_path)
+                fd.bam_path = bam_path  # Switch BAM
+                fd.detect_fusions()
             fd.report(output_path=out_fname)
-            logger.info("Fusion candidates for %s written to %s" % (bam_path, out_fname))
+            logger.info("Fusion candidates for sample %s written to %s" % (sample.prefix, out_fname))
             summary["successful"] += 1
         except Exception as e:
-            logger.error("Fusion detection failed for %s: %s" % (bam_path, str(e)))
+            logger.error("Fusion detection failed for sample %s: %s" % (sample.prefix, str(e)))
             logger.debug("Traceback:", exc_info=True)
             summary["failed"] += 1
-            summary["skipped"].append(bam_path)
+            summary["skipped"].append(sample.prefix)
     return summary
 
 
@@ -1365,7 +1372,7 @@ def run_pipeline(args):
             try:
                 from isoquant_lib.fusion.fusion_detector import FusionDetector
                 fd = FusionDetector(bam_files[0], args.genedb, reference_fasta=args.reference)
-                summary = run_fusion_detection_on_bams(fd, bam_files, args.output)
+                summary = run_fusion_detection_on_samples(fd, args.input_data.samples)
                 logger.info("Fusion detection summary: %d total, %d successful, %d failed" %
                             (summary["total"], summary["successful"], summary["failed"]))
                 logger.info(" === Fusion detection finished === ")

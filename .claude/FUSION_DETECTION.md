@@ -17,8 +17,8 @@ python isoquant.py \
   -o out --analysis fusion
 ```
 
-Output: one TSV per input BAM named `out/fusion_<bam_basename>.tsv`
-(see [Output format](#output-format) below).
+Output: one TSV per sample, written alongside the other per-sample outputs as
+`out/<experiment>/<prefix>.fusions.tsv` (see [Output format](#output-format) below).
 
 Requires `mappy>=2.24` and `intervaltree>=3.0` (already in `requirements.txt`).
 
@@ -31,7 +31,7 @@ Requires `mappy>=2.24` and `intervaltree>=3.0` (already in `requirements.txt`).
 | `isoquant_lib/fusion_metadata.py` | `FusionMetadata` — gating, gene assignment from canonical key, per-side biotype computation, key remapping. |
 | `isoquant_lib/genomic_interval_index.py` | `GenomicIntervalIndex` — IntervalTree wrapper around gffutils for O(log n) gene/exon coordinate lookups. |
 | `isoquant_tests/test_fusion_*.py` + `test_genomic_interval_index.py` | 161 unit tests (1 legitimately skipped). |
-| `isoquant.py` | `--analysis fusion` / deprecated `--fusion` flag (`parse_args`) resolved to `args.fusion` in `resolve_analyses`, `get_bam_files_from_samples`, `run_fusion_detection_on_bams`, the post-isoform trigger block in `run_pipeline`. |
+| `isoquant.py` | `--analysis fusion` / deprecated `--fusion` flag (`parse_args`) resolved to `args.fusion` in `resolve_analyses`, `get_bam_files_from_samples`, `run_fusion_detection_on_samples`, the post-isoform trigger block in `run_pipeline`. |
 
 ## Pipeline integration
 
@@ -198,7 +198,7 @@ Per-instance caches:
 
 ## Output format
 
-`out/fusion_<bam_basename>.tsv`, tab-separated, columns:
+`out/<experiment>/<prefix>.fusions.tsv`, tab-separated, columns:
 
 ```
 LeftGene  LeftBiotype  LeftScore  LeftChromosome  LeftBreakpoint
