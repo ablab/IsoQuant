@@ -310,11 +310,11 @@ Quantification results for transcripts and genes from `*.transcript_models.gtf` 
 If `--sqanti_output` is set, IsoQuant will produce output in [SQANTI](https://github.com/ConesaLab/SQANTI3)-like format that 
 provides comparison between discovered novel transcripts vs reference transcripts (`*.novel_vs_known.SQANTI-like.tsv`).
 
+
 ## Fusion prediction format
 
 Produced only when fusion detection is requested via `--analysis fusion`.
-One TSV is written per input BAM, named `*.fusion_<bam_basename>.tsv`.
-Tab-separated values, the columns are:
+This option will result in `*.fusion_<bam_basename>.tsv` with the following columns:
 
 * `LeftGene` / `RightGene` - gene symbols of the two fusion partners;
 * `LeftBiotype` / `RightBiotype` - biotype of each partner gene (e.g. `protein_coding`);

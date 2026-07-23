@@ -1,4 +1,4 @@
-IsoQuant: A tool for isoform assignment, quantification and discovery for long RNA reads
+IsoQuant: A universal toolkit for upstream processing of long RNA reads
 Copyright (c) 2022-2026 University of Helsinki
 Copyright (c) 2020-2022 Saint Petersburg State University
 
@@ -19,7 +19,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 -------------------------------------------------------------------------------
 
 IsoQuant
-A tool for transcript discovery, quantification and read-to-isoform assignment for PacBio and Nanopore data
+A universal toolkit for upstream processing of long RNA reads
 Version: see VERSION
 
 Developed in
@@ -32,10 +32,10 @@ Center for Algorithmic Biotechnology, Institute of Translational Biomedicine, St
 Current contributors:
 
     Andrey Prjibelski,
-    Jack Freeman,
     Arina Coroliuc,
     Lieke Michielsen,
     Alla Mikheenko,
+    Taria Solasuo,
     Alexandru Tomescu
     and
     Hagen Tilgner
@@ -44,6 +44,7 @@ Also contributed:
 
     Maria Burunducova,
     Careen Foord,
+    Jack Freeman,
     Anoushka Joglekar,
     Alexander Smetanin,
     Artyom Kaltovich,
