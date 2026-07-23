@@ -98,35 +98,35 @@ External tools required (must be in PATH):
 Entry point: `isoquant.py` → `main()` → `run_pipeline()`
 
 Pipeline stages execute sequentially:
-1. **Barcode Calling** (single-cell/spatial modes only) - `detect_barcodes.py`
+1. **Barcode Calling** (single-cell/spatial modes only) - `isoquant_lib/barcode_calling/detect_barcodes.py`
 2. **Reference Preparation** - Decompress genome if needed
 3. **GTF/GFF Conversion** - Convert annotation to gffutils database format
-4. **Read Mapping** - Map reads using minimap2 or STAR (via `src/read_mapper.py`)
-5. **Isoform Assignment** - Core analysis (via `src/dataset_processor.py`)
+4. **Read Mapping** - Map reads using minimap2 or STAR (via `isoquant_lib/utils/read_mapper.py`)
+5. **Isoform Assignment** - Core analysis (via `isoquant_lib/dataset_processor.py`)
 6. **Count Aggregation** - Combine counts across samples
 
 ### Core Processing Pipeline
 
-The main processing happens in `DatasetProcessor` (`src/dataset_processor.py`), which orchestrates:
+The main processing happens in `DatasetProcessor` (`isoquant_lib/dataset_processor.py`), which orchestrates:
 
 1. **Per-chromosome parallel processing**:
-   - `AlignmentProcessor` (`src/alignment_processor.py`) - Collects alignments per gene, handles primary/secondary/supplementary alignments, merges BAM files
-   - `LongReadAssigner` (`src/long_read_assigner.py`) - Assigns reads to isoforms using junction comparison and profile matching
-   - `GraphBasedModelConstructor` (`src/graph_based_model_construction.py`) - Discovers novel transcript models from intron graphs
-   - `LongReadCounter` (`src/long_read_counter.py`) - Counts reads/transcripts/exons/introns with multiple strategies
+   - `AlignmentProcessor` (`isoquant_lib/alignment/alignment_processor.py`) - Collects alignments per gene, handles primary/secondary/supplementary alignments, merges BAM files
+   - `LongReadAssigner` (`isoquant_lib/assignment/long_read_assigner.py`) - Assigns reads to isoforms using junction comparison and profile matching
+   - `GraphBasedModelConstructor` (`isoquant_lib/model_construction/model_construction.py`) - Discovers novel transcript models from intron graphs
+   - `LongReadCounter` (`isoquant_lib/quantification/long_read_counter.py`) - Counts reads/transcripts/exons/introns with multiple strategies
 
 2. **Data structures**:
-   - `GeneInfo` (`src/gene_info.py`) - Reference gene and transcript models
-   - `ReadAssignment` (`src/isoform_assignment.py`) - Links reads to isoforms with match quality
+   - `GeneInfo` (`isoquant_lib/gene_info.py`) - Reference gene and transcript models
+   - `ReadAssignment` (`isoquant_lib/assignment/isoform_assignment.py`) - Links reads to isoforms with match quality
    - `TranscriptModel` - Novel transcript representations
 
 3. **File organization**:
-   - `InputDataStorage` (`src/input_data_storage.py`) - Manages input files and metadata
+   - `InputDataStorage` (`isoquant_lib/utils/input_data_storage.py`) - Manages input files and metadata
    - `file_naming.py` - Systematic naming for per-chromosome intermediates, lock files for crash recovery
 
 ### Key Enums and Modes
 
-**IsoQuantMode** (`src/modes.py`):
+**IsoQuantMode** (`isoquant_lib/modes.py`):
 - `bulk` - Standard bulk RNA-seq
 - `tenX_v3`, `tenX_v2`, `curio` - Single-cell modes
 - `tenX_v3_split`, `tenX_v2_split` - 10x split modes for concatenated ONT reads where multiple cDNA molecules are ligated end-to-end. Detects multiple barcode/UMI/TSO patterns per read, splits into individual molecule FASTA records. Uses `TenXSplittingBarcodeDetector` (see `.claude/BARCODE_CALLING.md` for algorithm details)
@@ -134,7 +134,7 @@ The main processing happens in `DatasetProcessor` (`src/dataset_processor.py`), 
 
 Different modes trigger different processing pipelines (barcode calling, UMI deduplication, etc.)
 
-**ReadAssignmentType** (`src/isoform_assignment.py`):
+**ReadAssignmentType** (`isoquant_lib/assignment/isoform_assignment.py`):
 - `unique` - Assigned to single isoform
 - `ambiguous` - Multiple equally good matches
 - `inconsistent` - Mismatches with reference
@@ -150,13 +150,13 @@ Different modes trigger different processing pipelines (barcode calling, UMI ded
 - `full_splice_match` (FSM), `incomplete_splice_match` (ISM)
 - `novel_in_catalog` (NIC), `novel_not_in_catalog` (NNIC)
 
-**CountingStrategy** (`src/long_read_counter.py`):
+**CountingStrategy** (`isoquant_lib/quantification/long_read_counter.py`):
 - `unique_only` - Only uniquely assigned reads
 - `with_ambiguous` - Include ambiguous assignments
 - `fsm_only` - Only full splice matches (subset of unique_only): reads with an `fsm` or `mono_exon_match` event
 - `all` - Include inconsistent reads
 
-**AmbiguityResolvingMethod** (`src/long_read_assigner.py`):
+**AmbiguityResolvingMethod** (`isoquant_lib/assignment/long_read_assigner.py`):
 - `none`, `monoexon_only`, `monoexon_and_fsm`, `all`
 
 ### Parallelization
@@ -170,7 +170,7 @@ Lock file mechanism prevents race conditions and enables crash recovery/resume.
 
 ### Output Formats
 
-**Assignment Printers** (`src/assignment_io.py`):
+**Assignment Printers** (`isoquant_lib/assignment/assignment_io.py`):
 - `BEDPrinter` - BED format for read assignments
 - `TSVPrinter` - Tab-separated read assignments
 - `SQANTIPrinter` - SQANTI-compatible classification
@@ -182,7 +182,7 @@ Lock file mechanism prevents race conditions and enables crash recovery/resume.
 
 ### Serialization and Resume
 
-`src/serialization.py` handles binary serialization of:
+`isoquant_lib/utils/serialization.py` handles binary serialization of:
 - Gene info databases
 - Read assignments
 - Intermediate processing results
@@ -204,7 +204,7 @@ IsoQuant supports multiple simultaneous grouping strategies (e.g., `--read_group
    - `ReadAssignment.read_group`: `list[str]` - One group ID per strategy for multi-group, single `str` for single group
    - Each counter knows its `group_index` to extract the appropriate group ID from the list
 
-2. **CompositeCounter Architecture** (`src/long_read_counter.py`):
+2. **CompositeCounter Architecture** (`isoquant_lib/quantification/long_read_counter.py`):
    - All counters (ungrouped and grouped) are contained within global `CompositeCounter` objects
    - Three global composite counters in `DatasetProcessor`:
      - `global_counter` - Contains gene, transcript, exon, intron counters
@@ -213,7 +213,7 @@ IsoQuant supports multiple simultaneous grouping strategies (e.g., `--read_group
    - When methods like `add_read_info_raw(read_id, feature_ids, group_ids)` are called on a `CompositeCounter`, it automatically forwards to all internal counters
    - Each internal `AssignedFeatureCounter` extracts its own group ID using `group_ids[self.group_index]`
 
-3. **Counter Initialization** (`src/dataset_processor.py`, lines 337-407):
+3. **Counter Initialization** (`isoquant_lib/dataset_processor.py`, lines 337-407):
    - Ungrouped counters created first and added to composite counter
    - For each grouping strategy, grouped counters created with `group_index` parameter
    - Each grouped counter added to the appropriate global composite counter
@@ -230,7 +230,7 @@ IsoQuant supports multiple simultaneous grouping strategies (e.g., `--read_group
          self.global_counter.add_counters([gene_counter, transcript_counter])
      ```
 
-4. **GraphBasedModelConstructor Integration** (`src/graph_based_model_construction.py`):
+4. **GraphBasedModelConstructor Integration** (`isoquant_lib/model_construction/model_construction.py`):
    - Receives only the global `CompositeCounter` objects (NOT separate lists of grouped counters)
    - Calls `add_read_info_raw(read_id, feature_ids, read_assignment.read_group)` with the full group ID list
    - `CompositeCounter` automatically distributes to all internal counters
@@ -238,7 +238,7 @@ IsoQuant supports multiple simultaneous grouping strategies (e.g., `--read_group
    - This eliminates manual distribution logic - the composite counter handles everything
 
 5. **Other Implementation Notes**:
-   - File naming uses strategy-based approach (see `src/file_naming.py`)
+   - File naming uses strategy-based approach (see `isoquant_lib/utils/file_naming.py`)
    - Technical replicas check uses `file_name` group only (identified by `grouping_strategy_names.index("file_name")`)
    - Serialization saves/loads `all_read_groups` as list of sets
    - Per-chromosome group files save number of strategies + semicolon-separated groups per strategy
@@ -251,7 +251,7 @@ IsoQuant supports multiple simultaneous grouping strategies (e.g., `--read_group
 
 ### Illumina Integration
 
-IsoQuant can use short Illumina reads (`--illumina_bam`) to correct long-read exon boundaries via `src/illumina_exon_corrector.py`. Short reads are NOT used for transcript discovery or abundance estimation.
+IsoQuant can use short Illumina reads (`--illumina_bam`) to correct long-read exon boundaries via `isoquant_lib/assignment/illumina_exon_corrector.py`. Short reads are NOT used for transcript discovery or abundance estimation.
 
 ### PolyA Handling
 
@@ -281,7 +281,7 @@ IsoQuant can use short Illumina reads (`--illumina_bam`) to correct long-read ex
 ## Git Workflow
 
 Main branch: `master`
-Current development: `sc_3.9` branch
+Current development: `isoquant_4.0.0` branch
 
 CI/CD workflows in `.github/workflows/`:
 - `Unit_tests.yml` - Primary test suite (Python 3.8, Ubuntu)
@@ -298,46 +298,46 @@ CI/CD workflows in `.github/workflows/`:
 ## Code Organization by Function
 
 **Input Processing**:
-- `src/input_data_storage.py` - Input file organization
-- `src/read_mapper.py` - Mapping orchestration
-- `src/read_groups.py` - Grouping/barcode handling
+- `isoquant_lib/utils/input_data_storage.py` - Input file organization
+- `isoquant_lib/utils/read_mapper.py` - Mapping orchestration
+- `isoquant_lib/assignment/read_groups.py` - Grouping/barcode handling
 
 **Alignment Analysis**:
-- `src/alignment_processor.py` - Alignment collection
-- `src/alignment_info.py` - Alignment data structures
-- `src/multimap_resolver.py` - Multi-mapping read handling
+- `isoquant_lib/alignment/alignment_processor.py` - Alignment collection
+- `isoquant_lib/alignment/alignment_info.py` - Alignment data structures
+- `isoquant_lib/assignment/multimap_resolver.py` - Multi-mapping read handling
 
 **Isoform Assignment**:
-- `src/long_read_assigner.py` - Main assignment logic
-- `src/long_read_profiles.py` - Read profile structures
-- `src/junction_comparator.py` - Splice junction comparison
-- `src/isoform_assignment.py` - Assignment classifications
+- `isoquant_lib/assignment/long_read_assigner.py` - Main assignment logic
+- `isoquant_lib/assignment/long_read_profiles.py` - Read profile structures
+- `isoquant_lib/assignment/junction_comparator.py` - Splice junction comparison
+- `isoquant_lib/assignment/isoform_assignment.py` - Assignment classifications
 
 **Model Construction**:
-- `src/graph_based_model_construction.py` - Novel transcript discovery
-- `src/intron_graph.py` - Intron graph structures
-- `src/gene_model.py` - Gene model representations
+- `isoquant_lib/model_construction/model_construction.py` - Novel transcript discovery
+- `isoquant_lib/model_construction/intron_graph.py` - Intron graph structures
+- `isoquant_lib/visualizer/gene_model.py` - Gene model representations
 
 **Quantification**:
-- `src/long_read_counter.py` - Read counting with multiple strategies
-- `src/stats.py` - Count aggregation and statistics
-- `src/convert_grouped_counts.py` - Format conversion for grouped data
+- `isoquant_lib/quantification/long_read_counter.py` - Read counting with multiple strategies
+- `isoquant_lib/utils/stats.py` - Count aggregation and statistics
+- `isoquant_lib/quantification/convert_grouped_counts.py` - Format conversion for grouped data
 
 **Specialized Features**:
-- `src/polya_finder.py`, `src/polya_verification.py` - PolyA detection
-- `src/cage_finder.py` - CAGE peak integration
-- `src/illumina_exon_corrector.py` - Short-read correction
-- `src/barcode_calling/umi_filtering.py` - UMI-based deduplication
+- `isoquant_lib/terminal_prediction/polya_finder.py`, `isoquant_lib/terminal_prediction/polya_verification.py` - PolyA detection
+- `isoquant_lib/terminal_prediction/cage_finder.py` - CAGE peak integration
+- `isoquant_lib/assignment/illumina_exon_corrector.py` - Short-read correction
+- `isoquant_lib/barcode_calling/umi_filtering.py` - UMI-based deduplication
 
 **Output**:
-- `src/assignment_io.py` - Assignment output writers
-- `src/transcript_printer.py` - GTF/GFF output
-- `src/plot_output.py` - Visualization generation
+- `isoquant_lib/assignment/assignment_io.py` - Assignment output writers
+- `isoquant_lib/model_construction/transcript_printer.py` - GTF/GFF output
+- `isoquant_lib/visualizer/plot_output.py` - Visualization generation
 
 **Utilities**:
-- `src/common.py` - Shared utility functions
-- `src/file_utils.py` - File I/O utilities
-- `src/serialization.py` - Binary serialization
+- `isoquant_lib/common.py` - Shared utility functions
+- `isoquant_lib/utils/file_utils.py` - File I/O utilities
+- `isoquant_lib/utils/serialization.py` - Binary serialization
 
 ## Recent Implementation Changes
 
