@@ -17,7 +17,7 @@ Oxford Nanopores. IsoQuant can perform the following analysis:
   - Fusion gene discovery;
 
 - **Single-cell and spatial transcriptomic analysis**:
-  - Barcode calling for 10x single-cell, 10x Visisum and Visium HD, Curio, Stereo-seq;
+  - Barcode calling for 10x single-cell, 10x Visium and Visium HD, Curio, Stereo-seq;
   - Universal barcode calling for user-specified protocols;
   - PCR deduplication;
   - Per-barcode and per-cell-type quantification;

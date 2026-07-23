@@ -73,7 +73,7 @@ Each experiment is represented as a set of parameters (e.g. in curly brackets):
 
 - `name` - experiment name, string (optional);
 - `long read files` - a list of paths to long read files matching the specified format;
-- `lables` - a list of labels for long read files for expression table (optional, must be equal to the number of long read files);
+- `labels` - a list of labels for long read files for expression table (optional, must be equal to the number of long read files);
 - `illumina bam` - a list of paths to short read BAM files for splice site correction (optional).
 
 All paths should be either absolute or relative to the YAML file.
@@ -221,8 +221,8 @@ Space-separated list of analyses to run. Supported values (short aliases in brac
   - Splice junction counts (`*.splice_junction_counts.tsv`);
   - Intron retention counts (`*.intron_retention_counts.tsv`);
   
-* `fusion`:fusion gene detection, (requires gene annotation), produces:
-  - Fusion gene predictions (`*.fusions.tsv`).
+* `fusion` (requires gene annotation): fusion gene detection, produces:
+  - Fusion gene predictions (`fusion_<bam_basename>.tsv`, one file per input BAM).
 
 
 Defaults when `--analysis` is not set:
@@ -256,8 +256,11 @@ Feeding you data as pseudo-bulk (`--mode bulk`) is recommended for full transcri
 
 `--count_intron_retentions`
     _Deprecated_: use `--analysis exon_quantification` instead.
-    Count intron retention events per reference intron. 
-`.
+    Count intron retention events per reference intron.
+
+`--fusion`
+    _Deprecated_: use `--analysis fusion` instead.
+    Enable fusion gene detection.
 
 
 ## Single-cell and spatial transcriptomics options
@@ -279,7 +282,7 @@ IsoQuant mode for processing single-cell or spatial transcriptomics data. Availa
 * `curio` - Curio Bioscience spatial data
 * `stereoseq` - Stereo-seq spatial data
 * `stereoseq_nosplit` - Stereo-seq without read splitting
-* `custom_sc` - custom single-cell/spatial mode using a [molecule definition file](single_cell.md#molecule-definition-file-mdf-format)
+* `custom_sc` - custom single-cell/spatial mode using a [molecule description file (MDF)](single_cell.md#molecule-description-format-mdf)
 
 Single-cell and spatial modes enable automatic barcode calling and UMI-based deduplication.
 
@@ -355,7 +358,7 @@ For Visium HD composite barcodes, use `isoquant_lib/scripts/prepare_visium_spot_
 
 Path to a molecule description file (MDF) for `custom_sc` mode.
 Defines molecule structure for universal barcode extraction from any protocol.
-See [MDF format](single_cell.md#molecule-definition-file-mdf-format) for details.
+See [MDF format](single_cell.md#molecule-description-format-mdf) for details.
 
 
 ## Algorithm parameters
@@ -370,7 +373,7 @@ Available options for quantification:
 * `fsm_only` - a stricter subset of `unique_only`: uses only full-splice match reads 
 (all annotated splice junctions present) and monoexonic reads matching monoexonic transcripts; 
 * `unique_only` - use only reads that are uniquely assigned and consistent with a transcript/gene
-(i.e. flagged as unique/unique_minor_difference), default fot transcript quantification;
+(i.e. flagged as unique/unique_minor_difference), default for transcript quantification;
 * `unique_splicing_consistent` - uses uniquely assigned reads that do not contradict annotated splice sites
 (i.e. flagged as unique/unique_minor_difference or inconsistent_non_intronic), default for gene quantification;
 * `with_ambiguous` - in addition to unique reads, ambiguously assigned consistent reads are split between features with equal weights 
@@ -542,7 +545,7 @@ Experiments with simulated data show that this method could give more accurate e
 However, the normalization method does not affect correlation/relative proportions.
 
 `--counts_format`
-    By default, IsoQuant outputs counts in internal linear format (see [formats](formats.md#expression-table-format) and [output](output.md#default-feature-counts-in-linear-format)).
+    By default, IsoQuant outputs counts in internal linear format (see [formats](formats.md#linear-format) and [output](output.md#grouped-counts-in-linear-format)).
     Use this option to convert grouped counts to other format(s). You can provide a list with the following values:
 
 * `matrix` - standard explicit TSV matrix format with genes as rows and groups as columns;
@@ -551,5 +554,13 @@ However, the normalization method does not affect correlation/relative proportio
 larger matrices (e.g. for single-cell experiments) will be saved to MTX (default).
 * `none` - no convertion.
 
-Note that grouped counts can be converted to any format using `{IsoQuant intsllation folder}/isoquant_lib/quantification/convert_grouped_counts.py`.
-See more information [here](output.md#default-grouped-counts-in-linear-format).
+Note that grouped counts can be converted to any format using `{IsoQuant installation folder}/isoquant_lib/quantification/convert_grouped_counts.py`.
+See more information [here](output.md#grouped-counts-in-linear-format).
+
+`--old_exon_count_format`
+    Additionally output the legacy per-exon inclusion/exclusion counts as
+    `*.old_exon_counts.tsv` (deprecated, will be removed in a future release).
+
+`--emit_read_ids`
+    Include per-feature read-id lists (`read_ids_full` / `read_ids_left` /
+    `read_ids_right`) in the exon splice-site count output.

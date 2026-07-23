@@ -34,15 +34,15 @@ A single read may occur more than once if assigned ambiguously.
     - `unique` - reads was unambiguously assigned to a single known isoform;
     - `unique_minor_difference` - read was assigned uniquely but has alignment artifacts;
     - `inconsistent` - read was matched with inconsistencies, closest match(es) are reported;
-    - `inconsistent_non_intronic` - read was matched with inconsistencies, which do not affect intron chain (e.g. olly TSS/TES);
+    - `inconsistent_non_intronic` - read was matched with inconsistencies, which do not affect intron chain (e.g. only TSS/TES);
     - `inconsistent_ambiguous`  - read was matched with inconsistencies equally well to two or more isoforms;
     - `ambiguous` - read was assigned to multiple isoforms equally well;
-    - `noninfomative` - reads is intronic or has an insignificant overlap with a known gene;
+    - `noninformative` - read is intronic or has an insignificant overlap with a known gene;
     - `intergenic` - read is intergenic.
 
     The following two values appear only in the gene-level `gene_assignment_type` column; such reads have no transcript assignment but overlap a gene body:
     - `inconsistent_genic` - read overlaps a single gene but resembles no isoform (counts toward the gene like `inconsistent`);
-    - `inconsistent_multigenic` - read overlaps several genes but resembles no isoform (behaves like `inconsistent_ambiguous`, split across the genes.
+    - `inconsistent_multigenic` - read overlaps several genes but resembles no isoform (behaves like `inconsistent_ambiguous`, split across the genes).
 
 * **Assignment events** (see [detailed explanation](classification.md)):
     - consistent events:
@@ -72,12 +72,12 @@ A single read may occur more than once if assigned ambiguously.
         - `alt_donor_site` - read contains alternative donor site;
         - `alt_acceptor_site` - read contains alternative annotated acceptor site;
         - `intron_migration` - read contains alternative annotated intron of approximately the same length as in the isoform;
-        - `intron_alternation` - read contains alternative intron, which doesn't fall intro any of the categories above;
+        - `intron_alternation` - read contains alternative intron, which doesn't fall into any of the categories above;
         - `mutually_exclusive_exons` - read contains different exon(s) of the same total length comparing to the isoform;
         - `exon_skipping` - read skips exon(s) comparing to the isoform;
         - `exon_merge` - read skips exon(s) comparing to the isoform, but a sequence of a similar length is attached to a neighboring exon;
         - `exon_gain` - read contains additional exon(s) comparing to the isoform;
-        - `exon_detach` - read contains additional exon(s) comparing to the isoform, but a neighboring exon looses a sequnce of a similar length;
+        - `exon_detach` - read contains additional exon(s) comparing to the isoform, but a neighboring exon loses a sequence of a similar length;
         - `terminal_exon_shift` - read has alternative terminal exon;   
         - `alternative_structure` - reads has different intron chain that does not fall into any of categories above;
     - alternative transcription start / end (reported when poly-A tails are present):
@@ -188,7 +188,7 @@ See [options](cmd.md#specific-output-options) to tune your output.
 
 ### Splice junctions count format
 
-This is the format of `splice_junction_counts.tsv` (previously names `intron_counts.tsv`), `intron_retention_counts.tsv`
+This is the format of `splice_junction_counts.tsv` (previously named `intron_counts.tsv`), `intron_retention_counts.tsv`
 and the deprecated `old_exon_counts.tsv` (only with `--old_exon_count_format`).
 
 Tab-separated values, the columns are:
@@ -280,7 +280,7 @@ IsoQuant outputs:
 - `*.extended_annotation.gtf` - all known transcripts plus discovered novel ones.
 
 All annotations contain `exon`, `transcript` and `gene` features.
-Known genes and transcripts are reposted with their reference IDs. 
+Known genes and transcripts are reported with their reference IDs. 
 Novel genes IDs have format `novel_gene_XXX_###` and novel transcript IDs are formatted as `transcript###.XXX.TYPE`,
 where `###` is the unique number (not necessarily consecutive), `XXX` is the chromosome name and TYPE can be one of the following:
 
@@ -314,7 +314,7 @@ provides comparison between discovered novel transcripts vs reference transcript
 ## Fusion prediction format
 
 Produced only when fusion detection is requested via `--analysis fusion`.
-This option will result in `*.fusion_<bam_basename>.tsv` with the following columns:
+This option will result in one `fusion_<bam_basename>.tsv` file per input BAM with the following columns:
 
 * `LeftGene` / `RightGene` - gene symbols of the two fusion partners;
 * `LeftBiotype` / `RightBiotype` - biotype of each partner gene (e.g. `protein_coding`);
