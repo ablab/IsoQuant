@@ -598,7 +598,6 @@ def resolve_analyses(args):
     # capture legacy stage flags before they are overwritten below
     legacy_count_exons = args.count_exons
     legacy_intron_retentions = args.count_intron_retentions
-    legacy_fusion = args.fusion
     legacy_no_model = args.no_model_construction
 
     if args.analysis is not None:
@@ -611,9 +610,6 @@ def resolve_analyses(args):
         analyses = {AnalysisType.transcript_discovery}
 
     # apply deprecated stage flags additively, on top of the chosen analyses
-    if legacy_fusion:
-        logger.warning("--fusion is deprecated, use --analysis fusion")
-        analyses.add(AnalysisType.fusion)
     if legacy_count_exons:
         logger.warning("--count_exons is deprecated, use --analysis exon_quantification")
         analyses.add(AnalysisType.exon_quantification)
@@ -1347,7 +1343,7 @@ def run_pipeline(args):
     if len(args.input_data.samples) > 1 and args.genedb and args.run_quantification:
         combine_counts(args.input_data, args.output)
 
-    # Run fusion detection after isoform detection when --fusion is enabled
+    # Run fusion detection after isoform detection when fusion is enabled
     if getattr(args, "fusion", False):
         logger.info(" === Isoform detection completed, starting fusion detection === ")
         bam_files = get_bam_files_from_samples(args.input_data)
