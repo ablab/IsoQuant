@@ -134,8 +134,8 @@ Multiple run types can be combined: `run_type	transcripts,quantification_known,p
 - `reduced_db` - Prefix to reduced gene database for transcript evaluation
 - `reference_tpm` - Ground truth TPM values for transcripts
 - `reference_gene_tpm` - Ground truth TPM values for genes
-- `check_files` - Space-separated list of expected output file suffixes
-- `check_input_files` - Space-separated list of expected output file suffixes (checked as `{label}.{suffix}`)
+- `check_input_files` - Space-separated list of expected output file suffixes; each is checked for existence as `{label}.{suffix}` in the sample output dir (missing files fail the run with `-5`).
+- `check_files` - **Deprecated alias for `check_input_files`**, honored identically (with a warning). It used to be silently ignored by `run_pipeline.py`, so historical `check_files` lists drifted out of sync with real output names — prefer `check_input_files` in new/updated configs.
 - `qa_options` - Additional options for quality assessment scripts
 - `edit_distance` - Edit distance for UMI filtering (default 3; used by `allinfo` run type)
 - `tolerance` - Tolerance fraction for metric comparison (default 0.01 = 1%)
@@ -410,7 +410,7 @@ Data and configs are shared via `/abga/work/andreyp/ci_isoquant/`
 - `GROUP5.CSV.SIRVs.R10.yaml` - Group by CSV file
 - `GROUP6-9.MTX*.yaml` - Matrix Market format output
 
-**Run type**: Usually `transcripts` with `check_files` to verify grouped outputs
+**Run type**: Usually `transcripts` with `check_input_files` to verify grouped outputs (older GROUP configs used the now-deprecated `check_files` alias)
 
 ### 4. Resume Tests
 
