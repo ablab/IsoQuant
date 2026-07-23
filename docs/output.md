@@ -4,7 +4,7 @@ IsoQuant output files will be stored in `<output_dir>`, which is set by the user
 If the output directory was not specified the files are stored in `isoquant_output`.
 
 IsoQuant consists of two stages, which generate its own output:
-1. Reference-based analysis. Runs only if reference annotation is provided. Performs read-to-isofrom assignment,
+1. Reference-based analysis. Runs only if reference annotation is provided. Performs read-to-isoform assignment,
 splice site correction and abundance quantification for reference genes/transcripts.
 2. Transcript discovery. Reconstructs transcript models and performs abundance quantification for discovered isoforms.
 
@@ -78,7 +78,7 @@ The region-based `exon` and `exon_splice_site` grouped counts are produced in li
 
 The exon splice-site counts carry a `group_id` column (one row per feature and group; `NA` when ungrouped). To reconstruct the per-molecule group-list format (one entry per read, e.g. barcodes for downstream cell/cell-type aggregation) use `isoquant_lib/scripts/exon_splice_site_to_group_lists.py`.
 
-Note that grouped counts can be converted to any format using `{IsoQuant intsllation folder}/isoquant_lib/quantification/convert_grouped_counts.py`.
+Note that grouped counts can be converted to any format using `{IsoQuant installation folder}/isoquant_lib/quantification/convert_grouped_counts.py`.
 The script accepts the following arguments:
 
 `--output` or `-o`
@@ -88,7 +88,7 @@ The script accepts the following arguments:
     Path to counts files in linear IsoQuant format;
 
 `--genedb` or `-g`
-    Gene annotation in gffutils `.db` format (can be found in IsoQuant log), feature names will be used instead of IDs if provided; works only for genes and trascncripts;
+    Gene annotation in gffutils `.db` format (can be found in IsoQuant log), feature names will be used instead of IDs if provided; works only for genes and transcripts;
 
 `--feature_type {gene,transcript,exon,intron}`
     Feature type to be converted [gene, transcript, exon, intron]; annotation lookup applies only to genes/transcripts;
@@ -153,6 +153,18 @@ If multiple experiments are provided, aggregated expression matrices will be pla
 * `combined_gene_tpm.tsv`
 * `combined_transcript_counts.tsv`
 * `combined_transcript_tpm.tsv`
+
+
+## Fusion detection output
+
+_Produced only when `fusion` is among the requested `--analysis` values (deprecated alias: `--fusion`)._
+
+Fusion detection runs after the isoform pipeline and reports candidate gene fusions for each input BAM file:
+
+* `fusion_<BAM_NAME>.tsv` - detected gene fusions for the respective input BAM, placed directly in `<output_dir>` (one file per BAM);
+
+See [output formats](formats.md#fusion-prediction-format) for a description of the columns.
+
 
 Additionally, an `isoquant.log` log file will be saved to the output directory.  
 
