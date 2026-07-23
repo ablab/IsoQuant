@@ -729,6 +729,18 @@ def run_fusion_quality(args, config_dict, baselines=None):
     return exit_code
 
 
+def collect_check_file_list(config_dict):
+    """Merge expected-output-file suffixes from `check_input_files` and the
+    deprecated `check_files` alias into a single list, preserving order
+    (check_input_files first). Either or both keys may be absent."""
+    files_list = []
+    if "check_input_files" in config_dict:
+        files_list += config_dict["check_input_files"].split()
+    if "check_files" in config_dict:
+        files_list += config_dict["check_files"].split()
+    return files_list
+
+
 def check_output_files(out_dir, label, file_list):
     missing_files = []
     internal_output_dir = os.path.join(out_dir, label)
@@ -793,8 +805,12 @@ def main():
     if RT_TSS_PREDICTION in run_types:
         err_codes.append(run_tss_prediction(args, config_dict, baselines))
 
-    if "check_input_files" in config_dict:
-        files_list = config_dict["check_input_files"].split()
+    # `check_input_files` is the enforced key; `check_files` is a deprecated alias
+    # honored identically (it used to be silently ignored, which let config lists drift).
+    if "check_input_files" in config_dict or "check_files" in config_dict:
+        if "check_files" in config_dict:
+            log.warning("Config key 'check_files' is deprecated; use 'check_input_files'. Honoring it identically.")
+        files_list = collect_check_file_list(config_dict)
         label = config_dict["label"]
         run_name = config_dict["name"]
         output_folder = os.path.join(args.output if args.output else config_dict["output"], run_name)

@@ -22,6 +22,7 @@ from run_pipeline import (
     load_yaml_config as pipeline_load_yaml,
     load_config as pipeline_load_config,
     check_value,
+    collect_check_file_list,
 )
 from run_barcode_test import (
     load_config as barcode_load_config,
@@ -533,6 +534,30 @@ class TestYamlTsvRoundTrip(unittest.TestCase):
         cfg_opts = cfg_config["isoquant_options"].replace('"', '').split()
         yaml_opts = yaml_config["isoquant_options"].replace('"', '').split()
         self.assertEqual(cfg_opts, yaml_opts)
+
+
+class TestCollectCheckFileList(unittest.TestCase):
+    """The runner must honor the deprecated `check_files` alias, not silently
+    ignore it (which previously let GROUP config lists drift undetected)."""
+
+    def test_check_input_files_only(self):
+        self.assertEqual(
+            collect_check_file_list({"check_input_files": "a.tsv b.tsv"}),
+            ["a.tsv", "b.tsv"])
+
+    def test_deprecated_check_files_is_honored(self):
+        # The whole point of the fix: check_files must NOT be dropped.
+        self.assertEqual(
+            collect_check_file_list({"check_files": "a.tsv b.tsv"}),
+            ["a.tsv", "b.tsv"])
+
+    def test_both_keys_merged_input_first(self):
+        self.assertEqual(
+            collect_check_file_list({"check_input_files": "a.tsv", "check_files": "b.tsv"}),
+            ["a.tsv", "b.tsv"])
+
+    def test_neither_key(self):
+        self.assertEqual(collect_check_file_list({"name": "x"}), [])
 
 
 if __name__ == "__main__":
