@@ -1,5 +1,29 @@
 # IsoQuant changelog
 
+## Isoquant 4.0.0, 27 July 2026
+
+Major update with new functionality and output formats.
+
+- Fully functional pipeline for single-cell and spatial data (developed in collaboration with @lcmmichielsen and @careenfoord),
+which includes :
+  - Barcode detection for 10x single-cell v3/v2, 10x Visium/VisiumHD, Curio, Stereo-seq;
+  - Universal barcode detection for use-defined molecules structure;
+  - UMI-based PCR-deduplication;
+  - Barcode-aware quantification;
+- Fusion gene detection (developed by @solatar);
+- PolyA site/TSS discovery (developed by @arina-c);
+- Significantly improved accuracy of PolyA and TSS positions for discovered transcripts;
+- Improved splice-site accuracy for discovered transcripts (developed by @heidi-holappa);
+- Reworked read assignment and quantification for discovered transcripts to improve consistency with reference-based analysis;
+- New exon counting strategies (two new output files);
+- Added intron retention counts;
+- New universal read assignment format for all pipelines, possible to convert to old formats; 
+- New key options:
+  - `--mode` to switch between bulk, single-cell and spatial protocols;
+  - `--analysis` to control the output produced;
+- Revised and updated the documentation;
+- Multiple minor bug-fixes.
+
 ## IsoQuant 3.13.1, 17 June 2026
 
 - Fixed duplicated exon and intron counts ([#394](https://github.com/ablab/IsoQuant/issues/394)).

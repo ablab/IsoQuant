@@ -383,7 +383,7 @@ def parse_args(cmd_args=None, namespace=None):
     add_hidden_option("--collect_tss_training", type=str, default=None,
                       help="developer: dump per-peak features + true_peak label for TSS training to this CSV path.")
 
-    isoquant_version = "3.12.0"
+    isoquant_version = "4.0.0"
     try:
         with open(os.path.join(os.path.dirname(os.path.realpath(__file__)), "VERSION")) as version_f:
             isoquant_version = version_f.readline().strip()
