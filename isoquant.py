@@ -294,8 +294,6 @@ def parse_args(cmd_args=None, namespace=None):
                                    help='extract barcodes and UMIs from BAM tags (CB/UB by default)')
     add_option_to_group(sc_args_group, "--barcode2spot", type=str,
                                    help='TSV file mapping barcode to cell type / spot id.')
-    add_option_to_group(sc_args_group, "--barcode2barcode", type=str,
-                                   help='TSV file mapping barcode to spot IDs for UMI deduplication')
     add_option_to_group(sc_args_group, "--molecule", type=str,
                                    help='molecule definition file (MDF) for custom_sc mode: '
                                         'defines molecule structure for universal barcode extraction')
@@ -305,6 +303,8 @@ def parse_args(cmd_args=None, namespace=None):
                                    help='BAM tag for UMI [UB]')
     add_additional_option_to_group(sc_args_group, "--strip_barcode_suffix", action='store_true', default=False,
                                    help='remove suffix after dash from barcodes extracted from BAM tag')
+    add_additional_option_to_group(sc_args_group, "--barcode2barcode", type=str,
+                                   help='TSV file mapping barcode to spot IDs for UMI deduplication')
 
     # ALGORITHM
     add_additional_option_to_group(algo_args_group, "--report_novel_unspliced", "-u", type=bool_str,
@@ -982,12 +982,20 @@ def set_data_dependent_options(args):
         elif "barcode_spot" not in args.read_group and "no_auto" not in args.read_group:
             args.read_group.append("barcode_spot")
 
-    # Automatically add barcode_barcode grouping when --barcode2barcode is set
     if hasattr(args, 'barcode2barcode') and args.barcode2barcode:
+        # Automatically add barcode_barcode grouping when --barcode2barcode is set
         if args.read_group is None:
             args.read_group = ["barcode_barcode"]
         elif "barcode_barcode" not in args.read_group and "no_auto" not in args.read_group:
             args.read_group.append("barcode_barcode")
+
+        # Automatically add allinfo output
+        if args.large_output is None:
+            args.large_output = ["allinfo"]
+        elif "none" in args.large_output:
+            pass
+        elif "allinfo" not in args.large_output:
+            args.large_output.append("allinfo")
 
     # In SC modes, auto-add barcode grouping if no barcode-related grouping is set
     if args.mode.needs_barcode_calling():

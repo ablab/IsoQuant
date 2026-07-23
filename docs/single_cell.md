@@ -153,27 +153,32 @@ When `--barcode2spot` is set, `--read_group barcode_spot` will be set automatica
 to group counts by cell type, spatial regions, or other provided properties.
 This will also turn off automatic per-barcode grouping (set `--read_group barcode` to enable).
 
-`--barcode2barcode`
-
-Path to TSV file mapping barcodes to spot IDs for spot-level UMI deduplication.
-When multiple barcodes map to the same physical spot (e.g. at lower spatial resolution),
-this option groups them together during UMI deduplication, collapsing duplicates across the entire spot.
-
-Format: `file.tsv` or `file.tsv:barcode_col:spot_col(s)` (same syntax as `--barcode2spot`).
-When multiple spot columns are provided, a separate UMI deduplication round is performed for each column.
-However, only the main (sequence-based) UMI-deduplicated reads will be used for quantification.
-
-When `--barcode2barcode` is set, `--read_group barcode_barcode` will be set automatically.
-This will also turn off automatic per-barcode grouping (set `--read_group barcode` to enable).
-
-For Visium HD composite barcodes, use `isoquant_lib/scripts/prepare_visium_spot_ids.py` to generate the mapping file.
-
 `--molecule`
 
 Path to a molecule description format (MDF) file for `custom_sc` mode.
 This file defines the structure of the sequencing molecule (barcodes, UMIs, linkers, polyT, cDNA)
 and allows IsoQuant to process reads from any single-cell or spatial protocol.
 See the [MDF format](#molecule-description-format-mdf) section below for details.
+
+`--barcode2barcode`
+
+_This option is still under development._
+
+
+Path to a TSV file with mapping barcodes to spot IDs for spot-level UMI deduplication.
+When multiple barcodes map to the same physical spot (e.g. at lower spatial resolution),
+this option groups them together during UMI deduplication, collapsing duplicates across the entire spot (not just the barcode).
+
+Format: `file.tsv` or `file.tsv:barcode_col:spot_col(s)` (same syntax as `--barcode2spot`).
+When multiple spot columns are provided, a separate UMI deduplication round is performed for each column and outputs 
+corresponding UMI-deduplicated reads only in [allinfo format](formats.md#umi-filtering-allinfo-deprecated-old-format).
+However, only the main (barcode-based) UMI-deduplicated reads will be used for quantification.
+
+When `--barcode2barcode` is set, `--read_group barcode_barcode` will be set automatically.
+Grouping by raw barcode sequences will be disabled in this case, use `--read_group barcode` to enable it.
+
+For Visium HD composite barcodes, use `isoquant_lib/scripts/prepare_visium_spot_ids.py` to generate the mapping file.
+
 
 ## Molecule description format (MDF)
 

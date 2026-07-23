@@ -339,26 +339,30 @@ When `--barcode2spot` is set, `--read_group barcode_spot` will be set automatica
 to group counts by cell type, spatial regions, or other provided properties. 
 Grouping by raw barcode sequences will be disabled in this case, use `--read_group barcode` to enable it.
 
+`--molecule`
+
+Path to a molecule description file (MDF) for `custom_sc` mode.
+Defines molecule structure for universal barcode extraction from any protocol.
+See [MDF format](single_cell.md#molecule-description-format-mdf) for details.
+
+
 `--barcode2barcode`
+
+_This option is still under development._
 
 Path to a TSV file with mapping barcodes to spot IDs for spot-level UMI deduplication.
 When multiple barcodes map to the same physical spot (e.g. at lower spatial resolution),
 this option groups them together during UMI deduplication, collapsing duplicates across the entire spot (not just the barcode).
 
 Format: `file.tsv` or `file.tsv:barcode_col:spot_col(s)` (same syntax as `--barcode2spot`).
-When multiple spot columns are provided, a separate UMI deduplication round is performed for each column.
-However, only the main (sequence-based) UMI-deduplicated reads will be used for quantification.
+When multiple spot columns are provided, a separate UMI deduplication round is performed for each column and outputs 
+corresponding UMI-deduplicated reads only in [allinfo format](formats.md#umi-filtering-allinfo-deprecated-old-format).
+However, only the main (barcode-based) UMI-deduplicated reads will be used for quantification.
 
 When `--barcode2barcode` is set, `--read_group barcode_barcode` will be set automatically.
 Grouping by raw barcode sequences will be disabled in this case, use `--read_group barcode` to enable it.
 
 For Visium HD composite barcodes, use `isoquant_lib/scripts/prepare_visium_spot_ids.py` to generate the mapping file.
-
-`--molecule`
-
-Path to a molecule description file (MDF) for `custom_sc` mode.
-Defines molecule structure for universal barcode extraction from any protocol.
-See [MDF format](single_cell.md#molecule-description-format-mdf) for details.
 
 
 ## Algorithm parameters
