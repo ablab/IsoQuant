@@ -33,7 +33,7 @@ which can also be used as a standalone tool.
 | `curio`             | Curio Bioscience       | 1                       | 9          | Double barcode (8bp + 6bp) with linker                                    |
 | `stereoseq`         | Stereo-seq             | 1                       | 10         | 25bp barcode, read splitting mode                                         |
 | `stereoseq_nosplit` | Stereo-seq             | 1                       | 10         | 25bp barcode, no read splitting                                           |
-| `custom_sc`         | Any protocol           | 0 (uses MDF)            | varies     | User-defined molecule structure via [MDF file](#molecule-definition-file-mdf-format)                       |
+| `custom_sc`         | Any protocol           | 0 (uses MDF)            | varies     | User-defined molecule structure via [MDF file](#molecule-description-format-mdf)                       |
 
 ## Quick start examples
 
@@ -173,7 +173,7 @@ For Visium HD composite barcodes, use `isoquant_lib/scripts/prepare_visium_spot_
 Path to a molecule description format (MDF) file for `custom_sc` mode.
 This file defines the structure of the sequencing molecule (barcodes, UMIs, linkers, polyT, cDNA)
 and allows IsoQuant to process reads from any single-cell or spatial protocol.
-See the [MDF format](#molecule-definition-file-mdf-format) section below for details.
+See the [MDF format](#molecule-description-format-mdf) section below for details.
 
 ## Molecule description format (MDF)
 
@@ -195,7 +195,7 @@ An MDF file has two parts:
 | `VAR_LIST`                | Variable sequence matched against an inline list                              | Comma-separated sequences |
 | `VAR_ANY`                 | Variable fixed-length sequence extracted as-is                                | Length (integer)         |
 | `VAR_ANY_SEPARATOR`       | Fixed-length variable separator sequence (not extracted)                      | Length (integer)        |
-| `VAR_ANY_NON_T_SEPARATOR` | Fixed-length variable separator sequence without T nucleoties (not extracted) | Length (integer)         |
+| `VAR_ANY_NON_T_SEPARATOR` | Fixed-length variable separator sequence without T nucleotides (not extracted) | Length (integer)         |
 | `PolyT`                   | PolyT tail                                                                    | (none)                   |
 | `cDNA`                    | cDNA region                                                                   | (none)                   |
 
@@ -229,7 +229,7 @@ TSO       CONST      CCCATGTACTCTGCGTTGATACCACTGCTT
 ```
 R1:Barcode:UMI:PolyT:cDNA:TSO
 R1        CONST      CTACACGACGCTCTTCCGATCT
-Barcode   VAR_FILE   AAACCCGGGTTTAAAC,TTTGGGCCCAAATTTG,GGGGAAAACCCCTTTT
+Barcode   VAR_LIST   AAACCCGGGTTTAAAC,TTTGGGCCCAAATTTG,GGGGAAAACCCCTTTT
 UMI       VAR_ANY    12
 TSO       CONST      CCCATGTACTCTGCGTTGATACCACTGCTT
 ```
@@ -275,7 +275,7 @@ The split modes detect multiple barcode/UMI patterns within each read,
 split the read at molecule boundaries, and produce a new FASTA file
 with one record per cDNA molecule.
 
-The split modes produce an additional output file (`*.split_reads.fa`)
+The split modes produce an additional output file (`*.split_reads.fasta`)
 containing the extracted cDNA segments. Each segment is named with
 the original read ID plus coordinates and strand: `{read_id}_{start}_{end}_{strand}`.
 
@@ -293,7 +293,7 @@ The representative read is selected based on:
 3. Longer transcript alignment
 
 The resulting reads after UMI-deduplication are used for the subsequent analysis such as quantification and
-are stored in an [`read_info.tsv` file](formats.md#read-info-default-output).
+are stored in a [`read_info.tsv` file](formats.md#read-info-default-output).
 
 ### Spot-level UMI deduplication
 
@@ -335,7 +335,7 @@ Use `--read_group` to control how reads are grouped for quantification.
 Multiple grouping strategies can be combined (space-separated), producing separate count tables for each.
 
 In single-cell/spatial modes, IsoQuant automatically adds `--read_group barcode`
-**only** `--barcoded_reads` or `--barcode2spot` are not set.
+**only when** `--barcoded_reads` or `--barcode2spot` are not set.
 Use `--read_group barcode` to group reads by barcode explicitly. In case of a large number of barcodes, it may take a lot of time. 
 Use `--read_group no_auto` to disable automatic grouping.
 

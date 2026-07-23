@@ -122,7 +122,7 @@ If multiple experiments are provided, aggregated expression matrices will be pla
 
 #### PolyA / TSS site prediction
 
-Whenever a gene annotation is provides, IsoQuant predicts known and novel polyA sites:
+Whenever a gene annotation is provided, IsoQuant predicts known and novel polyA sites:
 
 * `SAMPLE_ID.polyA_prediction.tsv` - predicted polyA sites per reference transcript.
 
@@ -173,7 +173,7 @@ Produced only when `fusion` is among the requested `--analysis` values.
 
 Fusion detection runs after the isoform pipeline and reports candidate gene fusions:
 
-* `SAMPLE_ID.fusion.tsv` - detected gene fusions;
+* `fusion_<bam_basename>.tsv` - detected gene fusions, one file per input BAM, placed directly in `<output_dir>`;
 
 See [output formats](formats.md#fusion-prediction-format) for a description of the columns.
 

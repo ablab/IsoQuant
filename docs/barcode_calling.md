@@ -80,7 +80,7 @@ Barcode calling mode. Available modes: `tenX_v3`, `tenX_v2`, `tenX_v3_split`, `t
 `--molecule`
 Path to a molecule description format (MDF) file for `custom_sc` mode.
 This file defines the structure of the sequencing molecule (barcodes, UMIs, linkers, polyT, cDNA).
-See [MDF format](single_cell.md#molecule-definition-file-mdf-format) for the format specification.
+See [MDF format](single_cell.md#molecule-description-format-mdf) for the format specification.
 
 `--threads` or `-t`
 
@@ -197,7 +197,7 @@ Requires 1 barcode whitelist file (e.g., the 10x `3M-february-2018.txt.gz`).
 
 ### 10x Genomics split modes (`tenX_v3_split`, `tenX_v2_split`)
 
-For concatenated ONT reads containing multiple 10x cDNA moleculesd.
+For concatenated ONT reads containing multiple 10x cDNA molecules.
 Uses the same molecule structure as `tenX_v3` but scans the entire read for multiple
 barcode/UMI/TSO patterns on both strands.
 
@@ -240,7 +240,7 @@ Molecule structure:
 ### Custom protocols (`custom_sc`)
 
 Uses a molecule definition file (MDF) to describe arbitrary molecule structures.
-See [MDF format](single_cell.md#molecule-definition-file-mdf-format).
+See [MDF format](single_cell.md#molecule-description-format-mdf).
 
 The universal extractor:
 1. Tries both forward and reverse complement orientations
