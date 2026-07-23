@@ -131,7 +131,10 @@ Note, that a single read may occur more than once if assigned ambiguously.
 
 ### UMI filtering allinfo (deprecated old format)
 
-Produced in single-cell/spatial modes when `--large_output allinfo` is enabled.
+By default the reads that survive UMI deduplication are written only in the unified
+[read info](#read-info-default-output) format (`SAMPLE_ID.read_info.tsv.gz`); the
+`allinfo` format described here is a legacy alternative, produced only when
+`--large_output allinfo` is enabled.
 The file `SAMPLE_ID.UMI_filtered.ED{N}.allinfo[.gz]` contains one line per read that survived UMI deduplication.
 Tab-separated values, the columns are:
 
@@ -151,7 +154,18 @@ Tab-separated values, the columns are:
 
 Coordinate lists use `;%;` as the element separator.
 
-An accompanying `SAMPLE_ID.UMI_filtered.ED{N}.stats.tsv` file contains summary statistics of the UMI filtering process.
+In single-cell/spatial modes IsoQuant always writes UMI-deduplication statistics to
+`SAMPLE_ID.UMI_filtered.ED{N}.stats.tsv` (independently of `--large_output`).
+
+When `--barcode2barcode` (spot-level UMI deduplication) is set, IsoQuant runs one
+extra deduplication round per spot column. These extra rounds do **not** emit their
+own read output (neither `read_info` nor `allinfo`) and are not used for
+quantification — only the main sequence-based round feeds the default
+`SAMPLE_ID.read_info.tsv.gz` and the counts. Each extra round only writes its
+statistics to `SAMPLE_ID.UMI_filtered.barcode_barcode_col{C}.ED{N}.stats.tsv`
+(`{C}` = 0-based spot-column index), plus, when `--large_output allinfo` is set, a
+matching `SAMPLE_ID.UMI_filtered.barcode_barcode_col{C}.ED{N}.allinfo[.gz]` in the
+same format as above.
 
 
 
