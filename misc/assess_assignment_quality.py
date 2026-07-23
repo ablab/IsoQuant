@@ -6,6 +6,7 @@
 # # All Rights Reserved
 # See file LICENSE for details.
 ############################################################################
+import bz2
 import gzip
 import os
 import re
@@ -73,7 +74,14 @@ class MappingData:
             logger.error("Unsupported extension: %s" % fasta_ext)
             return
 
-        for record in SeqIO.parse(fasta, data_type):
+        if outer_ext in {'.gz', '.gzip'}:
+            handle = gzip.open(fasta, "rt")
+        elif outer_ext in {'.bz2', '.bzip2'}:
+            handle = bz2.open(fasta, "rt")
+        else:
+            handle = open(fasta, "rt")
+
+        for record in SeqIO.parse(handle, data_type):
             if is_real_data:
                 # TODO: check SQANTI seq names
                 seq_id = record.id
@@ -94,6 +102,7 @@ class MappingData:
                 else:
                     logger.warning("Unexpected isoform id %s" % isoform_id)
             self.seq_set.add(seq_id)
+        handle.close()
         logger.info("Total %d sequences loaded" % len(self.seq_set))
 
     def parse_bam(self, bam_file):
