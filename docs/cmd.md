@@ -258,10 +258,6 @@ Feeding you data as pseudo-bulk (`--mode bulk`) is recommended for full transcri
     _Deprecated_: use `--analysis exon_quantification` instead.
     Count intron retention events per reference intron.
 
-`--fusion`
-    _Deprecated_: use `--analysis fusion` instead.
-    Enable fusion gene detection.
-
 
 ## Single-cell and spatial transcriptomics options
 
