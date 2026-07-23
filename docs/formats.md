@@ -230,3 +230,47 @@ In addition, each transcript contains `canonical` property if `--check_canonical
 If `--sqanti_output` option is set, each novel transcript also has a `similar_reference_id` field containing ID of
 a most similar reference isoform and `alternatives` attribute, which indicates the exact differences between
 this novel transcript and the similar reference transcript.
+
+## PolyA and TSS site prediction format
+
+When a gene annotation is provided (`--genedb`) IsoQuant predicts per-transcript
+transcription end (polyA) and, with full-length data (`--fl_data`), transcription
+start (TSS) sites. Predictions are written to `SAMPLE.polyA_prediction.tsv` and
+`SAMPLE.TSS_prediction.tsv`. When read groups are used (`--read_group`), an
+additional grouped file is produced per grouping strategy, named
+`SAMPLE.polyA_prediction_grouped_<strategy>` / `SAMPLE.TSS_prediction_grouped_<strategy>`.
+Both files share the same layout. Tab-separated values, the columns are:
+
+* `chromosome` - chromosome ID;
+* `transcript_id` - reference transcript the site was predicted for;
+* `gene_id` - reference gene ID;
+* `prediction` - genomic coordinate of the predicted terminal site;
+* `counts` - number of reads supporting the predicted site (reads whose terminal position falls within the peak window);
+* `flag` - `Known` if the predicted site is within 10 bp of the annotated transcript end, `Novel` otherwise.
+
+Grouped files contain two additional columns (one row per predicted site and group with a non-zero count):
+
+* `counts_byGroup` - number of reads from this group supporting the site;
+* `group_id` - read group name.
+
+## Fusion prediction format
+
+Produced only when fusion detection is requested via `--analysis fusion`.
+One TSV is written per input BAM, named `fusion_<bam_basename>.tsv`.
+Tab-separated values, the columns are:
+
+* `LeftGene` / `RightGene` - gene symbols of the two fusion partners;
+* `LeftBiotype` / `RightBiotype` - biotype of each partner gene (e.g. `protein_coding`);
+* `LeftScore` / `RightScore` - mean per-read gene-assignment score for each side;
+* `LeftChromosome` / `RightChromosome` - chromosome of each breakpoint;
+* `LeftBreakpoint` / `RightBreakpoint` - consensus genomic breakpoint coordinate on each side;
+* `SupportingReads` - number of reads supporting the fusion;
+* `FusionName` - `LeftGene-RightGene`;
+* `Class` - fusion class: `canonical`, `cis-SAGe`, `intragenic`, or `intergenic`;
+* `Valid` - `True`/`False`, whether the fusion passed all validation filters;
+* `Confidence` - confidence score in the range `[0, 1]`;
+* `Reasons` - semicolon-separated list of filter/annotation reasons.
+
+By default the report keeps only `canonical` and `cis-SAGe` fusions with
+`Confidence` >= 0.3; invalid entries passing these filters are still reported
+for inspection, with the failure reason in the `Reasons` column.
