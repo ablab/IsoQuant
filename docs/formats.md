@@ -2,7 +2,9 @@
 
 Although most output files include headers that describe the data, a brief explanation of the output files is provided below.
 
-## Read info (default output)
+## Read assignments 
+
+### Read info (default output)
 
 The default per-read output format. Tab-separated values, the columns are:
 
@@ -10,11 +12,11 @@ The default per-read output format. Tab-separated values, the columns are:
 * `chr` - chromosome id;
 * `strand` - strand of the assigned isoform (not to be confused with read mapping strand);
 * `gene_id` - gene id to which the read was assigned;
-* `gene_assignment_type` - gene-level assignment type; same values as `assignment_type` below, plus two gene-only values for reads that overlap a gene body but resemble no isoform: `inconsistent_genic` (a single overlapping gene) and `inconsistent_multigenic` (several overlapping genes);
+* `gene_assignment_type` - gene-level assignment type (see below);
 * `isoform_id` - isoform id to which the read was assigned;
-* `isoform_assignment_type` - transcript-level assignment type (same values as `assignment_type` below);
-* `assignment_events` - list of detected events (same format as below);
-* `classification` - SQANTI-like classification: `full_splice_match`, `incomplete_splice_match`, `novel_in_catalog`, `novel_not_in_catalog`, `genic`, `antisense`, `fusion`, `intergenic`, `genic_intron`;
+* `isoform_assignment_type` - transcript-level assignment type (see below);
+* `assignment_events` - list of detected events (see below);
+* `classification` - SQANTI-like classification (see below); 
 * `exons` - corrected exon coordinates (1-based, Illumina-corrected when available);
 * `polyA` - `True` if poly-A tail is detected, `False` otherwise;
 * `CAGE` - `True`/`False` if CAGE data is provided, `.` otherwise;
@@ -27,22 +29,7 @@ The default per-read output format. Tab-separated values, the columns are:
 
 A single read may occur more than once if assigned ambiguously.
 
-To convert `read_info.tsv` to legacy formats, use the conversion script:
-```
-python -m isoquant_lib.scripts.convert_read_info --read_info SAMPLE.read_info.tsv.gz --format read_assignments --output SAMPLE.read_assignments.tsv
-python -m isoquant_lib.scripts.convert_read_info --read_info SAMPLE.read_info.tsv.gz --format allinfo --output SAMPLE.allinfo.tsv
-```
-
-## Read to isoform assignment (legacy)
-
-Tab-separated values, the columns are:
-
-* `read_id` - read id;
-* `chr` - chromosome id;
-* `strand` - strand of the assigned isoform (not to be confused with read mapping strand);
-* `isoform_id` - isoform id to which the read was assigned;
-* `gene_id` - gene id to which the read was assigned;
-* `assignment_type` - assignment type, can be:
+* Assignment types:
     - `unique` - reads was unambiguously assigned to a single known isoform;
     - `unique_minor_difference` - read was assigned uniquely but has alignment artifacts;
     - `inconsistent` - read was matched with inconsistencies, closest match(es) are reported;
@@ -52,10 +39,11 @@ Tab-separated values, the columns are:
     - `noninfomative` - reads is intronic or has an insignificant overlap with a known gene;
     - `intergenic` - read is intergenic.
 
-    The following two values appear only in the gene-level `gene_assignment_type` column (never as a transcript `assignment_type`); such reads have no transcript assignment but overlap a gene body:
+    The following two values appear only in the gene-level `gene_assignment_type` column; such reads have no transcript assignment but overlap a gene body:
     - `inconsistent_genic` - read overlaps a single gene but resembles no isoform (counts toward the gene like `inconsistent`);
-    - `inconsistent_multigenic` - read overlaps several genes but resembles no isoform (behaves like `inconsistent_ambiguous`, split across the genes);
-* `assignment_events` - list of detected inconsistencies; for each assigned isoform a list of detected inconsistencies relative to the respective isoform is stored; values in each list are separated by `+` symbol, lists are separated by comma, the number of lists equals to the number of assigned isoforms; possible events are (see graphical representation below):
+    - `inconsistent_multigenic` - read overlaps several genes but resembles no isoform (behaves like `inconsistent_ambiguous`, split across the genes.
+
+* Assignment events (see [detailed explanation](classification.md)):
     - consistent events:
         - `none` / `.` / `undefined` - no special event detected;
         - `mono_exon_match` mono-exonic read matched to mono-exonic transcript;
@@ -97,6 +85,39 @@ Tab-separated values, the columns are:
         - `correct_polya_site` - poly-A site matches reference transcript end;
         - `aligned_polya_tail` - poly-A tail aligns to the reference;  
         - `alternative_tss` - alternative transcription start site.
+
+* SQANTI-like classifications:
+  - `full_splice_match`;
+  - `incomplete_splice_match`;
+  - `novel_in_catalog`;
+  - `novel_not_in_catalog`;
+  - `genic`;
+  - `antisense`;
+  - `fusion`;
+  - `intergenic`;
+  - `genic_intron`.
+  
+
+To convert `read_info.tsv` to old deprecated formats, use the conversion script:
+```
+python -m isoquant_lib.scripts.convert_read_info --read_info SAMPLE.read_info.tsv.gz --format read_assignments --output SAMPLE.read_assignments.tsv
+
+python -m isoquant_lib.scripts.convert_read_info --read_info SAMPLE.read_info.tsv.gz --format allinfo --output SAMPLE.allinfo.tsv
+```
+
+### Read to isoform assignment 
+
+Produced when `--large_output read_assignments` is enabled.
+
+Tab-separated values, the columns are:
+
+* `read_id` - read id;
+* `chr` - chromosome id;
+* `strand` - strand of the assigned isoform (not to be confused with read mapping strand);
+* `isoform_id` - isoform id to which the read was assigned;
+* `gene_id` - gene id to which the read was assigned;
+* `assignment_type` - transcript assignment type;
+* `assignment_events` - list of detected inconsistencies; for each assigned isoform a list of detected inconsistencies relative to the respective isoform is stored; values in each list are separated by `+` symbol, lists are separated by comma, the number of lists equals to the number of assigned isoforms; 
 * `exons` - list of coordinates for normalized read exons (1-based, indels and polyA exons are excluded);
 * `additional` - field for supplementary information, which may include:
     - `gene_assignment` - Gene assignment classification; possible values are the same as for transcript classification.
@@ -106,33 +127,10 @@ Tab-separated values, the columns are:
 
 Note, that a single read may occur more than once if assigned ambiguously.
 
-## Expression table format
 
-Non-grouped counts/TPM values are stored in a simple TSV file, the columns are:
+## UMI filtering allinfo (deprecated old format)
 
-* `feature_id` - genomic feature ID;
-* `TPM` or `count` - expression value (float).
-
-Grouped counts are stored in linear format by default - a TSV file with 3 columns:
-
-* `feature_id` - genomic feature ID;
-* `group_id` - group name;
-* `count` - read count of the feature in this group. 
-
-By default, IsoQuant converts grouped counts with small number of groups/samples (<=100) to standard matrix format; 
-larger matrices (e.g. for single-cell experiments) will be saved to MTX format, which is compatible with the Seurat package.
-In standard matrix rows represent features, columns represent groups. While being more human-readable, 
-this file make take substantial disk space when the number of groups is large.
-In MTX format, `.matrix.mtx` represents counts, `.features.tsv` contains the feature list and 
-`.barcodes.tsv` contains group list (typically, barcodes are used as groups in single-cell and spatial experiments).
-See [options](cmd.md#specific-output-options) to tune your output.
-
-
-## UMI filtering allinfo format
-
-**Important: this is an internal format subject to change without notice.**
-
-Produced in single-cell/spatial modes when `--large_output allinfo` is enabled (enabled by default).
+Produced in single-cell/spatial modes when `--large_output allinfo` is enabled.
 The file `SAMPLE_ID.UMI_filtered.ED{N}.allinfo[.gz]` contains one line per read that survived UMI deduplication.
 Tab-separated values, the columns are:
 
@@ -154,7 +152,31 @@ Coordinate lists use `;%;` as the element separator.
 
 An accompanying `SAMPLE_ID.UMI_filtered.ED{N}.stats.tsv` file contains summary statistics of the UMI filtering process.
 
-## Splice junction and legacy exon count format
+## Quantification formats
+
+### Expression table format
+
+Non-grouped counts/TPM values are stored in a simple TSV file, the columns are:
+
+* `feature_id` - genomic feature ID;
+* `TPM` or `count` - expression value (float).
+
+Grouped counts are stored in linear format by default - a TSV file with 3 columns:
+
+* `feature_id` - genomic feature ID;
+* `group_id` - group name;
+* `count` - read count of the feature in this group. 
+
+By default, IsoQuant converts grouped counts with small number of groups/samples (<=100) to standard matrix format; 
+larger matrices (e.g. for single-cell experiments) will be saved to MTX format, which is compatible with the Seurat package.
+In standard matrix rows represent features, columns represent groups. While being more human-readable, 
+this file make take substantial disk space when the number of groups is large.
+In MTX format, `.matrix.mtx` represents counts, `.features.tsv` contains the feature list and 
+`.barcodes.tsv` contains group list (typically, barcodes are used as groups in single-cell and spatial experiments).
+See [options](cmd.md#specific-output-options) to tune your output.
+
+
+## Splice junctions count format
 
 This is the format of `splice_junction_counts.tsv`, `intron_retention_counts.tsv`
 and the legacy `old_exon_counts.tsv` (only with `--old_exon_count_format`).
