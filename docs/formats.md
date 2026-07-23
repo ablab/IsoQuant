@@ -1,6 +1,7 @@
 # Output file formats
 
-Although most output files include headers that describe the data, a brief explanation of the output files is provided below.
+Although most output files include headers that describe the data, a brief explanation of the output formats is provided below.
+For full description of the output files and their naming, refer to [output description page](output.md).
 
 ## Read assignments 
 
@@ -29,7 +30,7 @@ The default per-read output format. Tab-separated values, the columns are:
 
 A single read may occur more than once if assigned ambiguously.
 
-* Assignment types:
+* **Assignment types**:
     - `unique` - reads was unambiguously assigned to a single known isoform;
     - `unique_minor_difference` - read was assigned uniquely but has alignment artifacts;
     - `inconsistent` - read was matched with inconsistencies, closest match(es) are reported;
@@ -43,7 +44,7 @@ A single read may occur more than once if assigned ambiguously.
     - `inconsistent_genic` - read overlaps a single gene but resembles no isoform (counts toward the gene like `inconsistent`);
     - `inconsistent_multigenic` - read overlaps several genes but resembles no isoform (behaves like `inconsistent_ambiguous`, split across the genes.
 
-* Assignment events (see [detailed explanation](classification.md)):
+* **Assignment events** (see [detailed explanation](classification.md)):
     - consistent events:
         - `none` / `.` / `undefined` - no special event detected;
         - `mono_exon_match` mono-exonic read matched to mono-exonic transcript;
@@ -86,7 +87,7 @@ A single read may occur more than once if assigned ambiguously.
         - `aligned_polya_tail` - poly-A tail aligns to the reference;  
         - `alternative_tss` - alternative transcription start site.
 
-* SQANTI-like classifications:
+* **SQANTI-like classifications**:
   - `full_splice_match`;
   - `incomplete_splice_match`;
   - `novel_in_catalog`;
@@ -105,7 +106,7 @@ python -m isoquant_lib.scripts.convert_read_info --read_info SAMPLE.read_info.ts
 python -m isoquant_lib.scripts.convert_read_info --read_info SAMPLE.read_info.tsv.gz --format allinfo --output SAMPLE.allinfo.tsv
 ```
 
-### Read to isoform assignment 
+### Read to isoform assignment (deprecated old format)
 
 Produced when `--large_output read_assignments` is enabled.
 
@@ -128,7 +129,7 @@ Tab-separated values, the columns are:
 Note, that a single read may occur more than once if assigned ambiguously.
 
 
-## UMI filtering allinfo (deprecated old format)
+### UMI filtering allinfo (deprecated old format)
 
 Produced in single-cell/spatial modes when `--large_output allinfo` is enabled.
 The file `SAMPLE_ID.UMI_filtered.ED{N}.allinfo[.gz]` contains one line per read that survived UMI deduplication.
@@ -152,11 +153,15 @@ Coordinate lists use `;%;` as the element separator.
 
 An accompanying `SAMPLE_ID.UMI_filtered.ED{N}.stats.tsv` file contains summary statistics of the UMI filtering process.
 
+
+
 ## Quantification formats
 
-### Expression table format
+### Transcript and gene counts
 
-Non-grouped counts/TPM values are stored in a simple TSV file, the columns are:
+#### Linear format
+
+Non-grouped counts/TPM values are stored in a linear TSV file, the columns are:
 
 * `feature_id` - genomic feature ID;
 * `TPM` or `count` - expression value (float).
@@ -167,19 +172,25 @@ Grouped counts are stored in linear format by default - a TSV file with 3 column
 * `group_id` - group name;
 * `count` - read count of the feature in this group. 
 
+#### Count matrices
+
 By default, IsoQuant converts grouped counts with small number of groups/samples (<=100) to standard matrix format; 
 larger matrices (e.g. for single-cell experiments) will be saved to MTX format, which is compatible with the Seurat package.
+
 In standard matrix rows represent features, columns represent groups. While being more human-readable, 
 this file make take substantial disk space when the number of groups is large.
+
 In MTX format, `.matrix.mtx` represents counts, `.features.tsv` contains the feature list and 
 `.barcodes.tsv` contains group list (typically, barcodes are used as groups in single-cell and spatial experiments).
+
 See [options](cmd.md#specific-output-options) to tune your output.
 
 
-## Splice junctions count format
+### Splice junctions count format
 
-This is the format of `splice_junction_counts.tsv`, `intron_retention_counts.tsv`
-and the legacy `old_exon_counts.tsv` (only with `--old_exon_count_format`).
+This is the format of `splice_junction_counts.tsv` (previously names `intron_counts.tsv`), `intron_retention_counts.tsv`
+and the deprecated `old_exon_counts.tsv` (only with `--old_exon_count_format`).
+
 Tab-separated values, the columns are:
 
 * `chr` - chromosome ID;
@@ -199,7 +210,7 @@ Tab-separated values, the columns are:
 * `include_counts` - number of reads that include this feature;
 * `exclude_counts` - number of reads that span, but do not include this feature;
 
-## Exon count format
+### Exon count format
 
 This is the format of `exon_counts.tsv`. Overlapping reference exons are grouped
 into regions; each region emits one row per included exon variant plus one
@@ -215,9 +226,10 @@ region-level exclusion row. Tab-separated values, the columns are:
 * `group_id` - read group if provided (NA by default);
 * `count` - read count.
 
-## Exon splice-site count format
+### Exon splice-site count format
 
-This is the format of `exon_splice_site_counts.tsv`. Overlapping candidate exons
+This is the format of `exon_splice_site_counts.tsv` suitable for [ScisorseqR package](https://github.com/noush-joglekar/scisorseqr). 
+Overlapping candidate exons
 of a gene are grouped into regions; for each read the counter records whether it
 demonstrates a candidate exon's splice sites fully, only on the left, or only on
 the right, plus per-region exclusion and ambiguous outcomes. There is **one row
@@ -231,13 +243,43 @@ the columns are:
 * `group_id` - read group (`NA` when ungrouped);
 * `read_ids_full`, `read_ids_left`, `read_ids_right` - optional read-id lists for this feature and group, only with `--emit_read_ids`.
 
-To reconstruct the per-molecule group-list format (columns `groups_full` / `groups_left` / `groups_right`, one entry per read — e.g. barcodes for downstream cell/cell-type aggregation) run `isoquant_lib/scripts/exon_splice_site_to_group_lists.py`.
+To reconstruct the per-molecule group-list format (columns `groups_full` / `groups_left` / `groups_right`, 
+one entry per read, e.g. barcodes for downstream cell/cell-type aggregation) run `isoquant_lib/scripts/exon_splice_site_to_group_lists.py`.
+
+
+## PolyA and TSS site prediction format
+
+When a gene annotation is provided (`--genedb`) IsoQuant predicts per-transcript
+transcription end (polyA) and, with full-length data (`--fl_data`), transcription
+start (TSS) sites. Predictions are written to `*.polyA_prediction.tsv` and
+`*.TSS_prediction.tsv`. 
+
+When read groups are used (`--read_group`), an
+additional grouped file is produced per grouping strategy, named
+`*.polyA_prediction_grouped_<strategy>` / `*.TSS_prediction_grouped_<strategy>`.
+Both files share the same layout. Tab-separated values, the columns are:
+
+* `chromosome` - chromosome ID;
+* `transcript_id` - reference transcript the site was predicted for;
+* `gene_id` - reference gene ID;
+* `prediction` - genomic coordinate of the predicted terminal site;
+* `counts` - number of reads supporting the predicted site (reads whose terminal position falls within the peak window);
+* `flag` - `Known` if the predicted site is within 10 bp of the annotated transcript end, `Novel` otherwise.
+
+Grouped files contain two additional columns (one row per predicted site and group with a non-zero count):
+
+* `counts_byGroup` - number of reads from this group supporting the site;
+* `group_id` - read group name.
+
 
 ## Transcript models format
 
 Constructed transcript models are stored in usual [GTF format](https://www.ensembl.org/info/website/upload/gff.html).
-Contains `exon`, `transcript` and `gene` features.
+IsoQuant outputs:
+- `*.transcript_models.gtf` - a set of expressed known and novel transcripts;
+- `*.extended_annotation.gtf` - all known transcripts plus discovered novel ones.
 
+All annotations contain `exon`, `transcript` and `gene` features.
 Known genes and transcripts are reposted with their reference IDs. 
 Novel genes IDs have format `novel_gene_XXX_###` and novel transcript IDs are formatted as `transcript###.XXX.TYPE`,
 where `###` is the unique number (not necessarily consecutive), `XXX` is the chromosome name and TYPE can be one of the following:
@@ -253,32 +295,25 @@ If `--sqanti_output` option is set, each novel transcript also has a `similar_re
 a most similar reference isoform and `alternatives` attribute, which indicates the exact differences between
 this novel transcript and the similar reference transcript.
 
-## PolyA and TSS site prediction format
+#### Read assignments
 
-When a gene annotation is provided (`--genedb`) IsoQuant predicts per-transcript
-transcription end (polyA) and, with full-length data (`--fl_data`), transcription
-start (TSS) sites. Predictions are written to `SAMPLE.polyA_prediction.tsv` and
-`SAMPLE.TSS_prediction.tsv`. When read groups are used (`--read_group`), an
-additional grouped file is produced per grouping strategy, named
-`SAMPLE.polyA_prediction_grouped_<strategy>` / `SAMPLE.TSS_prediction_grouped_<strategy>`.
-Both files share the same layout. Tab-separated values, the columns are:
+Reads assigned to transcripts from `*.transcript_models.gtf` are stored in the same [read info](#read-info-default-output) format.
+A read may be marked as `discarded` if it was assigned to an isoform that did make it to the `*.transcript_models.gtf`
+(e.g. due to low coverage or other filters).
 
-* `chromosome` - chromosome ID;
-* `transcript_id` - reference transcript the site was predicted for;
-* `gene_id` - reference gene ID;
-* `prediction` - genomic coordinate of the predicted terminal site;
-* `counts` - number of reads supporting the predicted site (reads whose terminal position falls within the peak window);
-* `flag` - `Known` if the predicted site is within 10 bp of the annotated transcript end, `Novel` otherwise.
+#### Transcript and gene counts
 
-Grouped files contain two additional columns (one row per predicted site and group with a non-zero count):
+Quantification results for transcripts and genes from `*.transcript_models.gtf` are stored in the [same formats](#quantification-formats).
 
-* `counts_byGroup` - number of reads from this group supporting the site;
-* `group_id` - read group name.
+#### SQANTI-like output
+
+If `--sqanti_output` is set, IsoQuant will produce output in [SQANTI](https://github.com/ConesaLab/SQANTI3)-like format that 
+provides comparison between discovered novel transcripts vs reference transcripts (`*.novel_vs_known.SQANTI-like.tsv`).
 
 ## Fusion prediction format
 
 Produced only when fusion detection is requested via `--analysis fusion`.
-One TSV is written per input BAM, named `fusion_<bam_basename>.tsv`.
+One TSV is written per input BAM, named `*.fusion_<bam_basename>.tsv`.
 Tab-separated values, the columns are:
 
 * `LeftGene` / `RightGene` - gene symbols of the two fusion partners;
@@ -293,6 +328,6 @@ Tab-separated values, the columns are:
 * `Confidence` - confidence score in the range `[0, 1]`;
 * `Reasons` - semicolon-separated list of filter/annotation reasons.
 
-By default the report keeps only `canonical` and `cis-SAGe` fusions with
+By default, the report keeps only `canonical` and `cis-SAGe` fusions with
 `Confidence` >= 0.3; invalid entries passing these filters are still reported
 for inspection, with the failure reason in the `Reasons` column.
