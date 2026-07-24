@@ -140,6 +140,28 @@ Multiple run types can be combined: `run_type	transcripts,quantification_known,p
 - `edit_distance` - Edit distance for UMI filtering (default 3; used by `allinfo` run type)
 - `tolerance` - Tolerance fraction for metric comparison (default 0.01 = 1%)
 
+##### `check_files` enforcement + config cleanup (2026-07)
+
+When `check_files` was revived (it had been silently ignored), the stale lists in the
+CI configs had to be corrected so enforcement wouldn't fail on wrong names:
+
+- **Migrated to `check_input_files` with corrected names** — GROUP1-9 and STEREO.TOY.
+  Correct grouped-output names are derived as
+  `{gene|transcript|discovered_transcript|exon|splice_junction}_grouped_{strategy}_{counts|tpm}...`,
+  where the strategy infix comes from `get_grouping_strategy_names` (`read_groups.py`):
+  `file_name`, `tag:RG`→`tag_RG`, `file:F:0:1`→`file0_col1`, `read_id:_`→`read_id__`,
+  multiple `--bam` with no `--read_group` → auto `file_name`. Renamed tokens:
+  `intron_grouped`→`splice_junction_grouped`, `transcript_model_grouped`→`discovered_transcript_grouped`.
+  Exon/splice-junction entries appear only when `--count_exons` is set. Counts use the
+  `.linear.tsv` form (always persists, format-independent); TPM uses matrix `.tsv`;
+  MTX configs (GROUP8/9) additionally list the `.matrix.mtx`/`.features.tsv`/`.barcodes.tsv` triple.
+- **Retired the dead key** (removed, no replacement) — RESUME1-4 and RESUME_GR1-2, because
+  they resume from **old-format checkpoints** (strategy-less names), so their outputs can't be
+  re-pointed to current names without regenerating the checkpoints on the runner.
+
+Validated on `doc_update_4.0` via `gh workflow run` of `Group_tests` / `Resume_tests` /
+`Stereo_toy` — all green (a wrong name now fails with `-5`).
+
 **Legacy-only keys** (not needed in YAML, baselines are inline):
 - `etalon` - Path to reference values for transcript quality (.etl file)
 - `etalon_assignment` - Path to reference values for assignment quality
