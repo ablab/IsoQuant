@@ -16,6 +16,12 @@ import argparse
 from traceback import print_exc
 import gzip
 
+# Allow running this file directly (e.g. `python isoquant_lib/gtf2db.py`): when
+# executed as a script only its own directory is on sys.path, so add the repo
+# root (this file's grandparent) so the isoquant_lib package can be imported.
+if __package__ in (None, ""):
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from isoquant_lib.utils.error_codes import IsoQuantExitCode
 
 logger = logging.getLogger('IsoQuant')
