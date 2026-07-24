@@ -257,18 +257,18 @@ class ReadAssignmentAggregator:
         # are not produced in dev mode.
         if self.args.predict_terminal_sites and not getattr(self.args, "collect_polya_training", None):
             if chr_id:
-                polya_out_file = sample.get_grouped_counts_file(chr_id, "polyA_prediction", strategy_name)
+                polya_out_file = sample.get_grouped_counts_file(chr_id, "polyA_prediction", strategy_name) + ".tsv"
             else:
-                polya_out_file = f"{sample.out_polya_prediction_grouped_tsv}_{strategy_name}"
+                polya_out_file = f"{sample.out_polya_prediction_grouped_tsv}_{strategy_name}.tsv"
             grouped_polya_counter = PolyACounter(self.args, polya_out_file,
                                                  string_pools=self.string_pools,
                                                  group_index=group_idx)
             self.global_counter.add_counter(grouped_polya_counter)
         if self.args.predict_terminal_sites and self.args.fl_data and not getattr(self.args, "collect_tss_training", None):
             if chr_id:
-                tss_out_file = sample.get_grouped_counts_file(chr_id, "TSS_prediction", strategy_name)
+                tss_out_file = sample.get_grouped_counts_file(chr_id, "TSS_prediction", strategy_name) + ".tsv"
             else:
-                tss_out_file = f"{sample.out_tss_prediction_grouped_tsv}_{strategy_name}"
+                tss_out_file = f"{sample.out_tss_prediction_grouped_tsv}_{strategy_name}.tsv"
             grouped_tss_counter = TSSCounter(self.args, tss_out_file,
                                              string_pools=self.string_pools,
                                              group_index=group_idx)
