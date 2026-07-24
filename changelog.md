@@ -1,6 +1,6 @@
 # IsoQuant changelog
 
-## Isoquant 4.0.0, 27 July 2026
+## Isoquant 4.0.0, 25 July 2026
 
 Major update with new functionality and output formats.
 
