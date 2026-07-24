@@ -17,6 +17,7 @@ which includes :
 - Reworked read assignment and quantification for discovered transcripts to improve consistency with reference-based analysis;
 - New exon counting strategies (two new output files);
 - Added intron retention counts;
+- Added `fsm_only` transcript/gene counting strategy ([#338](https://github.com/ablab/IsoQuant/issues/338));
 - New universal read assignment format for all pipelines, possible to convert to old formats; 
 - New key options:
   - `--mode` to switch between bulk, single-cell and spatial protocols;
