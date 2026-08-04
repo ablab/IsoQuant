@@ -139,15 +139,17 @@ class UniversalSingleMoleculeExtractor:
         if error_probability > 0.01 or density > 1:
             filling_edit_distance -= 1
 
-        if filling_edit_distance == 0:
-            self.min_scores[base_name] = barcode_length - 1
-        self.min_scores[base_name] = barcode_length - filling_edit_distance
+        # A whitelist dense enough to drive the tolerated distance to zero (reachable for
+        # ~50M barcodes of length 16) would demand an exact match, which makes the index
+        # useless; always allow at least one mismatch. The lower clamp also keeps a negative
+        # distance from producing a min_score above barcode_length, which nothing can reach.
+        self.min_scores[base_name] = barcode_length - max(filling_edit_distance, 1)
         if variable_length:
             self.min_scores[base_name] = min(self.min_scores[base_name] + 1, barcode_length)
         logger.info("Minimal score for element %s is set to %d" % (base_name, self.min_scores[base_name]))
 
         if barcode_count > 1000000:
-            logger.warning("The number of barcodes for element %s is large: %d, barcode calling may take substantial amount of time and RAM", (base_name, barcode_count))
+            logger.warning("The number of barcodes for element %s is large: %d, barcode calling may take substantial amount of time and RAM", base_name, barcode_count)
             logger.warning("We suggest to use a sub-list of barcodes derived from short-read analysis whenever possible")
 
         kmer_size = find_optimal_kmer_size(barcode_length, barcode_count)

@@ -14,6 +14,8 @@ Array2BitKmerIndexer: Flat array with range indexing for large barcode sets
 import math
 from typing import List, Tuple, Iterable, DefaultDict
 from collections import defaultdict
+
+import numpy
 from ..common import bit_to_str, str_to_2bit
 
 
@@ -142,31 +144,43 @@ class Array2BitKmerIndexer:
         """
         self.k: int = kmer_size
         total_kmers = int(math.pow(4, kmer_size))
-        tmp_index: List[List[int]] = [[] for _ in range(total_kmers)]
         self.mask: int = (1 << (2 * self.k)) - 1
         self.seq_len: int = seq_len
         self.seq_mask: int = (1 << (2 * self.seq_len)) - 1
         self.total_sequences: int = 0
-        self._index(known_bin_seq, tmp_index)
-
-        # Flatten index for better cache performance
-        self.index: List[int] = []
-        self.index_ranges: List[int] = [0]
-        for entry in tmp_index:
-            self.index += entry
-            self.index_ranges.append(len(self.index))
+        self._index(known_bin_seq, total_kmers)
 
     def _get_kmer_bin_indexes(self, bin_seq: int) -> Iterable[int]:
         """Extract k-mer indices from a 2-bit encoded sequence."""
         for i in range(self.seq_len - self.k + 1):
             yield (bin_seq >> ((self.seq_len - self.k - i) * 2)) & self.mask
 
-    def _index(self, known_bin_seq: Iterable[int], tmp_index: List[List[int]]) -> None:
-        """Build k-mer index from 2-bit encoded sequences."""
-        for bin_seq in known_bin_seq:
-            self.total_sequences += 1
+    def _index(self, known_bin_seq: Iterable[int], total_kmers: int) -> None:
+        """Build a flat k-mer index from 2-bit encoded sequences.
+
+        Counts each k-mer first and fills a single flat array, instead of collecting the
+        entries into 4^k per-k-mer lists and concatenating them. Materialising those lists
+        costs ~235 MB of empty list objects for a 3M barcode whitelist (k=11) and grows
+        16-fold per extra base, all of it transient and on top of the final index.
+        """
+        sequences = list(known_bin_seq)
+        self.total_sequences = len(sequences)
+
+        # counting pass -> number of entries per k-mer, as a cumulative offset table
+        ranges = numpy.zeros(total_kmers + 1, dtype=numpy.int64)
+        for bin_seq in sequences:
             for kmer_idx in self._get_kmer_bin_indexes(bin_seq):
-                tmp_index[kmer_idx].append(bin_seq)
+                ranges[kmer_idx + 1] += 1
+        numpy.cumsum(ranges, out=ranges)
+        self.index_ranges: List[int] = ranges.tolist()
+
+        # fill pass -> place each entry at its k-mer's next free slot
+        self.index: List[int] = [0] * self.index_ranges[-1]
+        cursors = self.index_ranges[:-1]
+        for bin_seq in sequences:
+            for kmer_idx in self._get_kmer_bin_indexes(bin_seq):
+                self.index[cursors[kmer_idx]] = bin_seq
+                cursors[kmer_idx] += 1
 
     def empty(self) -> bool:
         """Check if index is empty."""
