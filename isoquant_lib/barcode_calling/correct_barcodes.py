@@ -108,7 +108,8 @@ def correct_barcodes(raw_barcode_files: List[str], output_files: List[str],
                      rounds: int = 2,
                      kmer_size: int = 6,
                      threads: int = 1,
-                     stats_file: Optional[str] = None) -> Dict[str, int]:
+                     stats_file: Optional[str] = None,
+                     implementation: str = "centers") -> Dict[str, int]:
     """Run the full correction stage over a sample's raw barcode tables."""
     logger.info("Correcting barcodes using the edit-distance graph")
     graph = BarcodeGraph(threshold=threshold, barcode_length=barcode_length, kmer_size=kmer_size)
@@ -118,9 +119,14 @@ def correct_barcodes(raw_barcode_files: List[str], output_files: List[str],
         logger.warning("No barcodes were extracted, nothing to correct")
 
     whitelist = load_whitelist(barcode_whitelist)
-    graph.construct_graph(threads=threads)
-    graph.select_cluster_centers(n_cells=n_cells, whitelist=whitelist, interval=n_cells_interval)
-    graph.cluster(rounds=rounds)
+    if implementation == "full":
+        # materialise the whole graph; same result, kept for cross-checking
+        graph.construct_graph(threads=threads)
+        graph.select_cluster_centers(n_cells=n_cells, whitelist=whitelist, interval=n_cells_interval)
+        graph.cluster(rounds=rounds)
+    else:
+        graph.select_cluster_centers(n_cells=n_cells, whitelist=whitelist, interval=n_cells_interval)
+        graph.cluster_from_centers(rounds=rounds)
 
     assignments = graph.get_assignments()
     stats = graph.assignment_stats()

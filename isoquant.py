@@ -316,6 +316,11 @@ def parse_args(cmd_args=None, namespace=None):
                                    help='maximal edit distance between barcodes connected in the graph [1]')
     add_additional_option_to_group(sc_args_group, "--barcode_graph_rounds", type=int, default=2,
                                    help='number of graph hops barcodes are corrected over [2]')
+    add_additional_option_to_group(sc_args_group, "--barcode_graph_impl", type=str,
+                                   choices=["centers", "full"], default="centers",
+                                   help='barcode graph implementation: expand outwards from the cluster '
+                                        'centers, or materialise the entire graph first; the results are '
+                                        'identical, "full" is kept for cross-checking [centers]')
     add_additional_option_to_group(sc_args_group, "--barcode_tag", type=str, default="CB",
                                    help='BAM tag for cell barcode [CB]')
     add_additional_option_to_group(sc_args_group, "--umi_tag", type=str, default="UB",
@@ -1331,7 +1336,8 @@ def correct_sample_barcodes(args, sample, raw_barcodes_list, output_barcodes_lis
                                  args.barcode_graph_rounds,
                                  6,
                                  threads,
-                                 sample.out_barcode_correction_stats)
+                                 sample.out_barcode_correction_stats,
+                                 args.barcode_graph_impl)
 
     concurrent.futures.wait([future_res], return_when=concurrent.futures.ALL_COMPLETED)
     if future_res.exception() is not None:
