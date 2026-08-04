@@ -22,9 +22,21 @@ Array-based k-mer index using 2-bit nucleotide encoding.
 
 ### `Array2BitKmerIndexer`
 Memory-efficient index storing both k-mers and sequences in 2-bit format.
-- Flat array structure for cache-friendly access
+- Flat (CSR-style) `index` + `index_ranges` structure for cache-friendly access
+- Built by a counting pass followed by a fill pass, so the 4^k per-k-mer lists are never
+  materialised (they cost ~235 MB of empty list objects at k=11, ×16 per extra base)
 - Best for large barcode sets (e.g., 10x whitelists)
-- Lowest memory usage
+
+### `SharedMemoryArray2BitKmerIndexer`
+Same layout backed by `multiprocessing.shared_memory`, so worker processes map the index
+instead of receiving a copy. Used by the Stereo-seq detectors.
+
+## Two 2-bit alphabets
+
+`ArrayKmerIndexer.NUCL2BIN` is **A,C,G,T = 0,1,2,3**; `common.NUCL2BIN` (used by
+`str_to_2bit` / `batch_str_to_2bit` and the 2-bit indexers) is **A,C,T,G = 0,1,2,3**, chosen so
+a base's code is `(ord(c) & 6) >> 1`. Both are self-consistent; codes must never be exchanged
+between the two families.
 
 ## Algorithm
 
@@ -39,6 +51,13 @@ Memory-efficient index storing both k-mers and sequences in 2-bit format.
 - `min_kmers` - Minimum shared k-mers to report match
 - `hits_delta` - Include results within N k-mers of top hit
 - `ignore_equal` - Skip exact matches
+
+**`hits_delta` counts k-mer *occurrences*, not distinct k-mers.** For low-complexity sequences
+(homopolymer runs) a single query k-mer can match many times in one indexed barcode, so the
+count can far exceed the barcode length — `hits_delta=barcode_length` does *not* disable the
+filter. The provable upper bound is `(barcode_length - kmer_size + 1)²`; see
+`BarcodeGraph._no_hit_pruning()`. This pruning is one of the reasons per-read whitelist
+matching misses error-bearing barcodes (`.claude/BARCODE_GRAPH_CORRECTION.md`).
 
 ## Performance
 

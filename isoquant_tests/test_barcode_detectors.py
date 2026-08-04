@@ -22,6 +22,7 @@ from isoquant_lib.barcode_calling.callers import (
     SharedMemoryStereoSplittingBarcodeDetector,
     # 10x Genomics
     TenXBarcodeDetector,
+    TenXv2BarcodeDetector,
     TenXSplittingBarcodeDetector,
     TenXv2SplittingBarcodeDetector,
     VisiumHDBarcodeDetector,
@@ -490,6 +491,99 @@ class TestTenXBarcodeDetector:
         assert not result.is_valid()
         assert result.barcode == '*'
         assert result.UMI == '*'
+
+
+class TestTenXRawExtraction:
+    """Test 10x detectors with whitelist matching disabled (graph-based correction)."""
+
+    R1 = TenXBarcodeDetector.R1
+
+    def _read(self, barcode, umi="CTCATGGCCCCA", prefix="TCAGT"):
+        return prefix + self.R1 + barcode + umi + "T" * 30 + "GACTGACTGACTGACT"
+
+    def test_no_whitelist_index_is_built(self):
+        detector = TenXBarcodeDetector(None, whitelist_matching=False)
+        assert detector.barcode_indexer is None
+        assert not detector.whitelist_matching
+
+    def test_emits_the_window_verbatim(self):
+        detector = TenXBarcodeDetector(None, whitelist_matching=False)
+        result = detector.find_barcode_umi("read", self._read("TCCATTGTCAACAAGG"))
+        assert result.barcode == "TCCATTGTCAACAAGG"
+        assert result.UMI == "CTCATGGCCCCA"
+
+    def test_barcode_has_exactly_the_protocol_length(self):
+        """The graph works on fixed-length windows, unlike the whitelist path."""
+        detector = TenXBarcodeDetector(None, whitelist_matching=False)
+        result = detector.find_barcode_umi("read", self._read("TCCATTGTCAACAAGG"))
+        assert len(result.barcode) == TenXBarcodeDetector.BARCODE_LEN_10X
+
+    def test_error_bearing_barcode_is_kept(self):
+        """The whitelist path drops what it cannot match; raw extraction keeps it."""
+        mutated = "TCCATTGTCTACAAGG"
+        detector = TenXBarcodeDetector(None, whitelist_matching=False)
+        result = detector.find_barcode_umi("read", self._read(mutated))
+        assert result.barcode == mutated
+
+    def test_reverse_strand_is_still_considered(self):
+        """Raw mode makes almost every forward hit "valid", so it must not short-circuit."""
+        from isoquant_lib.barcode_calling.common import reverese_complement
+        detector = TenXBarcodeDetector(None, whitelist_matching=False)
+        read = reverese_complement(self._read("TCCATTGTCAACAAGG"))
+        result = detector.find_barcode_umi("read", read)
+        assert result.barcode == "TCCATTGTCAACAAGG"
+        assert result.strand == "-"
+
+    def test_strand_is_chosen_by_molecule_structure(self):
+        """R1 and polyT must sit ~BARCODE_LEN + UMI_LEN apart on the correct strand.
+
+        Raw mode has no whitelist match to pick the strand with, and BC_score is always 0,
+        so more_informative_than would decide essentially at random; a wrong strand yields a
+        reverse-complemented window that no amount of graph correction can rescue.
+        """
+        from isoquant_lib.barcode_calling.common import reverese_complement
+        detector = TenXBarcodeDetector(None, whitelist_matching=False)
+        for barcode in ("TCCATTGTCAACAAGG", "CAATCTAAGTACTGGT", "GTTTCTAGTGACATGC"):
+            read = self._read(barcode)
+            forward = detector.find_barcode_umi("read", read)
+            reverse = detector.find_barcode_umi("read", reverese_complement(read))
+            assert forward.barcode == barcode
+            assert reverse.barcode == barcode
+
+    def test_structural_score_prefers_a_consistent_layout(self):
+        detector = TenXBarcodeDetector(None, whitelist_matching=False)
+        consistent = TenXBarcodeDetectionResult("r", "ACGTACGTACGTACGT", "ACGTACGTACGT",
+                                                polyT=58, r1=30)   # span 28 == 16 + 12
+        implausible = TenXBarcodeDetectionResult("r", "ACGTACGTACGTACGT", "ACGTACGTACGT",
+                                                 polyT=400, r1=30)  # span far beyond the max
+        no_polyt = TenXBarcodeDetectionResult("r", "ACGTACGTACGTACGT", "ACGTACGTACGT", r1=30)
+        empty = TenXBarcodeDetectionResult("r")
+        scores = [detector._raw_strand_score(r)
+                  for r in (consistent, implausible, no_polyt, empty)]
+        assert scores[0] > scores[1]
+        assert scores[1] == scores[2]   # both "valid but unframed"
+        assert scores[2] > scores[3]
+        assert detector._pick_raw_strand(implausible, consistent) is consistent
+        assert detector._pick_raw_strand(consistent, implausible) is consistent
+
+    def test_no_primer_means_no_barcode(self):
+        detector = TenXBarcodeDetector(None, whitelist_matching=False)
+        result = detector.find_barcode_umi("read", RANDOM_SEQUENCE)
+        assert not result.is_valid()
+
+    def test_v2_umi_length_is_preserved(self):
+        detector = TenXv2BarcodeDetector(None, whitelist_matching=False)
+        assert detector.UMI_LEN == 10
+        assert detector.barcode_indexer is None
+
+    def test_whitelist_mode_is_unaffected(self):
+        """The default path must keep matching against the whitelist."""
+        barcodes = ["TCCATTGTCAACAAGG", "CAATCTAAGTACTGGT"]
+        detector = TenXBarcodeDetector(barcodes)
+        assert detector.whitelist_matching
+        assert detector.barcode_indexer is not None
+        result = detector.find_barcode_umi("read", self._read("TCCATTGTCTACAAGG"))
+        assert result.barcode == "TCCATTGTCAACAAGG"  # corrected against the whitelist
 
 
 class TestVisiumHDBarcodeDetector:
