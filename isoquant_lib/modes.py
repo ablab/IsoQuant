@@ -53,11 +53,41 @@ class IsoQuantMode(Enum):
     def needs_barcode_iterator(self):
         return self in [IsoQuantMode.stereoseq_nosplit, IsoQuantMode.stereoseq]
 
+    def supports_graph_correction(self):
+        """Modes whose detectors can extract raw barcodes for graph-based correction.
+
+        These are the protocols with a large generic whitelist and a small unknown set of
+        real cells, where per-read whitelist matching degenerates into exact matching.
+        """
+        return self in [IsoQuantMode.tenX_v3,
+                        IsoQuantMode.tenX_v2,
+                        IsoQuantMode.tenX_v3_split,
+                        IsoQuantMode.tenX_v2_split,
+                        IsoQuantMode.visium_5prime]
+
     def enforces_single_thread(self):
         return False
 
 
 ISOQUANT_MODES = [x.name for x in IsoQuantMode]
+
+
+@unique
+class BarcodeCorrectionMethod(Enum):
+    """How extracted barcodes are mapped onto real ones."""
+    # match every read against the whitelist during extraction
+    whitelist = 1
+    # extract barcodes verbatim, then select actually sequenced barcodes from their counts
+    # and correct the rest onto them via an edit-distance graph
+    graph = 2
+    # graph when the whitelist is large enough that per-read matching degenerates
+    # into exact matching, whitelist otherwise
+    auto = 3
+
+
+# Above this whitelist size per-read matching effectively requires an exact match
+# (see TenXBarcodeDetector.__init__), so graph-based correction takes over in auto mode.
+LARGE_WHITELIST_SIZE = 100000
 
 
 @unique

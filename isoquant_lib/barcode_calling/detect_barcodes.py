@@ -87,6 +87,16 @@ def get_umi_length(isoquant_mode: IsoQuantMode):
         return 0
 
 
+def get_barcode_length(isoquant_mode: IsoQuantMode):
+    """Barcode length for modes that support graph-based correction."""
+    if isoquant_mode not in BARCODE_CALLING_MODES:
+        return 0
+    try:
+        return BARCODE_CALLING_MODES[isoquant_mode].BARCODE_LEN_10X
+    except AttributeError:
+        return 0
+
+
 class SimpleReadStorage:
     def __init__(self):
         self.read_ids = []
@@ -297,6 +307,11 @@ def process_chunk(barcode_detector, read_chunk, output_file, num, out_fasta=None
 
 def create_barcode_caller(args):
     logger.info("Creating barcode detector for mode %s" % args.mode.name)
+
+    if not getattr(args, "whitelist_matching", True):
+        # Raw extraction mode: the whitelist is not needed here at all, it is only used
+        # later by the graph-based correction stage to filter candidate cluster centers.
+        return BARCODE_CALLING_MODES[args.mode](None, whitelist_matching=False)
 
     if args.mode == IsoQuantMode.custom_sc:
         if not args.molecule:

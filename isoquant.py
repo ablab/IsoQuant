@@ -40,7 +40,8 @@ import gffutils
 import pyfaidx
 
 from isoquant_lib.utils.error_codes import IsoQuantExitCode
-from isoquant_lib.modes import IsoQuantMode, ISOQUANT_MODES, AnalysisType, ANALYSIS_ALIASES, ANALYSIS_CHOICES
+from isoquant_lib.modes import (IsoQuantMode, ISOQUANT_MODES, AnalysisType, ANALYSIS_ALIASES, ANALYSIS_CHOICES,
+                                BarcodeCorrectionMethod, LARGE_WHITELIST_SIZE)
 from isoquant_lib.gtf2db import convert_gtf_to_db
 from isoquant_lib.utils.read_mapper import (
     DATA_TYPE_ALIASES,
@@ -59,7 +60,8 @@ from isoquant_lib.quantification.long_read_counter import COUNTING_STRATEGIES, C
 from isoquant_lib.utils.input_data_storage import InputDataStorage, InputDataType
 from isoquant_lib.assignment.multimap_resolver import MultimapResolvingStrategy
 from isoquant_lib.utils.stats import combine_counts
-from isoquant_lib.barcode_calling import process_single_thread, process_in_parallel, get_umi_length
+from isoquant_lib.barcode_calling import (process_single_thread, process_in_parallel, get_umi_length,
+                                          get_barcode_length, correct_barcodes)
 from isoquant_lib.common import setup_worker_logging, _get_log_params
 
 
@@ -297,6 +299,23 @@ def parse_args(cmd_args=None, namespace=None):
     add_option_to_group(sc_args_group, "--molecule", type=str,
                                    help='molecule definition file (MDF) for custom_sc mode: '
                                         'defines molecule structure for universal barcode extraction')
+    add_option_to_group(sc_args_group, "--barcode_correction", type=str,
+                                   choices=[e.name for e in BarcodeCorrectionMethod],
+                                   default=BarcodeCorrectionMethod.auto.name,
+                                   help="how to correct extracted barcodes: match each read against the "
+                                        "whitelist, or select actually sequenced barcodes and correct via an "
+                                        "edit-distance graph [%s: graph for large whitelists]"
+                                        % BarcodeCorrectionMethod.auto.name)
+    add_option_to_group(sc_args_group, "--n_cells", type=int,
+                                   help='expected number of cell-associated barcodes, used by '
+                                        '--barcode_correction graph [estimated from barcode counts]')
+    add_additional_option_to_group(sc_args_group, "--n_cells_interval", type=int, default=25,
+                                   help='percentage by which the number of selected barcodes may differ '
+                                        'from --n_cells [25]')
+    add_additional_option_to_group(sc_args_group, "--barcode_graph_threshold", type=int, default=1,
+                                   help='maximal edit distance between barcodes connected in the graph [1]')
+    add_additional_option_to_group(sc_args_group, "--barcode_graph_rounds", type=int, default=2,
+                                   help='number of graph hops barcodes are corrected over [2]')
     add_additional_option_to_group(sc_args_group, "--barcode_tag", type=str, default="CB",
                                    help='BAM tag for cell barcode [CB]')
     add_additional_option_to_group(sc_args_group, "--umi_tag", type=str, default="UB",
@@ -715,8 +734,54 @@ def _dedup_read_group_specs(args):
         args.read_group = updated_specs
 
 
+def _count_whitelist_barcodes(whitelist_files):
+    total = 0
+    for file_name in whitelist_files:
+        handle = gzip.open(file_name, "rt") if file_name.endswith(("gz", "gzip")) else open(file_name)
+        with handle:
+            total += sum(1 for _ in handle)
+    return total
+
+
+def _resolve_barcode_correction(args):
+    """Turn --barcode_correction into args.whitelist_matching, validating the request."""
+    args.whitelist_matching = True
+    requested = BarcodeCorrectionMethod[args.barcode_correction]
+
+    if requested == BarcodeCorrectionMethod.whitelist:
+        return
+    # nothing to correct when barcodes come ready-made
+    if args.barcoded_reads or args.barcoded_bam:
+        return
+
+    if not args.mode.supports_graph_correction():
+        if requested == BarcodeCorrectionMethod.graph:
+            logger.critical("Graph-based barcode correction is not supported for mode %s" % args.mode.name)
+            sys.exit(IsoQuantExitCode.INCOMPATIBLE_OPTIONS)
+        return
+    if not args.barcode_whitelist:
+        if requested == BarcodeCorrectionMethod.graph:
+            logger.critical("Graph-based barcode correction requires --barcode_whitelist")
+            sys.exit(IsoQuantExitCode.BARCODE_WHITELIST_MISSING)
+        return
+
+    if requested == BarcodeCorrectionMethod.auto:
+        barcode_count = _count_whitelist_barcodes(args.barcode_whitelist)
+        if barcode_count <= LARGE_WHITELIST_SIZE:
+            logger.info("Whitelist contains %d barcodes, using per-read whitelist matching" % barcode_count)
+            return
+        logger.info("Whitelist contains %d barcodes, per-read matching would degenerate into exact "
+                    "matching; using graph-based barcode correction instead" % barcode_count)
+
+    args.whitelist_matching = False
+    if args.n_cells is not None and args.n_cells <= 0:
+        logger.critical("--n_cells must be positive")
+        sys.exit(IsoQuantExitCode.INVALID_PARAMETER)
+
+
 def _validate_barcode_calling(args):
     args.umi_length = 0
+    args.whitelist_matching = True
     if not args.mode.needs_barcode_calling():
         return
     barcode_sources = sum([bool(args.barcode_whitelist), bool(args.barcoded_reads), bool(args.barcoded_bam)])
@@ -735,6 +800,8 @@ def _validate_barcode_calling(args):
         args.umi_length = _detect_umi_length_from_bam(args.input_data.samples[0].file_list[0][0], args.umi_tag)
     else:
         args.umi_length = get_umi_length(args.mode)
+
+    _resolve_barcode_correction(args)
 
 
 def check_input_params(args):
@@ -1232,7 +1299,7 @@ def prepare_reference_genome(args):
 
 class BarcodeCallingArgs:
     def __init__(self, input, barcode_whitelist, mode, output, out_fasta, tmp_dir, threads,
-                 molecule: str = None):
+                 molecule: str = None, whitelist_matching: bool = True):
         self.input = input  # Can be a single file (str) or list of files
         self.barcodes = barcode_whitelist
         self.mode = mode
@@ -1241,6 +1308,34 @@ class BarcodeCallingArgs:
         self.tmp_dir = tmp_dir
         self.threads = threads
         self.molecule = molecule
+        # when False the detector emits raw barcode windows for later graph-based correction
+        self.whitelist_matching = whitelist_matching
+
+
+def correct_sample_barcodes(args, sample, raw_barcodes_list, output_barcodes_list, threads):
+    """Select real cell barcodes and correct the extracted ones onto them."""
+    # run in a separate process for the same reason as barcode calling itself: the count
+    # table and the graph are large and are not reclaimed promptly by the GC
+    log_file, log_level = _get_log_params()
+    with ProcessPoolExecutor(max_workers=1,
+                             initializer=setup_worker_logging,
+                             initargs=(log_file, log_level)) as proc:
+        future_res = proc.submit(correct_barcodes,
+                                 raw_barcodes_list,
+                                 output_barcodes_list,
+                                 args.barcode_whitelist,
+                                 get_barcode_length(args.mode),
+                                 args.n_cells,
+                                 args.n_cells_interval,
+                                 args.barcode_graph_threshold,
+                                 args.barcode_graph_rounds,
+                                 6,
+                                 threads,
+                                 sample.out_barcode_correction_stats)
+
+    concurrent.futures.wait([future_res], return_when=concurrent.futures.ALL_COMPLETED)
+    if future_res.exception() is not None:
+        raise future_res.exception()
 
 
 def call_barcodes(args):
@@ -1251,11 +1346,18 @@ def call_barcodes(args):
         # TODO barcoded files via YAML
         args.input_data.samples[0].barcoded_reads = args.barcoded_reads
         return
+    graph_correction = not args.whitelist_matching
     for sample in args.input_data.samples:
         # Collect all input files for this sample
         input_files = [files[0] for files in sample.file_list]
         output_barcodes_list = [sample.barcodes_tsv + "_%d.tsv" % i for i in range(len(input_files))]
         barcodes_done_list = [sample.barcodes_done + "_%d.tsv" % i for i in range(len(input_files))]
+        # with graph correction the detector writes uncorrected barcodes to an intermediate
+        # table, and the correction stage produces the usual barcoded read tables
+        if graph_correction:
+            extracted_barcodes_list = [sample.raw_barcodes_tsv + "_%d.tsv" % i for i in range(len(input_files))]
+        else:
+            extracted_barcodes_list = output_barcodes_list
 
         output_fasta_list = None
         new_reads = []
@@ -1265,6 +1367,8 @@ def call_barcodes(args):
 
         # Check if all files were already processed during resume
         all_done = all(os.path.exists(done) for done in barcodes_done_list)
+        if graph_correction:
+            all_done = all_done and os.path.exists(sample.barcodes_corrected_done)
         if all_done and args.resume:
             logger.info("Barcodes were called during the previous run, skipping")
             sample.barcoded_reads.extend(output_barcodes_list)
@@ -1276,28 +1380,35 @@ def call_barcodes(args):
         for barcodes_done in barcodes_done_list:
             if os.path.exists(barcodes_done):
                 os.remove(barcodes_done)
+        if graph_correction and os.path.exists(sample.barcodes_corrected_done):
+            os.remove(sample.barcodes_corrected_done)
 
-            bc_threads = 1 if args.mode.enforces_single_thread() else args.threads
-            bc_args = BarcodeCallingArgs(input_files, args.barcode_whitelist, args.mode,
-                                         output_barcodes_list, output_fasta_list, sample.aux_dir, bc_threads,
-                                         molecule=getattr(args, 'molecule', None))
-            # Launching barcode calling in a separate process has the following reason:
-            # Read chunks are not cleared by the GC in the end of barcode calling, leaving the main
-            # IsoQuant process to consume ~2,5 GB even when barcode calling is done.
-            # Once 16 child processes are created later, IsoQuant instantly takes threads x 2,5 GB for nothing.
-            log_file, log_level = _get_log_params()
-            with ProcessPoolExecutor(max_workers=1,
-                                     initializer=setup_worker_logging,
-                                     initargs=(log_file, log_level)) as proc:
-                logger.info("Detecting barcodes for %d file(s)" % len(input_files))
-                if bc_threads == 1:
-                    future_res = proc.submit(process_single_thread, bc_args)
-                else:
-                    future_res = proc.submit(process_in_parallel, bc_args)
+        bc_threads = 1 if args.mode.enforces_single_thread() else args.threads
+        bc_args = BarcodeCallingArgs(input_files, args.barcode_whitelist, args.mode,
+                                     extracted_barcodes_list, output_fasta_list, sample.aux_dir, bc_threads,
+                                     molecule=getattr(args, 'molecule', None),
+                                     whitelist_matching=args.whitelist_matching)
+        # Launching barcode calling in a separate process has the following reason:
+        # Read chunks are not cleared by the GC in the end of barcode calling, leaving the main
+        # IsoQuant process to consume ~2,5 GB even when barcode calling is done.
+        # Once 16 child processes are created later, IsoQuant instantly takes threads x 2,5 GB for nothing.
+        log_file, log_level = _get_log_params()
+        with ProcessPoolExecutor(max_workers=1,
+                                 initializer=setup_worker_logging,
+                                 initargs=(log_file, log_level)) as proc:
+            logger.info("Detecting barcodes for %d file(s)" % len(input_files))
+            if bc_threads == 1:
+                future_res = proc.submit(process_single_thread, bc_args)
+            else:
+                future_res = proc.submit(process_in_parallel, bc_args)
 
-            concurrent.futures.wait([future_res],  return_when=concurrent.futures.ALL_COMPLETED)
-            if future_res.exception() is not None:
-                raise future_res.exception()
+        concurrent.futures.wait([future_res],  return_when=concurrent.futures.ALL_COMPLETED)
+        if future_res.exception() is not None:
+            raise future_res.exception()
+
+        if graph_correction:
+            correct_sample_barcodes(args, sample, extracted_barcodes_list, output_barcodes_list, bc_threads)
+            open(sample.barcodes_corrected_done, "w").close()
 
         # Mark all files as done and add to barcoded_reads
         for i, (input_file, output_barcodes, barcodes_done) in enumerate(zip(input_files, output_barcodes_list, barcodes_done_list)):

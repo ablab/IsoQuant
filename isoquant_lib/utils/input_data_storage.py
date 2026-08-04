@@ -90,6 +90,11 @@ class SampleData:
         self.barcodes_tsv = self._make_path(self.prefix + ".barcoded_reads")
         self.barcodes_done = self._make_aux_path(self.prefix + ".barcodes_done")
         self.barcodes_split_reads = self._make_aux_path(self.prefix + ".split_barcodes")
+        # graph-based correction: raw (uncorrected) barcodes are an intermediate,
+        # the corrected table is written to barcodes_tsv as usual
+        self.raw_barcodes_tsv = self._make_aux_path(self.prefix + ".raw_barcodes")
+        self.barcodes_corrected_done = self._make_aux_path(self.prefix + ".barcodes_corrected_done")
+        self.out_barcode_correction_stats = self._make_path(self.prefix + ".barcode_correction.stats")
         self.out_umi_filtered = self._make_path(self.prefix + ".UMI_filtered")
         self.out_umi_filtered_tmp = self._make_aux_path(self.prefix + ".UMI_filtered")
         self.out_umi_filtered_done = self._make_aux_path(self.prefix + ".UMI_filtered.done")

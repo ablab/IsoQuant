@@ -65,10 +65,15 @@ from .detect_barcodes import (
     process_single_thread,
     process_in_parallel,
     get_umi_length,
+    get_barcode_length,
     create_barcode_caller,
     BARCODE_CALLING_MODES,
     BARCODE_FILES_REQUIRED,
 )
+
+# Graph-based barcode correction
+from .barcode_graph import BarcodeGraph, bounded_distance, estimate_cell_number
+from .correct_barcodes import correct_barcodes
 
 __all__ = [
     # Indexers
@@ -115,7 +120,13 @@ __all__ = [
     'process_single_thread',
     'process_in_parallel',
     'get_umi_length',
+    'get_barcode_length',
     'create_barcode_caller',
     'BARCODE_CALLING_MODES',
     'BARCODE_FILES_REQUIRED',
+    # Graph-based correction
+    'BarcodeGraph',
+    'bounded_distance',
+    'estimate_cell_number',
+    'correct_barcodes',
 ]
