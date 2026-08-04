@@ -169,14 +169,27 @@ class BarcodeGraph:
 
     # ------------------------------------------------- graph construction
 
+    def _kmers_per_barcode(self) -> int:
+        return self.barcode_length - self.kmer_size + 1
+
     def _qgram_bound(self) -> int:
         """Minimum shared k-mer occurrences two barcodes within `threshold` edits must have.
 
         Standard q-gram lemma: each edit destroys at most `kmer_size` of the
         `barcode_length - kmer_size + 1` k-mers.
         """
-        bound = self.barcode_length - self.kmer_size + 1 - self.kmer_size * self.threshold
-        return max(bound, 1)
+        return max(self._kmers_per_barcode() - self.kmer_size * self.threshold, 1)
+
+    def _no_hit_pruning(self) -> int:
+        """hits_delta that provably keeps every candidate the q-gram bound admits.
+
+        The indexers drop candidates more than hits_delta shared k-mers behind the best one,
+        which is exactly the pruning that makes whitelist matching miss error-bearing
+        barcodes. The graph needs every candidate, so the delta has to exceed the largest
+        possible count: each of the query's k-mers can match at most that many occurrences
+        in one indexed barcode, and low-complexity barcodes really do reach it.
+        """
+        return self._kmers_per_barcode() ** 2
 
     def build_index(self, barcodes: Optional[Sequence[str]] = None) -> ArrayKmerIndexer:
         if barcodes is None:
@@ -195,8 +208,7 @@ class BarcodeGraph:
         logger.info("Constructing barcode graph over %d distinct barcodes" % len(barcodes))
         index = self.build_index(barcodes)
         min_kmers = self._qgram_bound()
-        # the indexers prune to the best hits by default; the graph needs every candidate
-        hits_delta = self.barcode_length
+        hits_delta = self._no_hit_pruning()
 
         if threads <= 1:
             _set_worker_state(index, self.threshold, min_kmers, hits_delta)
@@ -317,6 +329,55 @@ class BarcodeGraph:
             frontier = next_frontier
             if not frontier:
                 break
+
+        self.clustering = clustering
+
+    def cluster_from_centers(self, centers: Optional[Sequence[str]] = None, rounds: int = 2) -> None:
+        """Cluster without ever materialising the graph.
+
+        The graph built by construct_graph() is only ever consumed by a walk outwards from
+        the centers, so the edges nobody reaches need not be found. Each round indexes just
+        the previous round's frontier -- the centers first (a few thousand sequences), then
+        whatever they claimed -- and queries the still-unassigned barcodes against it.
+        Produces exactly the same clustering as construct_graph() + cluster(), but the
+        index never has to hold all observed barcodes at once.
+        """
+        if centers is None:
+            centers = self.centers
+        clustering: Dict[str, Tuple[Optional[str], int]] = {bc: (bc, 0) for bc in centers}
+        min_kmers = self._qgram_bound()
+        hits_delta = self._no_hit_pruning()
+        frontier = list(centers)
+
+        for hop in range(1, rounds + 1):
+            if not frontier:
+                break
+            index = self.build_index(frontier)
+            next_frontier = []
+            ambiguous = 0
+            for barcode in self.counts:
+                if barcode in clustering:
+                    continue
+                claiming_centers: Set[str] = set()
+                for candidate, _, _ in index.get_occurrences(barcode, max_hits=0,
+                                                             min_kmers=min_kmers,
+                                                             hits_delta=hits_delta):
+                    if bounded_distance(barcode, candidate, self.threshold) <= self.threshold:
+                        claiming_centers.add(clustering[candidate][0])
+                        if len(claiming_centers) > 1:
+                            break
+                if not claiming_centers:
+                    continue
+                if len(claiming_centers) == 1:
+                    clustering[barcode] = (next(iter(claiming_centers)), hop)
+                    next_frontier.append(barcode)
+                else:
+                    # reached from several centers at the same distance, cannot be resolved
+                    clustering[barcode] = (None, hop)
+                    ambiguous += 1
+            logger.info("Clustering round %d: %d barcodes assigned, %d ambiguous" %
+                        (hop, len(next_frontier), ambiguous))
+            frontier = next_frontier
 
         self.clustering = clustering
 
