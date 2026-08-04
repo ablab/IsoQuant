@@ -44,6 +44,8 @@ class TenXBarcodeDetector:
     # errors are corrected later by the graph-based stage instead of being rejected here.
     RAW_R1_MIN_SCORE = 9
     RAW_TERMINAL_MATCH_DELTA = 4
+    # Maximum plausible distance between the R1 end and polyT: R1...BC(16)...UMI(12)...polyT
+    MAX_R1_POLYT_DISTANCE = 50
 
     def __init__(self, barcode_list: Optional[List[str]], whitelist_matching: bool = True):
         """
@@ -122,7 +124,34 @@ class TenXBarcodeDetector:
         if self.whitelist_matching and read_rev_result.is_valid():
             return read_rev_result
 
+        if not self.whitelist_matching:
+            return self._pick_raw_strand(read_result, read_rev_result)
         return read_result if read_result.more_informative_than(read_rev_result) else read_rev_result
+
+    def _raw_strand_score(self, result: TenXBarcodeDetectionResult):
+        """Rank a raw-mode detection by how well R1 and polyT frame a barcode and UMI.
+
+        Whitelist mode picks the strand on which the barcode matched, which is strong
+        evidence. Raw mode has no such signal -- every window is accepted and BC_score is
+        always 0, which leaves more_informative_than comparing polyT positions, i.e. picking
+        essentially at random. Use the molecule structure instead: on the correct strand R1
+        and polyT sit about BARCODE_LEN + UMI_LEN apart.
+        """
+        if not result.is_valid():
+            return 0, 0
+        if result.r1 == -1 or result.polyT == -1:
+            return 1, 0
+        span = result.polyT - result.r1
+        if span <= 0 or span > self.MAX_R1_POLYT_DISTANCE:
+            return 1, 0
+        return 2, -abs(span - (self.BARCODE_LEN_10X + self.UMI_LEN))
+
+    def _pick_raw_strand(self, fwd_result: TenXBarcodeDetectionResult,
+                         rev_result: TenXBarcodeDetectionResult) -> TenXBarcodeDetectionResult:
+        """Choose between the two orientations of a raw-mode detection (ties go forward)."""
+        if self._raw_strand_score(rev_result) > self._raw_strand_score(fwd_result):
+            return rev_result
+        return fwd_result
 
     # Maximum search margin before polyT for direct barcode search (beyond BC+UMI region)
     BARCODE_SEARCH_MARGIN = 30
@@ -493,9 +522,7 @@ class TenXSplittingBarcodeDetector(TenXBarcodeDetector):
         from ..indexers import KmerIndexer as _KmerIndexer
         self.tso_indexer = _KmerIndexer([self.TSO], kmer_size=9)
 
-    # Maximum allowed distance between R1 end and polyT for a valid split detection.
-    # Expected: R1...BC(16)...UMI(12)...polyT = ~28bp, allow generous margin.
-    MAX_R1_POLYT_DISTANCE = 50
+    # MAX_R1_POLYT_DISTANCE (inherited): R1...BC(16)...UMI(12)...polyT = ~28bp plus margin
 
     def _find_barcode_umi_fwd_local(self, read_id: str, sequence: str) -> TenXBarcodeDetectionResult:
         """Find barcode near polyT only — no fallback to full-read R1 search.
