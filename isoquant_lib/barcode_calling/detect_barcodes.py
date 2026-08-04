@@ -290,12 +290,25 @@ def bam_file_chunk_reader(handler):
     yield current_chunk
 
 
-def process_chunk(barcode_detector, read_chunk, output_file, num, out_fasta=None):
+# The detector is stored per worker process rather than passed to every task: it owns the
+# whitelist index, which for a stock 10x whitelist is hundreds of megabytes. Shipping it with
+# each 100k-read chunk would pickle it dozens of times per worker.
+_WORKER_DETECTOR = {}
+
+
+def setup_detector_worker(log_file, log_level, barcode_detector):
+    setup_worker_logging(log_file, log_level)
+    _WORKER_DETECTOR["detector"] = barcode_detector
+
+
+def process_chunk(read_chunk, output_file, num, out_fasta=None, barcode_detector=None):
     output_file += "_" + str(num)
     if out_fasta:
         out_fasta += "_" + str(num)
     counter = 0
 
+    if barcode_detector is None:
+        barcode_detector = _WORKER_DETECTOR["detector"]
     barcode_caller = BarcodeCaller(output_file, barcode_detector, output_sequences=out_fasta)
     counter += barcode_caller.process_chunk(read_chunk)
     read_chunk.clear()
@@ -414,15 +427,14 @@ def _process_single_file_in_parallel(input_file, output_tsv, out_fasta, args, ba
     executor_kwargs = {
         'max_workers': args.threads,
         'mp_context': mp_context,
-        'initializer': setup_worker_logging,
-        'initargs': (log_file, log_level),
+        'initializer': setup_detector_worker,
+        'initargs': (log_file, log_level, barcode_detector),
     }
-    if sys.version_info >= (3, 11):
-        executor_kwargs['max_tasks_per_child'] = 20
+    # max_tasks_per_child recycles workers, which would re-pickle the detector to each
+    # replacement; the detector is the expensive part, so keep workers alive instead
     with concurrent.futures.ProcessPoolExecutor(**executor_kwargs) as proc:
         for chunk in read_chunk_gen:
             future_results.append(proc.submit(process_chunk,
-                                              barcode_detector,
                                               chunk,
                                               tmp_barcode_file,
                                               chunk_counter,
@@ -449,7 +461,6 @@ def _process_single_file_in_parallel(input_file, output_tsv, out_fasta, args, ba
                     try:
                         chunk = next(read_chunk_gen)
                         future_results.append(proc.submit(process_chunk,
-                                                          barcode_detector,
                                                           chunk,
                                                           tmp_barcode_file,
                                                           chunk_counter,

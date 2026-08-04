@@ -206,11 +206,11 @@ def detect_exact_positions(sequence, start, end, kmer_size, pattern, pattern_occ
         return None, None
 
     start_pos, end_pos, pattern_start, pattern_end, score = None, None, None, None, 0
-    last_potential_pos = -2*len(pattern)
+    # Every seed is aligned and the best-scoring alignment wins. Seeds from one pattern
+    # occurrence produce windows shifted by a base at a time, and which of them yields the
+    # best alignment is not predictable, so this loop must not be short-circuited: skipping
+    # seeds within len(pattern) of the previous one measurably loses primer detections.
     for match_position in pattern_occurrences[pattern_index][2]:
-        if match_position - last_potential_pos < len(pattern):
-            continue
-
         potential_start = start + match_position - len(pattern) + kmer_size
         potential_start = max(start, potential_start)
         potential_end = start + match_position + len(pattern) + 1
@@ -243,11 +243,9 @@ def detect_first_exact_positions(sequence, start, end, kmer_size, pattern, patte
         return None, None
 
     start_pos, end_pos, pattern_start, pattern_end, score = None, None, None, None, 0
-    last_potential_pos = -2*len(pattern)
+    # unlike detect_exact_positions this one stops at the first acceptable alignment,
+    # so seeds are consumed in order and none may be skipped
     for match_position in pattern_occurrences[pattern_index][2]:
-        if match_position - last_potential_pos < len(pattern):
-            continue
-
         potential_start = start + match_position - len(pattern) + kmer_size
         potential_start = max(start, potential_start)
         potential_end = start + match_position + len(pattern) + 1
@@ -270,6 +268,10 @@ def detect_first_exact_positions(sequence, start, end, kmer_size, pattern, patte
     return start_pos - skipped_bases, end_pos + leftover_bases
 
 
+# NOTE: this alphabet is A,C,T,G = 0,1,2,3, chosen so that the code of a base can be derived
+# straight from its ASCII value as (ord(c) & 6) >> 1 (see str_to_2bit and batch_str_to_2bit).
+# ArrayKmerIndexer uses its own, different alphabet (A,C,G,T = 0,1,2,3, indexers/base.py).
+# Both are self-consistent, but codes produced by one family must never be fed to the other.
 NUCL2BIN = {'A': 0, 'C': 1, 'G': 3, 'T': 2, 'a': 0, 'c': 1, 'g': 3, 't': 2}
 BIN2NUCL = ["A", "C", "T", "G"]
 
@@ -419,25 +421,15 @@ def bit_to_str(seq, seq_len):
     return str_seq
 
 
-def load_h5_barcodes_bit(h5_file_path, dataset_name='bpMatrix_1'):
-    raise NotImplementedError()
-    import h5py
-    barcode_list = []
-    with h5py.File(h5_file_path, 'r') as h5_file:
-        dataset = numpy.array(h5_file[dataset_name])
-        for row in dataset:
-            for col in row:
-                barcode_list.append(bit_to_str(int(col[0])))
-    return barcode_list
-
-
 def load_barcodes(inf, needs_iterator=False):
     if not os.path.isfile(inf):
         logger.critical("Barcode file '%s' does not exist.", inf)
         sys.exit(IsoQuantExitCode.INPUT_FILE_NOT_FOUND)
 
     if inf.endswith("h5") or inf.endswith("hdf5"):
-        return load_h5_barcodes_bit(inf)
+        logger.critical("HDF5 barcode whitelists are not supported, please convert '%s' to a "
+                        "plain text or gzipped list of barcodes, one per line.", inf)
+        sys.exit(IsoQuantExitCode.INVALID_FILE_FORMAT)
 
     if inf.endswith("gz") or inf.endswith("gzip"):
         handle = gzip.open(inf, "rt")
