@@ -17,6 +17,8 @@ import tempfile
 import gffutils
 import yaml
 
+from isoquant_lib.quantification.convert_grouped_counts import convert_to_matrix
+
 
 class OutputConfig:
     """Class to build dictionaries from the output files of the pipeline."""
@@ -46,6 +48,8 @@ class OutputConfig:
         self.transcript_model_grouped_counts = None
         self.use_counts = use_counts
         self.ref_only = ref_only
+        # Lazily-created scratch dir for wide matrices converted from *.linear.tsv
+        self._linear_conversion_dir = None
 
         self._load_params_file()
         self._find_files()
@@ -188,6 +192,12 @@ class OutputConfig:
                 f"Specified sample subdirectory does not exist: {self.output_directory}"
             )
 
+        # Grouped counts are written as *.linear.tsv; the wide matrix *.tsv is
+        # only produced for --counts_format matrix/default (and skipped when
+        # there are too many groups). Collect any linear variants so we can
+        # convert them to the wide matrix the visualizer expects (#241).
+        linear_grouped = {}
+
         for file_name in os.listdir(self.output_directory):
             if file_name.endswith(".extended_annotation.gtf"):
                 self.extended_annotation = os.path.join(
@@ -238,6 +248,36 @@ class OutputConfig:
                 self.transcript_model_tpm = os.path.join(
                     self.output_directory, file_name
                 )
+            # Linear-format grouped counts (--counts_format linear). The leading
+            # dot in each suffix keeps the plain "transcript_" patterns from also
+            # matching the "discovered_transcript_" files.
+            elif file_name.endswith(".gene_grouped_counts.linear.tsv"):
+                linear_grouped["gene_grouped_counts"] = os.path.join(
+                    self.output_directory, file_name
+                )
+            elif file_name.endswith(".gene_grouped_tpm.linear.tsv"):
+                linear_grouped["gene_grouped_tpm"] = os.path.join(
+                    self.output_directory, file_name
+                )
+            elif file_name.endswith(".discovered_transcript_grouped_counts.linear.tsv"):
+                linear_grouped["transcript_model_grouped_counts"] = os.path.join(
+                    self.output_directory, file_name
+                )
+            elif file_name.endswith(".discovered_transcript_grouped_tpm.linear.tsv"):
+                linear_grouped["transcript_model_grouped_tpm"] = os.path.join(
+                    self.output_directory, file_name
+                )
+            elif file_name.endswith(".transcript_grouped_counts.linear.tsv"):
+                linear_grouped["transcript_grouped_counts"] = os.path.join(
+                    self.output_directory, file_name
+                )
+            elif file_name.endswith(".transcript_grouped_tpm.linear.tsv"):
+                linear_grouped["transcript_grouped_tpm"] = os.path.join(
+                    self.output_directory, file_name
+                )
+
+        # Fall back to linear grouped files when the wide matrix is absent.
+        self._resolve_linear_grouped_files(linear_grouped)
 
         # Determine if GTF flag is needed
         if (
@@ -251,6 +291,55 @@ class OutputConfig:
         # Set ref_only default based on the availability of extended_annotation
         if self.ref_only is None:
             self.ref_only = not self.extended_annotation
+
+    def _resolve_linear_grouped_files(self, linear_grouped):
+        """For each grouped attribute lacking a wide matrix, convert the matching
+        *.linear.tsv file to the wide format the visualizer parses (#241)."""
+        if not linear_grouped:
+            return
+        # Read groups are present, so grouped (per-condition) files must be used.
+        self.conditions = True
+        feature_types = {
+            "gene_grouped_counts": "gene",
+            "gene_grouped_tpm": "gene",
+            "transcript_grouped_counts": "transcript",
+            "transcript_grouped_tpm": "transcript",
+            "transcript_model_grouped_counts": "transcript",
+            "transcript_model_grouped_tpm": "transcript",
+        }
+        for attr, linear_path in linear_grouped.items():
+            if getattr(self, attr) is not None:
+                continue  # Wide matrix already present, prefer it.
+            converted = self._convert_linear_to_matrix(
+                linear_path, feature_types.get(attr, "gene")
+            )
+            if converted:
+                setattr(self, attr, converted)
+
+    def _convert_linear_to_matrix(self, linear_path, feature_type):
+        """Convert a 3-column linear counts/TPM file into a wide matrix TSV in a
+        scratch directory and return its path (or None on failure)."""
+        if linear_path.endswith(".gz"):
+            linear_path = self._unzip_file(linear_path)
+            if not linear_path:
+                return None
+        if self._linear_conversion_dir is None:
+            self._linear_conversion_dir = tempfile.mkdtemp(prefix="isoquant_viz_matrix_")
+        base = os.path.basename(linear_path)
+        if base.endswith(".linear.tsv"):
+            base = base[: -len(".linear.tsv")]
+        output_prefix = os.path.join(self._linear_conversion_dir, base)
+        try:
+            # convert_to_matrix appends ".tsv" to the given prefix.
+            convert_to_matrix(linear_path, output_prefix, feature_type=feature_type)
+        except Exception as e:
+            print(
+                f"Warning: failed to convert linear counts {linear_path} "
+                f"to matrix format: {e}"
+            )
+            return None
+        output_path = output_prefix + ".tsv"
+        return output_path if os.path.exists(output_path) else None
 
     def _find_files_from_yaml(self):
         """Locate the necessary files in the directory, set specific grouped count and TPM files, and process read assignments."""
