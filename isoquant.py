@@ -1334,7 +1334,7 @@ def correct_sample_barcodes(args, sample, raw_barcodes_list, output_barcodes_lis
                                  args.n_cells_interval,
                                  args.barcode_graph_threshold,
                                  args.barcode_graph_rounds,
-                                 6,
+                                 None,  # k-mer size derived from barcode length and threshold
                                  threads,
                                  sample.out_barcode_correction_stats,
                                  args.barcode_graph_impl)

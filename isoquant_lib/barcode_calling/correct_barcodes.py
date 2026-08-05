@@ -106,7 +106,7 @@ def correct_barcodes(raw_barcode_files: List[str], output_files: List[str],
                      n_cells_interval: int = 25,
                      threshold: int = 1,
                      rounds: int = 2,
-                     kmer_size: int = 6,
+                     kmer_size: Optional[int] = None,
                      threads: int = 1,
                      stats_file: Optional[str] = None,
                      implementation: str = "centers") -> Dict[str, int]:

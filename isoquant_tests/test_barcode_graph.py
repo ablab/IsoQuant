@@ -12,6 +12,7 @@ from isoquant_lib.barcode_calling.barcode_graph import (
     BarcodeGraph,
     bounded_distance,
     estimate_cell_number,
+    optimal_kmer_size,
 )
 
 
@@ -58,6 +59,67 @@ class TestEstimateCellNumber:
 
     def test_ignores_singletons(self):
         assert estimate_cell_number([1] * 1000) == 0
+
+
+class TestKmerSizeSelection:
+    """k is picked as large as the q-gram bound allows, which is what makes lookups cheap."""
+
+    @pytest.mark.parametrize("length, threshold, expected", [
+        (16, 1, 8), (16, 2, 5), (16, 3, 4), (25, 1, 12), (14, 1, 7),
+    ])
+    def test_expected_sizes(self, length, threshold, expected):
+        assert optimal_kmer_size(length, threshold) == expected
+
+    def test_never_below_the_floor(self):
+        assert optimal_kmer_size(8, 5) == 4
+
+    @pytest.mark.parametrize("threshold", [1, 2, 3])
+    def test_bound_stays_usable(self, threshold):
+        assert BarcodeGraph(threshold=threshold, barcode_length=16)._qgram_bound() >= 1
+
+    @pytest.mark.parametrize("threshold", [1, 2, 3])
+    def test_bound_never_rejects_a_close_pair(self, threshold):
+        """Every pair within `threshold` edits must share at least `bound` k-mers.
+
+        If this ever fails the k-mer filter silently drops real neighbours, which is the
+        exact failure mode that makes whitelist matching miss error-bearing barcodes.
+        """
+        rnd = random.Random(77)
+        graph = BarcodeGraph(threshold=threshold, barcode_length=16)
+        k, bound = graph.kmer_size, graph._qgram_bound()
+        for _ in range(300):
+            seq1 = random_barcode(rnd)
+            seq2 = seq1
+            for _ in range(threshold):
+                seq2 = substitute(rnd, seq2)
+            if bounded_distance(seq1, seq2, threshold) > threshold:
+                continue
+            kmers1 = [seq1[i:i + k] for i in range(len(seq1) - k + 1)]
+            kmers2 = [seq2[i:i + k] for i in range(len(seq2) - k + 1)]
+            assert sum(kmers2.count(x) for x in kmers1) >= bound
+
+    def test_explicit_size_is_respected(self):
+        assert BarcodeGraph(threshold=1, barcode_length=16, kmer_size=6).kmer_size == 6
+
+    def test_clustering_is_independent_of_kmer_size(self):
+        rnd = random.Random(78)
+        cells = [random_barcode(rnd) for _ in range(30)]
+        counts = {}
+        for barcode in cells:
+            counts[barcode] = 60
+            for _ in range(5):
+                counts[substitute(rnd, barcode)] = 2
+        for _ in range(300):
+            counts[random_barcode(rnd)] = 1
+
+        results = []
+        for kmer_size in (6, 8):
+            graph = BarcodeGraph(threshold=1, kmer_size=kmer_size)
+            graph.counts = dict(counts)
+            graph.select_cluster_centers(n_cells=30, whitelist=set(cells))
+            graph.cluster_from_centers(rounds=2)
+            results.append(graph.clustering)
+        assert results[0] == results[1]
 
 
 class TestCounting:
