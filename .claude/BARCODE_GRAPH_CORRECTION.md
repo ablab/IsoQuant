@@ -15,26 +15,57 @@ alignment. That works for a short whitelist derived from short-read data, but wi
 | 2 | `common.py find_optimal_kmer_size` | k grows with whitelist size; 16 bp × 3M barcodes lands at k≈11, leaving only 6 k-mers per barcode. A substitution at positions 5–10 destroys all six, so the true barcode is never even a candidate. |
 | 3 | all indexers, `hits_delta=1` | candidates more than one shared k-mer behind the best are dropped before alignment. |
 
-**Measured** on real CI data — `Mouse.10x.5k.no_truncation.NewStereoQ.600k.fq.gz`, 600k ONT
-reads from 5000 simulated cells — called against a 7.4M stock-sized whitelist
-(`10x.stocklike_7.4M.txt` = the 3pgex list with the 5000 true cell barcodes prepended):
+## Benchmarks
 
-| | recall | precision |
-|---|---|---|
-| `--barcode_correction whitelist` | 74.36% | 99.60% |
-| `--barcode_correction graph` | **86.55%** | **99.84%** |
-| *reference: the matched 5000-barcode whitelist* | *87.35%* | *99.73%* |
+Measured on the real CI datasets. "stock" whitelists are the 7.4M `3M-3pgex-may-2023` list
+with the dataset's true cell barcodes prepended (`10x.stocklike_7.4M.txt`,
+`wl_stocklike_hipp.txt`) — i.e. what a user gets by passing the stock 10x whitelist instead
+of a short-read-derived one.
 
-Graph correction against a 7.4M whitelist recovers essentially the accuracy of having the
-perfect 5000-barcode whitelist — which is the whole point.
+| dataset | cells | whitelist | whitelist matching | graph |
+|---|---|---|---|---|
+| Mouse 10x ONT StereoQ, 600k reads | 5000 | matched (5K) | 87.35% / 99.73% | 86.55% / **99.84%** |
+| | | stock (7.4M) | 74.36% / 99.60% | **86.55%** / **99.84%** |
+| Mouse 10x ONT cDNA R10.4, 304k reads | 5000 | matched (5K) | 89.63% / 99.80% | 88.64% / **99.90%** |
+| | | stock (7.4M) | 76.27% / 99.58% | **88.64%** / **99.90%** |
+| Mouse 10x concat, 800k reads (`tenX_v3_split`) | 8975 | matched (8975) | 86.80% / 99.80% | **87.24%** / 99.80% |
+| | | stock (7.4M) | 74.31% / 99.63% | **87.24%** / **99.80%** |
 
-The existing `Mouse.10x.v3.3M.full` CI baseline (recall 58.42%) shows the same degradation on
-a different dataset, but that one simulates reads from ~4M distinct cell barcodes, so
-count-based center selection does not apply to it — it is a whitelist-matching stress test,
-not a realistic single-cell experiment. Note also that the 5000 cells in `10xMultiome_5K.tsv`
-come from the 10x ARC/Multiome whitelist, which is not among the stock lists under
-`simulation/ref/10x/` (only 458/5000 are in `3M-3pgex-may-2023.txt`) — hence the synthesised
-stock-like whitelist above.
+(recall / precision)
+
+Three things this establishes:
+
+1. **Graph correction is exactly insensitive to whitelist size.** The matched and stock rows
+   are identical down to the raw counts, because the whitelist only filters candidate
+   centers. Whitelist matching loses 12–13 points across the same span.
+2. **With a stock whitelist graph wins by ~12 points of recall**, and gains precision too.
+3. **With a correctly sized whitelist graph costs ~1 point of recall** on the single-molecule
+   datasets (and *gains* 0.44 in split mode). Hence `auto`: whitelist matching below
+   `LARGE_WHITELIST_SIZE`, graph above.
+
+Split mode was the open risk — `SplittingBarcodeDetectionResult.filter()` keeps every valid
+detection, and in raw mode every window is valid, so wrong-strand duplicates could have been
+emitted. They are not: 1,343,140 molecules emitted against 1,359,897 true ones, versus
+1,231,545 for whitelist matching, i.e. closer to truth rather than inflated. The structural
+`_is_consistent_detection` check is what holds the line.
+
+### Datasets this does *not* apply to
+
+`Mouse.10x.v3.3M.full` (3,982,878 distinct true barcodes over 10M reads) and
+`Mouse.10x.v2.737K.full` (552,857) simulate reads from the *entire* whitelist at ~2.5 reads
+per barcode. A flat count distribution has no knee, and `MIN_CENTER_COUNT` excludes nearly
+everything — an accidental run against a mismatched whitelist picked 1038 centers out of 5000
+requested. These are whitelist-matching stress tests, not single-cell experiments; their ~58%
+recall baselines are not a target this feature can move.
+
+Note also that the 5000 cells in `10xMultiome_5K.tsv` come from the 10x ARC/Multiome
+whitelist, which is not among the stock lists under `simulation/ref/10x/` (only 458/5000 are
+in `3M-3pgex-may-2023.txt`) — hence the synthesised stock-like whitelist. If the real
+`737K-arc-v1` list is ever added, point the CI configs at it instead.
+
+`custom_sc` is excluded by `supports_graph_correction()`, so `Mouse.10x.custom_sc.{large,small}`
+(the same 5k reads through an MDF) cannot use it yet. Given the numbers above, extending it
+there looks worthwhile.
 
 ## The idea
 
@@ -159,6 +190,31 @@ absorb the spurious trailing base left when an indel inside the barcode shifts t
 `isoquant_tests/test_barcode_graph.py::TestImplementationsAgree` asserts they match. Measured
 on 90k distinct observed barcodes: **4.9× faster**, and the index never has to hold every
 observed barcode at once.
+
+### k-mer size drives clustering cost
+
+`optimal_kmer_size(barcode_length, threshold)` picks the **largest** k for which the q-gram
+bound stays usable: two sequences within `threshold` edits share at least
+`L - k + 1 - k*threshold` k-mer occurrences, so the filter is lossless while that is >= 1,
+i.e. while `k <= L / (threshold + 1)`. For 16 bp at threshold 1 that is **k=8**, not the 6
+Badger used.
+
+This is not a micro-optimisation. k-mers land in `4^k` buckets, so each extra base quarters
+the candidates a query walks. Measured on 140,187 distinct observed barcodes: clustering went
+**284 s → 31 s (9.1x)** with byte-identical assignments, and the whole correction stage
+431 s → 176 s, putting it level with whitelist matching. Regression test:
+`TestKmerSizeSelection::test_bound_never_rejects_a_close_pair`.
+
+### Round 2 is the remaining bottleneck
+
+Round 1 indexes the centers (a few thousand sequences); round 2 indexes everything round 1
+claimed, which is where cost scales with the observed barcode set rather than the center set.
+On the concat dataset round 2 took 35 of 63 minutes. It buys **+1.30 points of recall**
+(85.25% → 86.55%) for roughly 2/3 of the runtime, and costs 0.12 of precision.
+
+`--barcode_graph_rounds 1` is therefore a reasonable trade on very large inputs. A count gate
+on the round-2 frontier (most of it is singleton error variants) would be the principled fix
+and is not implemented.
 
 ### Gotcha: hit pruning must stay disabled
 
