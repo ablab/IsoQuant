@@ -366,11 +366,13 @@ nnic_event_types = {
     MatchEventSubtype.exon_gain_novel, MatchEventSubtype.exon_skipping_novel,
     MatchEventSubtype.exon_detach_novel, MatchEventSubtype.exon_merge_novel,
     MatchEventSubtype.terminal_exon_shift_novel,
-    MatchEventSubtype.alternative_structure_novel, MatchEventSubtype.intron_alternation_novel,
-    MatchEventSubtype.alternative_polya_site_left, MatchEventSubtype.alternative_polya_site_right,
-    MatchEventSubtype.alternative_tss_right, MatchEventSubtype.alternative_tss_left
+    MatchEventSubtype.alternative_structure_novel, MatchEventSubtype.intron_alternation_novel
 }
 
+# NNIC means a novel splice site, so purely terminal events belong here and not
+# in the NNIC set: an alternative polyA / TSS site on a known intron chain is NIC.
+# A novel splice site elsewhere in the same transcript still wins, since
+# get_inconsistency_classification() checks the NNIC set first.
 nic_event_types = {
     MatchEventSubtype.unspliced_intron_retention, MatchEventSubtype.intron_retention,
     MatchEventSubtype.alt_left_site_known, MatchEventSubtype.alt_right_site_known,
@@ -382,7 +384,9 @@ nic_event_types = {
     MatchEventSubtype.intron_alternation_known, MatchEventSubtype.major_exon_elongation_left,
     MatchEventSubtype.major_exon_elongation_right, MatchEventSubtype.incomplete_intron_retention_left,
     MatchEventSubtype.incomplete_intron_retention_right, MatchEventSubtype.internal_polya_right,
-    MatchEventSubtype.internal_polya_left
+    MatchEventSubtype.internal_polya_left,
+    MatchEventSubtype.alternative_polya_site_left, MatchEventSubtype.alternative_polya_site_right,
+    MatchEventSubtype.alternative_tss_right, MatchEventSubtype.alternative_tss_left
 }
 
 nonintronic_events = {
