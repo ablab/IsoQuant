@@ -301,6 +301,11 @@ where `###` is the unique number (not necessarily consecutive), `XXX` is the chr
 * nic - novel in catalog, new transcript that contains only annotated introns;
 * nnic - novel not in catalog, new transcript that contains unannotated introns.
 
+Note that this type is derived from the intron chain alone. Transcripts discovered in regions
+with no annotated genes have no annotated introns to match and are thus always labelled `nnic`,
+as are novel mono-exonic transcripts. Accordingly, such transcripts are reported as `intergenic`
+in `*.novel_vs_known.SQANTI-like.tsv`.
+
 Each exon also has a unique ID stored in `exon_id` attribute.
 
 In addition, each transcript contains `canonical` property if `--check_canonical` is set.
