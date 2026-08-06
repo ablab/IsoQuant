@@ -5,11 +5,14 @@
 # See file LICENSE for details.
 ############################################################################
 
+import copy
 import logging
 from collections import defaultdict
 
 from isoquant_lib.common import junctions_from_blocks
 from isoquant_lib.assignment.assignment_io import ReadAssignmentType
+from isoquant_lib.assignment.long_read_assigner import LongReadAssigner
+from isoquant_lib.assignment.long_read_profiles import CombinedProfileConstructor
 from isoquant_lib.gene_info import TranscriptModelType
 from isoquant_lib.assignment.isoform_assignment import (
     match_subtype_to_str_with_additional_info,
@@ -56,9 +59,15 @@ class GraphBasedModelConstructor:
         self.args = ctx.args
         self.string_pools = ctx.string_pools
         self.id_distributor = ctx.id_distributor
-        self.assigner = ctx.assigner
-        self.profile_constructor = ctx.profile_constructor
         self.transcript2transcript = []
+        # Comparison of finished models with the annotation (--sqanti_output).
+        # A model is not a read: its splice sites either coincide with the
+        # annotated ones or are genuinely novel, so this comparison runs with
+        # delta = 0. With args.delta a model built on an intron a few bases off
+        # an annotated one was reported as full_splice_match while its own ID
+        # said .nnic (issue #265).
+        self.model_comparison_assigner, self.model_comparison_profile_constructor = \
+            self._make_model_comparators()
 
         # Construction stages, each operating on the shared ctx / ctx.store.
         # Stage 1: full-length isoforms from intron-graph paths.
@@ -73,6 +82,18 @@ class GraphBasedModelConstructor:
         self.read_assigner = ConstructionReadAssigner(ctx)
         # Stage 4c: final honest per-read assignment + counting + read_info.
         self.model_read_counter = ModelReadCounter(ctx, transcript_counter, gene_counter)
+
+    def _make_model_comparators(self):
+        """Delta-0 assigner + profile constructor used by compare_models_with_known.
+
+        Returns (None, None) unless SQANTI-like output is requested, since this is
+        the only consumer."""
+        if not self.args.sqanti_output:
+            return None, None
+        exact_args = copy.copy(self.args)
+        exact_args.delta = 0
+        return (LongReadAssigner(self.gene_info, exact_args, self.string_pools),
+                CombinedProfileConstructor(self.gene_info, exact_args))
 
     @property
     def transcript_model_storage(self):
@@ -153,8 +174,9 @@ class GraphBasedModelConstructor:
             else:
                 polya_info = PolyAInfo(model.exon_blocks[-1][1], -1, -1, -1)
 
-            combined_profile = self.profile_constructor.construct_profiles(model.exon_blocks, polya_info, [])
-            assignment = self.assigner.assign_to_isoform(model.transcript_id, combined_profile)
+            combined_profile = self.model_comparison_profile_constructor.construct_profiles(model.exon_blocks,
+                                                                                            polya_info, [])
+            assignment = self.model_comparison_assigner.assign_to_isoform(model.transcript_id, combined_profile)
             if assignment is None:
                 continue
 
