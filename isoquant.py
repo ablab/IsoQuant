@@ -348,8 +348,8 @@ def parse_args(cmd_args=None, namespace=None):
                                             "conservative_ont", "all", "assembly"],
                                    help="read alignment correction strategy to use", type=str, default=None)
     add_additional_option_to_group(algo_args_group, "--model_construction_strategy",
-                                   choices=["reliable", "default_pacbio", "sensitive_pacbio", "fl_pacbio",
-                                            "default_ont", "sensitive_ont", "all", "assembly"],
+                                   choices=["reliable", "default_pacbio", "sensitive_pacbio", "pacbio_all",
+                                            "fl_pacbio", "default_ont", "sensitive_ont", "all", "assembly"],
                                    help="transcript model construction strategy to use", type=str, default=None)
     add_additional_option_to_group(algo_args_group, "--delta", type=int, default=None,
                                    help="delta for inexact splice junction comparison [auto]")
@@ -1101,6 +1101,12 @@ def set_model_construction_options(args):
                                                      False, True, False, True, StrandnessReportingLevel.only_canonical),
         'sensitive_pacbio': ModelConstructionStrategy(1, 0.5, 5,   2, 0.005,  1, 0.01,  0.02,  1, 2, 2, 0.005, 0.001, 100,
                                                       False, True, False, False, StrandnessReportingLevel.only_stranded),
+        # Like sensitive_pacbio but admits single-read novel isoforms (min_novel_count=1)
+        # with a lower relative floor. Very sensitive discovery for clean full-length
+        # PacBio reads (e.g. Iso-Seq FLNC); recovers 5'-truncated genes at the cost of
+        # some novel precision, so not recommended for noisy data.
+        'pacbio_all':      ModelConstructionStrategy(1, 0.5, 5,   2, 0.005,  1, 0.01,  0.02,  1, 2, 1, 0.002, 0.001, 100,
+                                                     False, True, False, False, StrandnessReportingLevel.only_stranded),
         'default_ont':     ModelConstructionStrategy(1, 0.5, 20,  3, 0.02,  1, 0.05,  0.05,  1, 3, 3, 0.02, 0.02, 10,
                                                      False, False, True, True, StrandnessReportingLevel.only_canonical),
         'sensitive_ont':   ModelConstructionStrategy(1, 0.5, 20,  3, 0.005,  1, 0.01,  0.02,  1, 2, 3, 0.005, 0.005, 10,

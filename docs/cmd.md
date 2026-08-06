@@ -413,6 +413,7 @@ This option is chosen automatically based on the specified data type but will be
 * `reliable` - only the most abundant and reliable transcripts are reported, precise, but not sensitive;  
 * `default_pacbio` - optimal settings for PacBio CCS reads;
 * `sensitive_pacbio` - sensitive settings for PacBio CCS reads, more transcripts are reported possibly at a cost of precision;
+* `pacbio_all` - very sensitive settings for PacBio CCS reads; admits single-read novel isoforms and recovers lowly-covered or 5'-truncated genes. Best suited for clean full-length PacBio reads (e.g. Iso-Seq FLNC); reports the most transcripts at a further cost of novel precision;
 * `fl_pacbio` - optimal settings for full-length PacBio CCS reads; will be used if `--data_type pacbio_ccs` and `--fl_data` options are set;
 * `default_ont` - optimal settings for ONT reads, novel mono-exonic transcripts are not reported (use `--report_novel_unspliced true`);
 * `sensitive_ont` - sensitive settings for ONT reads, more transcripts are reported possibly at a cost of precision (including novel mono-exonic isoforms);
