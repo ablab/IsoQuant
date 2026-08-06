@@ -74,7 +74,7 @@ It can be provided in GFF/GTF format (can be gzipped).
 Pre-constructed `minimap2` index can also be provided to reduce mapping time.
 
 
-## Citation
+## Citation and support
 
 If you use IsoQuant's transcript discovery and quantification in your research, please cite 
 [Prjibelski, Mikheenko et al., 2023](https://doi.org/10.1038/s41587-022-01565-y).
@@ -85,6 +85,9 @@ If you use IsoQuant for analysing Curio spatial data, please cite
 
 If you use IsoQuant for processing Stereo-seq, 10x singlce-cell or 10x Visium/VisiumHD data, please cite 
 [Michielsen, Prjibelski, Foord et al., 2026](https://www.biorxiv.org/content/10.1101/2025.06.25.661563v3).
+
+
+This project is supported by Alexandru Tomescu (@alexandrutomescu, SCALEBIO ERC grant) and Tilger Lab (@tilgnerlab). 
 
 
 ## Feedback and bug reports
