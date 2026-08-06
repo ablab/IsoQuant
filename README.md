@@ -87,7 +87,7 @@ If you use IsoQuant for processing Stereo-seq, 10x singlce-cell or 10x Visium/Vi
 [Michielsen, Prjibelski, Foord et al., 2026](https://www.biorxiv.org/content/10.1101/2025.06.25.661563v3).
 
 
-This project is supported by Alexandru Tomescu (@alexandrutomescu, SCALEBIO ERC grant) and Tilger Lab (@tilgnerlab). 
+This project is supported by [Alexandru Tomescu](https://github.com/alexandrutomescu) (SCALEBIO ERC grant) and [Tilgner lab](https://github.com/tilgnerlab). 
 
 
 ## Feedback and bug reports
