@@ -21,8 +21,31 @@ import gffutils
 
 from ..assignment.assignment_loader import create_merging_assignment_loader
 from ..assignment.isoform_assignment import MatchEventSubtype, ReadAssignment
+from .callers.base import BarcodeDetectionResult
 
 logger = logging.getLogger('IsoQuant')
+
+# Key under which all reads with an undetected UMI are collected in the UMI dict.
+UNTRUSTED_UMI_KEY = "None"
+# Values that mean "no UMI was detected for this read": None (no UMI tag in BAM),
+# the barcode caller sentinel "*" (BarcodeDetectionResult.NOSEQ), the string "None"
+# written by legacy allinfo tables, and empty/missing fields.
+UNTRUSTED_UMIS = frozenset((None, "None", BarcodeDetectionResult.NOSEQ, ".", ""))
+
+
+def is_untrusted_umi(umi: Optional[str]) -> bool:
+    """
+    Check whether a UMI is missing or was not reliably detected.
+
+    Such reads must not be treated as separate molecules during deduplication.
+
+    Args:
+        umi: UMI sequence as stored on the ReadAssignment, or None
+
+    Returns:
+        True if the UMI cannot be trusted for deduplication
+    """
+    return umi in UNTRUSTED_UMIS
 
 
 def format_read_assignment_for_output(read_assignment: ReadAssignment) -> str:
@@ -211,7 +234,7 @@ class UMIFilter:
         # Create sorting keys: (count, length_penalty, umi_sequence)
         umi_sorting_keys = {}
         for umi in umi_counter:
-            if umi is None or umi == "None":
+            if is_untrusted_umi(umi):
                 umi_sorting_keys[umi] = (-1, 0, "")
             else:
                 umi_sorting_keys[umi] = (len(umi_counter[umi]), self.umi_len_dif_func(len(umi)), umi)
@@ -224,9 +247,9 @@ class UMIFilter:
         trusted_umi_list: List[str] = []
 
         for m in molecule_list:
-            if m.umi is None or m.umi == "None":
+            if is_untrusted_umi(m.umi):
                 # Collect untrusted UMIs together
-                umi_dict["None"].append(m)
+                umi_dict[UNTRUSTED_UMI_KEY].append(m)
                 continue
 
             similar_umi = self._find_similar_umi(m.umi, trusted_umi_list)
@@ -329,7 +352,7 @@ class UMIFilter:
             return [resulting_reads[0][0]]
 
         # With multiple UMIs, ignore untrusted ones
-        return [x[0] for x in filter(lambda x: x[1] != "None", resulting_reads)]
+        return [x[0] for x in filter(lambda x: x[1] != UNTRUSTED_UMI_KEY, resulting_reads)]
 
     def _process_gene(self, gene_dict: Dict[str, List[ReadAssignment]]):
         """

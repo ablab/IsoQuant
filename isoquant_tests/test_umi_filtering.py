@@ -8,6 +8,8 @@ import pytest
 from isoquant_lib.barcode_calling.umi_filtering import (
     UMIFilter,
     format_read_assignment_for_output,
+    is_untrusted_umi,
+    UNTRUSTED_UMI_KEY,
 
 )
 from isoquant_lib.assignment.isoform_assignment import ReadAssignment, ReadAssignmentType
@@ -123,6 +125,68 @@ class TestUMIFilter:
         # Untrusted UMIs should be grouped separately
         assert len(umi_dict) == 1
         assert "None" in umi_dict or "" in umi_dict or "read_001" in umi_dict
+
+    @pytest.mark.parametrize("umi", [None, "None", "*", ".", ""])
+    def test_is_untrusted_umi(self, umi):
+        """All sentinels for an undetected UMI must be recognized as untrusted."""
+        assert is_untrusted_umi(umi)
+
+    def test_is_untrusted_umi_real_sequence(self):
+        """A real UMI sequence must be trusted."""
+        assert not is_untrusted_umi("ACGTACGTAC")
+
+    def test_construct_umi_dict_noseq_umi(self, umi_filter):
+        """Reads with the barcode caller '*' sentinel go to the untrusted bucket."""
+        read1 = ReadAssignment(read_id="read_001", assignment_type=ReadAssignmentType.unique,
+                               string_pools=self.string_pools)
+        read1.umi = "AAAAAAAAAA"
+
+        read2 = ReadAssignment(read_id="read_002", assignment_type=ReadAssignmentType.unique,
+                               string_pools=self.string_pools)
+        read2.umi = "*"
+
+        umi_dict = umi_filter._construct_umi_dict([read1, read2])
+
+        assert "*" not in umi_dict
+        assert [m.read_id for m in umi_dict[UNTRUSTED_UMI_KEY]] == ["read_002"]
+        assert [m.read_id for m in umi_dict["AAAAAAAAAA"]] == ["read_001"]
+
+    def test_process_duplicates_drops_noseq_umi(self, umi_filter):
+        """A '*' UMI read is dropped when the gene-barcode pair has detected UMIs."""
+        read1 = ReadAssignment(read_id="read_001", assignment_type=ReadAssignmentType.unique,
+                               string_pools=self.string_pools)
+        read1.umi = "AAAAAAAAAA"
+        read1.corrected_exons = [(1000, 1500), (1600, 2000)]
+
+        read2 = ReadAssignment(read_id="read_002", assignment_type=ReadAssignmentType.unique,
+                               string_pools=self.string_pools)
+        read2.umi = "TTTTTTTTTT"
+        read2.corrected_exons = [(1000, 1500), (1600, 2000)]
+
+        read3 = ReadAssignment(read_id="read_003", assignment_type=ReadAssignmentType.unique,
+                               string_pools=self.string_pools)
+        read3.umi = "*"
+        read3.corrected_exons = [(1000, 1500), (1600, 2000)]
+
+        selected = umi_filter._process_duplicates([read1, read2, read3])
+
+        assert sorted(r.read_id for r in selected) == ["read_001", "read_002"]
+
+    def test_process_duplicates_keeps_lone_noseq_umi(self, umi_filter):
+        """Reads with no detected UMI still yield one molecule when they are all there is."""
+        read1 = ReadAssignment(read_id="read_001", assignment_type=ReadAssignmentType.unique,
+                               string_pools=self.string_pools)
+        read1.umi = "*"
+        read1.corrected_exons = [(1000, 1500), (1600, 2000)]
+
+        read2 = ReadAssignment(read_id="read_002", assignment_type=ReadAssignmentType.unique,
+                               string_pools=self.string_pools)
+        read2.umi = "*"
+        read2.corrected_exons = [(1000, 1500), (1600, 2000)]
+
+        selected = umi_filter._process_duplicates([read1, read2])
+
+        assert len(selected) == 1
 
     def test_select_best_read(self, umi_filter):
         """Test selecting best read from duplicates."""
