@@ -68,8 +68,8 @@ class TenXBarcodeDetector:
             self.score_diff = 0
             self.r1_min_score = self.RAW_R1_MIN_SCORE
             self.r1_terminal_delta = self.RAW_TERMINAL_MATCH_DELTA
-            logger.info("Barcodes will be extracted without whitelist matching, "
-                        "correction is delegated to the graph-based stage")
+            logger.info("Barcodes will be extracted verbatim so that cell barcodes "
+                        "can be detected from their counts")
             return
 
         self.r1_min_score = self.R1_MIN_SCORE

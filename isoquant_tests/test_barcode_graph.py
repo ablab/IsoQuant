@@ -60,6 +60,18 @@ class TestEstimateCellNumber:
     def test_ignores_singletons(self):
         assert estimate_cell_number([1] * 1000) == 0
 
+    def test_flat_distribution_has_no_knee(self):
+        """Equally abundant barcodes are all equally cell-like, so take all of them.
+
+        The chord-distance argmax is 0 everywhere here; reading that as a knee would
+        silently report a single cell.
+        """
+        assert estimate_cell_number([60] * 30 + [1] * 400) == 30
+
+    def test_knee_survives_a_noise_tail(self):
+        counts = [1000 - i for i in range(200)] + [2] * 5000
+        assert 150 <= estimate_cell_number(counts) <= 260
+
 
 class TestKmerSizeSelection:
     """k is picked as large as the q-gram bound allows, which is what makes lookups cheap."""

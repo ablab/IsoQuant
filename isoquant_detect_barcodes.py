@@ -18,7 +18,8 @@ import os
 import sys
 from traceback import print_exc
 
-from isoquant_lib.modes import IsoQuantMode, BarcodeCorrectionMethod, LARGE_WHITELIST_SIZE
+from isoquant_lib.modes import (IsoQuantMode, BarcodeCorrectionMethod, LARGE_WHITELIST_SIZE,
+                                AUTO_BARCODES)
 from isoquant_lib.utils.error_codes import IsoQuantExitCode
 from isoquant_lib.barcode_calling.detect_barcodes import (
     process_single_thread,
@@ -26,7 +27,7 @@ from isoquant_lib.barcode_calling.detect_barcodes import (
     get_barcode_length,
     BARCODE_CALLING_MODES,
 )
-from isoquant_lib.barcode_calling.correct_barcodes import correct_barcodes
+from isoquant_lib.barcode_calling.correct_barcodes import select_cell_barcodes
 
 logger = logging.getLogger('IsoQuant')
 
@@ -60,18 +61,14 @@ def parse_args(sys_argv):
                         required=True)
     parser.add_argument("--threads", "-t", type=int, help="threads to use [16]", default=16)
     parser.add_argument("--tmp_dir", type=str, help="folder for temporary files")
-    parser.add_argument("--barcode_correction", type=str, choices=[e.name for e in BarcodeCorrectionMethod],
-                        default=BarcodeCorrectionMethod.auto.name,
-                        help="how to correct extracted barcodes: match each read against the whitelist, "
-                             "or select actually sequenced barcodes and correct via an edit-distance "
-                             "graph [%s: graph for large whitelists]" % BarcodeCorrectionMethod.auto.name)
-    parser.add_argument("--n_cells", type=int,
-                        help="expected number of cell-associated barcodes, used by "
-                             "--barcode_correction graph [estimated from barcode counts]")
+    parser.add_argument("--n_cells", type=str,
+                        help='expected number of cell-associated barcodes, or "%s" to estimate it from the '
+                             'barcode count distribution. When set, the whitelist is treated as a pool to '
+                             'select cell barcodes from; when omitted, the whitelist is taken to be the '
+                             'cell barcodes themselves' % AUTO_BARCODES)
     add_hidden_option("--n_cells_interval", type=int, default=25)
-    add_hidden_option("--barcode_graph_threshold", type=int, default=1)
-    add_hidden_option("--barcode_graph_rounds", type=int, default=2)
-    add_hidden_option("--barcode_graph_impl", type=str, choices=["centers", "full"], default="centers")
+    add_hidden_option("--barcode_correction", type=str, choices=[e.name for e in BarcodeCorrectionMethod],
+                      default=BarcodeCorrectionMethod.auto.name)
     add_hidden_option('--debug', action='store_true', default=False, help='debug log output.')
 
     args = parser.parse_args(sys_argv)
@@ -91,33 +88,44 @@ def count_whitelist_barcodes(whitelist_files):
     return total
 
 
-def resolve_barcode_correction(args):
-    """Turn --barcode_correction into args.whitelist_matching, validating the request."""
-    args.whitelist_matching = True
+def resolve_cell_barcode_detection(args):
+    """Decide whether cell barcodes are supplied or detected. See isoquant.py for the rules."""
+    args.detect_cell_barcodes = False
+    whitelist_is_auto = args.barcodes == [AUTO_BARCODES]
+
+    if args.n_cells is not None and args.n_cells != AUTO_BARCODES:
+        try:
+            args.n_cells = int(args.n_cells)
+        except ValueError:
+            logger.critical('--n_cells must be a positive integer or "%s"' % AUTO_BARCODES)
+            sys.exit(IsoQuantExitCode.INVALID_PARAMETER)
+        if args.n_cells <= 0:
+            logger.critical("--n_cells must be positive")
+            sys.exit(IsoQuantExitCode.INVALID_PARAMETER)
+
     requested = BarcodeCorrectionMethod[args.barcode_correction]
     if requested == BarcodeCorrectionMethod.whitelist:
-        return
-
-    if not args.mode.supports_graph_correction():
-        if requested == BarcodeCorrectionMethod.graph:
-            logger.critical("Graph-based barcode correction is not supported for mode %s" % args.mode.name)
+        if whitelist_is_auto:
+            logger.critical('--barcode_correction whitelist cannot be used with --barcodes %s' % AUTO_BARCODES)
             sys.exit(IsoQuantExitCode.INCOMPATIBLE_OPTIONS)
         return
-    if not args.barcodes:
-        if requested == BarcodeCorrectionMethod.graph:
-            logger.critical("Graph-based barcode correction requires --barcodes")
-            sys.exit(IsoQuantExitCode.BARCODE_WHITELIST_MISSING)
+
+    if whitelist_is_auto and args.n_cells is None:
+        args.n_cells = AUTO_BARCODES
+
+    if not (whitelist_is_auto or args.n_cells is not None or requested == BarcodeCorrectionMethod.graph):
+        if args.barcodes and count_whitelist_barcodes(args.barcodes) > LARGE_WHITELIST_SIZE:
+            logger.warning("Barcode whitelist is large and is treated as the list of cell barcodes; "
+                           "matching every read against it effectively requires an exact match. "
+                           'Set --n_cells (or --n_cells %s) to select cell barcodes instead.' % AUTO_BARCODES)
         return
 
-    if requested == BarcodeCorrectionMethod.auto:
-        barcode_count = count_whitelist_barcodes(args.barcodes)
-        if barcode_count <= LARGE_WHITELIST_SIZE:
-            logger.info("Whitelist contains %d barcodes, using per-read whitelist matching" % barcode_count)
-            return
-        logger.info("Whitelist contains %d barcodes, per-read matching would degenerate into exact "
-                    "matching; using graph-based barcode correction instead" % barcode_count)
-
-    args.whitelist_matching = False
+    if not args.mode.supports_cell_barcode_detection():
+        logger.critical("Detecting cell barcodes from the data is not supported for mode %s" % args.mode.name)
+        sys.exit(IsoQuantExitCode.INCOMPATIBLE_OPTIONS)
+    if requested == BarcodeCorrectionMethod.graph and args.n_cells is None:
+        args.n_cells = AUTO_BARCODES
+    args.detect_cell_barcodes = True
 
 
 def check_args(args):
@@ -138,38 +146,45 @@ def check_args(args):
             args.out_fasta = [args.output + "_%d.split_reads.fasta" % i for i in range(num_files)]
 
 
-def main(sys_argv):
-    args = parse_args(sys_argv)
-    set_logger(logger, args)
-    check_args(args)
-    resolve_barcode_correction(args)
-
-    out_dir = os.path.dirname(args.output)
-    if out_dir and not os.path.exists(out_dir):
-        os.makedirs(out_dir, exist_ok=True)
-
-    # with graph correction the detector writes uncorrected barcodes to an intermediate
-    # table, and the correction stage produces the final barcoded read tables
-    final_output_tsv = args.output_tsv
-    if not args.whitelist_matching:
-        args.output_tsv = [name.replace(".barcoded_reads.tsv", ".raw_barcodes.tsv")
-                           for name in final_output_tsv]
-
+def run_barcode_calling(args):
     if args.threads == 1 or args.mode.enforces_single_thread():
         process_single_thread(args)
     else:
         process_in_parallel(args)
 
-    if not args.whitelist_matching:
-        correct_barcodes(args.output_tsv, final_output_tsv, args.barcodes,
-                         barcode_length=get_barcode_length(args.mode),
-                         n_cells=args.n_cells,
-                         n_cells_interval=args.n_cells_interval,
-                         threshold=args.barcode_graph_threshold,
-                         rounds=args.barcode_graph_rounds,
-                         threads=args.threads,
-                         stats_file=args.output + ".barcode_correction.stats",
-                         implementation=args.barcode_graph_impl)
+
+def main(sys_argv):
+    args = parse_args(sys_argv)
+    set_logger(logger, args)
+    check_args(args)
+    resolve_cell_barcode_detection(args)
+
+    out_dir = os.path.dirname(args.output)
+    if out_dir and not os.path.exists(out_dir):
+        os.makedirs(out_dir, exist_ok=True)
+
+    if args.detect_cell_barcodes:
+        # first pass: extract barcodes verbatim so they can be counted. No FASTA here, the
+        # second pass does the extraction whose results are kept.
+        final_output_tsv, final_out_fasta = args.output_tsv, args.out_fasta
+        args.output_tsv = [name.replace(".barcoded_reads.tsv", ".raw_barcodes.tsv")
+                           for name in final_output_tsv]
+        args.out_fasta = None
+        args.whitelist_matching = False
+        run_barcode_calling(args)
+
+        cell_barcodes = select_cell_barcodes(args.output_tsv, args.output + ".cell_barcodes.tsv",
+                                             args.barcodes,
+                                             barcode_length=get_barcode_length(args.mode),
+                                             n_cells=args.n_cells,
+                                             n_cells_interval=args.n_cells_interval,
+                                             stats_file=args.output + ".cell_barcodes.stats")
+        # second pass: ordinary barcode calling against the detected cell barcodes
+        args.barcodes = [cell_barcodes]
+        args.output_tsv, args.out_fasta = final_output_tsv, final_out_fasta
+
+    args.whitelist_matching = True
+    run_barcode_calling(args)
 
 
 def main_entry():
