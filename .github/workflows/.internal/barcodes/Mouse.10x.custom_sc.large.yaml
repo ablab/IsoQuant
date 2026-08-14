@@ -1,0 +1,32 @@
+name: Mouse.10x.custom_sc.large
+output: /abga/work/andreyp/ci_isoquant/output
+run_type: single
+reads: Mouse.10x.5k.no_truncation.NewStereoQ.600k.fq.gz
+mode: custom_sc
+molecule: 10x.large.mdf
+threads: '8'
+qa_mode: tenX_v3
+baselines:
+  barcode:
+    barcoded_reads: 514290.0
+    correct_barcodes: 512883.0
+    precision: 99.73
+    precision_at_11: 99.73
+    precision_at_12: 99.73
+    precision_at_13: 99.73
+    precision_at_14: 99.73
+    precision_at_15: 99.97
+    precision_at_16: 100.0
+    recall: 85.48
+    recall_at_11: 85.48
+    recall_at_12: 85.48
+    recall_at_13: 85.48
+    recall_at_14: 85.48
+    recall_at_15: 77.46
+    recall_at_16: 74.97
+    total_reads: 600000.0
+    umi_within_1: 464006.0
+    umi_within_2: 478004.0
+    umi_within_3: 487126.0
+    unique_detected_barcodes: 5808.0
+    unique_true_barcodes: 5000.0

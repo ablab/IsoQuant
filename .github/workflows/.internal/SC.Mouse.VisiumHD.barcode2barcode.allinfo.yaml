@@ -1,0 +1,28 @@
+name: SC.Mouse.VisiumHD.barcode2barcode.allinfo
+output: /abga/work/andreyp/ci_isoquant/output
+run_type: allinfo
+genome: /abga/work/andreyp/data/reference/mouse/GRCm39.primary_assembly.genome.fa
+genedb: /abga/work/andreyp/data/reference/mouse/gencode.vM36.basic.annotation.gtf
+bam: /abga/work/andreyp/ci_isoquant/data/barcodes/Mouse.VisiumHD.800K.aligned.bam
+datatype: ont
+isoquant_options: '"-m visium_hd --complete_genedb --barcoded_reads /abga/work/andreyp/ci_isoquant/data/barcodes/Mouse.VisiumHD.800K.barcoded_reads.tsv
+  --barcode2barcode /abga/work/andreyp/data/visium/spaceranger/barcode_seq_to_spots.tsv:0:1,2,3
+  --large_output read_info  -t 10"'
+edit_distance: '4'
+check_input_files: UMI_filtered.barcode_barcode_col0.ED4.allinfo.gz UMI_filtered.barcode_barcode_col0.ED4.stats.tsv
+baselines:
+  allinfo:
+    Unique gene-barcodes pairs: 513103.0
+    Total reads saved: 514240.0
+    Spliced reads saved: 376418.0
+    Total assignments processed: 773071.0
+    Assigned to any gene: 770301.0
+    Assigned to any gene and barcoded: 586615.0
+    Spliced: 563243.0
+    Spliced and barcoded: 430196.0
+    Uniquely assigned: 768034.0
+    Uniquely assigned and barcoded: 586615.0
+    Uniquely assigned and spliced: 562338.0
+    Uniquely assigned and spliced and barcoded: 430196.0
+    duplicate_triplets: 0.0
+    allinfo_stats_match: 1.0

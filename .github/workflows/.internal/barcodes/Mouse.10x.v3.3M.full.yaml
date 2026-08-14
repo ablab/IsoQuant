@@ -1,0 +1,32 @@
+name: Mouse.10x.v3.3M.full
+output: /abga/work/andreyp/ci_isoquant/output
+run_type: single
+reads: /abga/work/andreyp/simulation/data/10x/Mouse_M36.10x_v3.3M-3pgex-may-2023.R9.10M_aligned_reads.fasta.gz
+barcodes: /abga/work/andreyp/simulation/ref/10x/3M-3pgex-may-2023.txt
+mode: tenX_v3
+threads: '16'
+qa_mode: tenX_v3
+baselines:
+  barcode:
+    barcoded_reads: 6002431.0
+    correct_barcodes: 5842102.0
+    precision: 97.33
+    precision_at_11: 97.33
+    precision_at_12: 97.33
+    precision_at_13: 97.33
+    precision_at_14: 97.33
+    precision_at_15: 97.33
+    precision_at_16: 97.33
+    recall: 58.42
+    recall_at_11: 58.42
+    recall_at_12: 58.42
+    recall_at_13: 58.42
+    recall_at_14: 58.42
+    recall_at_15: 58.42
+    recall_at_16: 58.42
+    total_reads: 10000000.0
+    umi_within_1: 4599188.0
+    umi_within_2: 5290953.0
+    umi_within_3: 5680259.0
+    unique_detected_barcodes: 3259651.0
+    unique_true_barcodes: 3982878.0

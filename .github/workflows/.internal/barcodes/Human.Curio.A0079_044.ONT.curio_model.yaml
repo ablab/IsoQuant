@@ -1,0 +1,32 @@
+name: Human.Curio.A0079_044.ONT
+output: /abga/work/andreyp/ci_isoquant/output/
+run_type: single
+barcodes: A0079_044_BeadBarcodes.tsv
+reads: Human.Curio.A0079_044.curio_model.800K.fasta.gz
+mode: curio
+threads: '8'
+qa_mode: curio
+baselines:
+  barcode:
+    barcoded_reads: 612923.0
+    correct_barcodes: 610848.0
+    precision: 99.66
+    precision_at_10: 99.66
+    precision_at_11: 99.66
+    precision_at_12: 99.66
+    precision_at_13: 99.66
+    precision_at_14: 99.95
+    precision_at_9: 99.66
+    recall: 76.36
+    recall_at_10: 76.36
+    recall_at_11: 76.36
+    recall_at_12: 76.36
+    recall_at_13: 76.36
+    recall_at_14: 72.23
+    recall_at_9: 76.36
+    total_reads: 800000.0
+    umi_within_1: 529555.0
+    umi_within_2: 579178.0
+    umi_within_3: 592304.0
+    unique_detected_barcodes: 66151.0
+    unique_true_barcodes: 66600.0

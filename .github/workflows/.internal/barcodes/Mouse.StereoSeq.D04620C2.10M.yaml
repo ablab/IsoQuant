@@ -1,0 +1,32 @@
+name: Mouse.StereoSeq.D04620C2.10M
+output: /abga/work/andreyp/ci_isoquant/output/
+run_type: single
+reads: Mouse.StereoSeq.D04620C2.10M.800K.fa
+barcodes: D04620C2.10M.tsv
+mode: stereoseq_nosplit
+threads: '8'
+qa_mode: stereo
+baselines:
+  barcode:
+    barcoded_reads: 625661.0
+    correct_barcodes: 625570.0
+    precision: 99.99
+    precision_at_20: 99.99
+    precision_at_21: 99.99
+    precision_at_22: 99.99
+    precision_at_23: 99.99
+    precision_at_24: 99.99
+    precision_at_25: 100.0
+    recall: 78.2
+    recall_at_20: 78.2
+    recall_at_21: 78.2
+    recall_at_22: 78.2
+    recall_at_23: 76.7
+    recall_at_24: 68.63
+    recall_at_25: 64.71
+    total_reads: 800000.0
+    umi_within_1: 569527.0
+    umi_within_2: 589715.0
+    umi_within_3: 609668.0
+    unique_detected_barcodes: 549524.0
+    unique_true_barcodes: 679156.0

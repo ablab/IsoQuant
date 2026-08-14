@@ -1,0 +1,32 @@
+name: Mouse.StereoSeq.custom_sc.small
+output: /abga/work/andreyp/ci_isoquant/output
+run_type: single
+reads: Mouse.StereoSeq.custom_sc.80K.fa
+mode: custom_sc
+molecule: stereo.small.mdf
+threads: '8'
+qa_mode: stereo
+baselines:
+  barcode:
+    barcoded_reads: 5444.0
+    correct_barcodes: 5444.0
+    precision: 100.0
+    precision_at_20: 100.0
+    precision_at_21: 100.0
+    precision_at_22: 100.0
+    precision_at_23: 100.0
+    precision_at_24: 100.0
+    precision_at_25: 100.0
+    recall: 88.41
+    recall_at_20: 88.41
+    recall_at_21: 88.41
+    recall_at_22: 84.69
+    recall_at_23: 82.38
+    recall_at_24: 71.78
+    recall_at_25: 67.0
+    total_reads: 6158.0
+    umi_within_1: 4741.0
+    umi_within_2: 4952.0
+    umi_within_3: 5011.0
+    unique_detected_barcodes: 4734.0
+    unique_true_barcodes: 5273.0

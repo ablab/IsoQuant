@@ -1,0 +1,16 @@
+# R10.4 cDNA chemistry, 5000 cells, stock-sized whitelist, graph correction.
+name: Mouse.10x.5k.R10.4.stock_whitelist.graph
+output: /abga/work/andreyp/ci_isoquant/output
+run_type: single
+reads: Mouse.10x.5k.ONT_cDNA.R10.4.no_trunc.bam
+barcodes: /abga/work/andreyp/ci_isoquant/data/barcodes/10x.stocklike_7.4M.txt
+mode: tenX_v3
+threads: '16'
+qa_mode: tenX_v3
+detect_options: "--barcode_correction graph --n_cells 5000"
+# NOTE: baselines below were measured on a 600k-record subsample of the BAM
+# (303,754 primary reads); refresh them from a full run before enabling in CI.
+baselines:
+  barcode:
+    precision: 99.90
+    recall: 88.64

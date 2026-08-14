@@ -1,0 +1,23 @@
+name: Human.10x_realdata
+output: /abga/work/andreyp/ci_isoquant/output
+run_type: tenX_v3_split
+reads: Human.10x_realdata.sci_uniq_reads.fastq.gz
+barcodes: Human.10x_realdata.barcodes.tsv
+mode: tenX_v3_split
+threads: '8'
+truth_file: Human.10x_realdata.truth.tsv
+truth_barcode_col: '4'
+truth_umi_col: '7'
+baselines:
+  barcode:
+    correct_detections: 707816
+    correct_reads: 707816
+    incorrect_detections: 1031
+    incorrect_reads: 855
+    no_barcodes_assigned: 6707
+    pct_no_barcodes: 0.94
+    precision: 99.88
+    reads_with_truth: 715378
+    recall: 98.94
+    total_reads: 715378
+    total_valid_detections: 708847

@@ -1,0 +1,17 @@
+name: ILP.PB.Camk2b
+output: /abga/work/andreyp/ci_isoquant/output
+run_type: transcripts
+genome: /abga/work/andreyp/ci_isoquant/data/ILP/ref/GRCm39.chr11.fa.gz
+genedb: /abga/work/andreyp/ci_isoquant/data/ILP/ref/reduced_db/Camk2b.reduced.gtf
+bam: /abga/work/andreyp/ci_isoquant/data/ILP/pb_unifrom_cov/Camk2b.bam
+datatype: pacbio
+isoquant_options: '"-t 6 --complete_genedb  --force "'
+reduced_db: /abga/work/andreyp/ci_isoquant/data/ILP/ref/reduced_db/Camk2b
+baselines:
+  transcripts:
+    full_recall: 33.3
+    full_precision: 83.3
+    known_recall: 55.6
+    known_precision: 100.0
+    novel_recall: 0.0
+    novel_precision: 0.0

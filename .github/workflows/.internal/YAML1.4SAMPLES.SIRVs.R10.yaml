@@ -1,0 +1,8 @@
+name: YAML1.4SAMPLES.SIRVs.R10
+output: /abga/work/andreyp/ci_isoquant/output
+run_type: void
+genome: /abga/work/andreyp/ci_isoquant/data/ref/SIRV4/SIRV_isoforms_multi-fasta_200709a.fasta
+genedb: /abga/work/andreyp/ci_isoquant/data/ref/SIRV4/SIRV_isoforms_multi-fasta-annotation.reduced.gtf
+datatype: ont
+isoquant_options: '"-t 8 --complete_genedb --force --yaml /abga/work/andreyp/ci_isoquant/data/groups/Lexogen.SIRVs.Set4.ONT_cDNA.R10.4.grouped4.yaml
+  "'

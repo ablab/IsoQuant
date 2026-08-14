@@ -1,0 +1,19 @@
+name: GROUP13.SC.SIRVs.R10
+output: /abga/work/andreyp/ci_isoquant/output
+run_type: void
+label: GROUP13.SC.SIRVs.R10
+genome: /abga/work/andreyp/ci_isoquant/data/ref/SIRV4/SIRV_isoforms_multi-fasta_200709a.fasta
+genedb: /abga/work/andreyp/ci_isoquant/data/ref/SIRV4/SIRV_isoforms_multi-fasta-annotation.reduced.gtf
+bam: /abga/work/andreyp/ci_isoquant/data/groups/mix/SRIV.simulated_R10_no_trunc.group_SIRV1.bam
+  /abga/work/andreyp/ci_isoquant/data/groups/mix/SRIV.simulated_R10_no_trunc.group_SIRV2.bam
+  /abga/work/andreyp/ci_isoquant/data/groups/mix/SRIV.simulated_R10_no_trunc.group_SIRV3.bam
+  /abga/work/andreyp/ci_isoquant/data/groups/mix/SRIV.simulated_R10_no_trunc.group_SIRV4.bam
+  /abga/work/andreyp/ci_isoquant/data/groups/mix/SRIV.simulated_R10_no_trunc.group_SIRV5.bam
+  /abga/work/andreyp/ci_isoquant/data/groups/mix/SRIV.simulated_R10_no_trunc.group_SIRV6.bam
+  /abga/work/andreyp/ci_isoquant/data/groups/mix/SRIV.simulated_R10_no_trunc.group_SIRV7.bam
+datatype: ont
+isoquant_options: '"-t 8 --complete_genedb --force --mode tenX_v3 --read_group barcode  --barcoded_reads
+  /abga/work/andreyp/ci_isoquant/data/groups/mix/SRIV.simulated_R10_no_trunc.barcodes.3cols.tsv
+  --barcode2spot /abga/work/andreyp/ci_isoquant/data/groups/mix/SRIV.simulated_R10_no_trunc.barcode2spot.multicolumn.tsv:0:1,2,3
+  "'
+check_input_files: gene_grouped_barcode_counts.tsv transcript_grouped_barcode_counts.tsv gene_grouped_barcode_spot_col0_counts.tsv gene_grouped_barcode_spot_col1_counts.tsv gene_grouped_barcode_spot_col2_counts.tsv transcript_grouped_barcode_spot_col0_counts.tsv transcript_grouped_barcode_spot_col1_counts.tsv transcript_grouped_barcode_spot_col2_counts.tsv

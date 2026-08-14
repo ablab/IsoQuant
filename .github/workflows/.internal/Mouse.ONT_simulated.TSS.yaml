@@ -1,0 +1,41 @@
+name: Mouse.ONT_simulated.TSS
+output: /abga/work/andreyp/ci_isoquant/output
+run_type: transcripts,tss_prediction
+genome: /abga/work/andreyp/data/reference/mouse/GRCm39.primary_assembly.genome.fa
+genedb: /abga/work/andreyp/data/reference/mouse/gencode.vM36.basic.annotation.db
+bam: /abga/work/andreyp/ci_isoquant/data/mouse_tss/OUT_simulated_mouse_aligned_reads_fda86c_c7ddaa_493dae.bam
+simulated_counts: /abga/work/andreyp/ci_isoquant/data/mouse_tss/quantified_tr_mouse_1.tsv
+reference_tss_gtf: /abga/work/andreyp/ci_isoquant/data/mouse_tss/updated_mouse_1.gtf
+reduced_db: /abga/work/andreyp/ci_isoquant/data/simulated_truth/Mouse.ONT_simulated.TSS
+datatype: ont
+isoquant_options: '"-t 16 --complete_genedb --force --fl_data
+  "'
+baselines:
+  transcripts:
+    full_recall: 86.8
+    full_precision: 94.3
+    known_recall: 96.4
+    known_precision: 87.9
+    novel_recall: 54.7
+    novel_precision: 94.5
+  transcripts_td50:
+    full_recall: 84.7
+    full_precision: 92.0
+    known_recall: 96.4
+    known_precision: 87.8
+    novel_recall: 54.5
+    novel_precision: 94.1
+  transcripts_td10:
+    full_recall: 80.9
+    full_precision: 87.9
+    known_recall: 96.4
+    known_precision: 87.8
+    novel_recall: 53.2
+    novel_precision: 91.9
+  tss_prediction:
+    precision: 97.2047
+    recall: 71.1228
+    precision_known: 97.0610
+    recall_known: 66.0010
+    precision_novel: 97.4550
+    recall_novel: 82.1865

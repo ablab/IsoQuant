@@ -1,0 +1,14 @@
+name: Fusion.PB_simulated
+output: /abga/work/andreyp/ci_isoquant/output
+run_type: fusion
+genome: /abga/work/andreyp/data/reference/human/GRCh38.primary_assembly.genome.fa
+genedb: /abga/work/andreyp/data/reference/human/gencode.v49.annotation.gtf.db
+bam: /abga/work/andreyp/ci_isoquant/data/fusion/Fusion.PB_simulated_pacbio_simulated_fusion_transcripts_5409b1_72de8a_c36f04.bam
+datatype: pacbio
+fusion_truth: /abga/work/andreyp/ci_isoquant/data/fusion/fusion_truth_pb.tsv
+isoquant_options: "-t 16 --complete_genedb --analysis fusion"
+baselines:
+  fusion:
+    sensitivity: 0.8256
+    precision: 0.9532
+    f1_score: 0.8848

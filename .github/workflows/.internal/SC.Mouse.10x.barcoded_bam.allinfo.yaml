@@ -1,0 +1,26 @@
+name: SC.Mouse.10x.barcoded_bam.allinfo
+output: /abga/work/andreyp/ci_isoquant/output
+run_type: allinfo
+genome: /abga/work/andreyp/data/reference/mouse/GRCm39.primary_assembly.genome.fa
+genedb: /abga/work/andreyp/data/reference/mouse/gencode.vM36.basic.annotation.gtf
+bam: /abga/work/andreyp/ci_isoquant/data/barcodes/Mouse.10x.5k.ONT_cDNA.R10.4.no_trunc.tagged.bam
+datatype: ont
+isoquant_options: '"-m tenX_v3 --complete_genedb --barcoded_bam --strip_barcode_suffix
+  --large_output allinfo read2transcripts -t 10"'
+edit_distance: '3'
+baselines:
+  allinfo:
+    Unique gene-barcodes pairs: 716381.0
+    Total reads saved: 898640.0
+    Spliced reads saved: 786970.0
+    Total assignments processed: 1975526.0
+    Assigned to any gene: 1975650.0
+    Assigned to any gene and barcoded: 1744169.0
+    Spliced: 1738879.0
+    Spliced and barcoded: 1536463.0
+    Uniquely assigned: 1973577.0
+    Uniquely assigned and barcoded: 1744169.0
+    Uniquely assigned and spliced: 1738480.0
+    Uniquely assigned and spliced and barcoded: 1536463.0
+    duplicate_triplets: 0.0
+    allinfo_stats_match: 1.0

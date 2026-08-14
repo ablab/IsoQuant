@@ -1,0 +1,31 @@
+name: SRIV.Set4.ONT_R10
+output: /abga/work/andreyp/ci_isoquant/output
+run_type: transcripts
+genome: /abga/work/andreyp/ci_isoquant/data/ref/SIRV4/SIRV_isoforms_multi-fasta_200709a.fasta
+genedb: /abga/work/andreyp/ci_isoquant/data/ref/SIRV4/SIRV_isoforms_multi-fasta-annotation.reduced.db
+ubam: /abga/work/andreyp/data/sirvs/Lexogen.SIRVs.Set4.ONT_cDNA.R10.4.unmapped.bam
+datatype: ont
+isoquant_options: '"-t 8 --complete_genedb --force --clean_start "'
+reduced_db: /abga/work/andreyp/ci_isoquant/data/ref/SIRV4/SIRV_isoforms_multi-fasta-annotation
+baselines:
+  transcripts:
+    full_recall: 76.8
+    full_precision: 100.0
+    known_recall: 97.7
+    known_precision: 100.0
+    novel_recall: 42.3
+    novel_precision: 100.0
+  transcripts_td50:
+    full_recall: 73.9
+    full_precision: 96.2
+    known_recall: 97.7
+    known_precision: 100.0
+    novel_recall: 34.6
+    novel_precision: 81.8
+  transcripts_td10:
+    full_recall: 66.7
+    full_precision: 86.8
+    known_recall: 97.7
+    known_precision: 100.0
+    novel_recall: 15.4
+    novel_precision: 36.4
