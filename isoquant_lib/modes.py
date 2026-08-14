@@ -53,8 +53,8 @@ class IsoQuantMode(Enum):
     def needs_barcode_iterator(self):
         return self in [IsoQuantMode.stereoseq_nosplit, IsoQuantMode.stereoseq]
 
-    def supports_graph_correction(self):
-        """Modes whose detectors can extract raw barcodes for graph-based correction.
+    def supports_cell_barcode_detection(self):
+        """Modes whose detectors can extract raw barcodes so cell barcodes can be detected.
 
         These are the protocols with a large generic whitelist and a small unknown set of
         real cells, where per-read whitelist matching degenerates into exact matching.
@@ -72,21 +72,24 @@ class IsoQuantMode(Enum):
 ISOQUANT_MODES = [x.name for x in IsoQuantMode]
 
 
+# Accepted in place of a barcode whitelist file, and as a value for --n_cells
+AUTO_BARCODES = "auto"
+
+
 @unique
 class BarcodeCorrectionMethod(Enum):
-    """How extracted barcodes are mapped onto real ones."""
-    # match every read against the whitelist during extraction
+    """Where the list of cell barcodes reads are matched against comes from."""
+    # the supplied whitelist is the list of cell barcodes
     whitelist = 1
-    # extract barcodes verbatim, then select actually sequenced barcodes from their counts
-    # and correct the rest onto them via an edit-distance graph
+    # extract barcodes verbatim first, select the cell barcodes from their read counts,
+    # then match reads against those
     graph = 2
-    # graph when the whitelist is large enough that per-read matching degenerates
-    # into exact matching, whitelist otherwise
+    # decided by --n_cells: set means detect, unset means take the whitelist as given
     auto = 3
 
 
-# Above this whitelist size per-read matching effectively requires an exact match
-# (see TenXBarcodeDetector.__init__), so graph-based correction takes over in auto mode.
+# Above this whitelist size, matching every read against it effectively requires an exact
+# match (see TenXBarcodeDetector.__init__), so taking it as the cell list is worth a warning.
 LARGE_WHITELIST_SIZE = 100000
 
 

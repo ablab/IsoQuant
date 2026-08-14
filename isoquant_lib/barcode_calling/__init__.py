@@ -73,7 +73,7 @@ from .detect_barcodes import (
 
 # Graph-based barcode correction
 from .barcode_graph import BarcodeGraph, bounded_distance, estimate_cell_number
-from .correct_barcodes import correct_barcodes
+from .correct_barcodes import select_cell_barcodes
 
 __all__ = [
     # Indexers
@@ -128,5 +128,5 @@ __all__ = [
     'BarcodeGraph',
     'bounded_distance',
     'estimate_cell_number',
-    'correct_barcodes',
+    'select_cell_barcodes',
 ]

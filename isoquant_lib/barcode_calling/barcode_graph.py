@@ -40,6 +40,8 @@ CENTER_COUNT_FRACTION = 5.0
 MIN_CENTER_COUNT = 5
 # Barcodes rarer than this are not considered when estimating the cell number
 MIN_COUNT_FOR_ESTIMATION = 2
+# How far below its chord the log-log count curve must bend before we call it a knee
+KNEE_MIN_DEVIATION = 1e-9
 # Number of distinct barcodes handed to one graph construction worker
 BC_CHUNK_SIZE = 10000
 
@@ -102,6 +104,12 @@ def estimate_cell_number(sorted_counts: Sequence[int]) -> int:
     if norm == 0.0:
         return len(counts)
     distance = (dx * (y[0] - y) - (x[0] - x) * dy) / norm
+
+    # A curve that never bends away from its chord has no knee to find -- every barcode
+    # above the noise floor looks equally cell-like, so take all of them. Without this the
+    # argmax of an all-zero array would silently report a single cell.
+    if distance.max() <= KNEE_MIN_DEVIATION:
+        return len(counts)
     return int(numpy.argmax(distance)) + 1
 
 
@@ -275,35 +283,43 @@ class BarcodeGraph:
             return centers
 
         by_count = self.sorted_barcodes()
-        if not by_count:
+        # Restrict to the candidate pool before anything else: an abundant barcode outside
+        # the whitelist (ambient RNA, a chimera, an adapter artifact) would otherwise inflate
+        # the count cutoff below and push genuine cells under it.
+        candidates = [bc for bc in by_count if whitelist is None or bc in whitelist]
+        if not candidates:
             self.centers = []
             return []
 
         if n_cells is None:
-            n_cells = estimate_cell_number([self.counts[bc] for bc in by_count])
+            n_cells = estimate_cell_number([self.counts[bc] for bc in candidates])
             logger.info("Estimated number of cell-associated barcodes: %d" % n_cells)
-        n_cells = max(1, min(n_cells, len(by_count)))
+        n_cells = max(1, min(n_cells, len(candidates)))
 
-        cutoff = max(mean(self.counts[bc] for bc in by_count[:n_cells]) / CENTER_COUNT_FRACTION,
+        cutoff = max(mean(self.counts[bc] for bc in candidates[:n_cells]) / CENTER_COUNT_FRACTION,
                      MIN_CENTER_COUNT)
         upper = n_cells + n_cells * interval / 100.0
         lower = n_cells - n_cells * interval / 100.0
-        logger.info("Selecting up to %d cluster centers, minimal barcode count %.1f" % (upper, cutoff))
+        logger.info("Selecting up to %d cell barcodes out of %d candidates, minimal read count %.1f" %
+                    (upper, len(candidates), cutoff))
 
         centers: List[str] = []
         i = 0
-        while i < len(by_count) and self.counts[by_count[i]] > cutoff and len(centers) <= upper:
-            if whitelist is None or by_count[i] in whitelist:
-                centers.append(by_count[i])
+        while i < len(candidates) and self.counts[candidates[i]] > cutoff and len(centers) <= upper:
+            centers.append(candidates[i])
             i += 1
-        # if the count cutoff was too aggressive, keep going until the lower bound is reached
-        while i < len(by_count) and len(centers) < lower:
-            if whitelist is None or by_count[i] in whitelist:
-                centers.append(by_count[i])
+        # If the cutoff was too aggressive, keep going until the lower bound is reached -- but
+        # never down into the singletons, which is what injects spurious cells when n_cells is
+        # far too high.
+        while i < len(candidates) and len(centers) < lower and self.counts[candidates[i]] >= MIN_CENTER_COUNT:
+            centers.append(candidates[i])
             i += 1
 
-        logger.info("Selected %d cluster centers, rarest one observed %d times" %
+        logger.info("Detected %d cell barcodes, rarest one observed %d times" %
                     (len(centers), self.counts[centers[-1]] if centers else 0))
+        if centers and len(centers) < lower:
+            logger.warning("Detected %d cell barcodes, fewer than the %d expected. Check --n_cells, "
+                           "or whether the whitelist matches the protocol." % (len(centers), n_cells))
         self.centers = centers
         return centers
 
