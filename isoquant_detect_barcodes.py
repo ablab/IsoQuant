@@ -27,7 +27,7 @@ from isoquant_lib.barcode_calling.detect_barcodes import (
     get_barcode_length,
     BARCODE_CALLING_MODES,
 )
-from isoquant_lib.barcode_calling.correct_barcodes import select_cell_barcodes
+from isoquant_lib.barcode_calling.cell_selection import select_cell_barcodes
 
 logger = logging.getLogger('IsoQuant')
 

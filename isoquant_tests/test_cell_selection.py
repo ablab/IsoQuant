@@ -8,10 +8,11 @@ import random
 
 import pytest
 
-from isoquant_lib.barcode_calling.barcode_graph import BarcodeGraph
-from isoquant_lib.barcode_calling.correct_barcodes import (
+from isoquant_lib.barcode_calling.cell_selection import (
     NOSEQ,
+    CellBarcodeSelector,
     count_barcodes,
+    estimate_cell_number,
     load_whitelist,
     select_cell_barcodes,
 )
@@ -35,12 +36,130 @@ def read_barcodes(path):
         return [line.strip() for line in handle if line.strip()]
 
 
+class TestEstimateCellNumber:
+    def test_too_few_barcodes(self):
+        assert estimate_cell_number([9, 8, 7]) == 3
+
+    def test_finds_knee(self):
+        # 500 real cells at high counts, then a long tail of noise
+        counts = [1000] * 500 + [3] * 20000
+        assert 400 <= estimate_cell_number(counts) <= 600
+
+    def test_ignores_singletons(self):
+        assert estimate_cell_number([1] * 1000) == 0
+
+    def test_flat_distribution_has_no_knee(self):
+        """Equally abundant barcodes are all equally cell-like, so take all of them.
+
+        The chord-distance argmax is 0 everywhere here; reading that as a knee would
+        silently report a single cell.
+        """
+        assert estimate_cell_number([60] * 30 + [1] * 400) == 30
+
+    def test_knee_survives_a_noise_tail(self):
+        counts = [1000 - i for i in range(200)] + [2] * 5000
+        assert 150 <= estimate_cell_number(counts) <= 260
+
+
+class TestBarcodeTally:
+    def test_rejects_malformed(self):
+        selector = CellBarcodeSelector(barcode_length=16)
+        assert selector.add_barcode("ACGTACGTACGTACGT")
+        assert not selector.add_barcode("ACGTNCGTACGTACGT")      # N is not a nucleotide
+        assert not selector.add_barcode("ACGT")                  # too short
+        assert not selector.add_barcode("ACGTACGTACGTACGTACGT")  # too long
+        assert selector.malformed_count == 3
+        assert dict(selector.counts) == {"ACGTACGTACGTACGT": 1}
+
+    def test_trailing_base_is_trimmed(self):
+        """Windows one base longer than the barcode are truncated, as Badger did."""
+        selector = CellBarcodeSelector(barcode_length=16)
+        assert selector.add_barcode("ACGTACGTACGTACGTA")
+        assert dict(selector.counts) == {"ACGTACGTACGTACGT": 1}
+
+    def test_merge_counts(self):
+        selector = CellBarcodeSelector(barcode_length=16)
+        selector.add_barcode("ACGTACGTACGTACGT")
+        selector.merge_counts({"ACGTACGTACGTACGT": 4, "TTTTGGGGCCCCAAAA": 2}, malformed=7)
+        assert selector.counts["ACGTACGTACGTACGT"] == 5
+        assert selector.counts["TTTTGGGGCCCCAAAA"] == 2
+        assert selector.malformed_count == 7
+
+
+class TestSelect:
+    def _selector(self, counts):
+        selector = CellBarcodeSelector(barcode_length=16)
+        selector.counts = dict(counts)
+        return selector
+
+    def test_whitelist_filters_candidates(self):
+        rnd = random.Random(1)
+        real = [random_barcode(rnd) for _ in range(5)]
+        impostor = random_barcode(rnd)
+        counts = {bc: 100 for bc in real}
+        counts[impostor] = 1000  # most abundant, but not whitelisted
+        centers = self._selector(counts).select(n_cells=5, whitelist=set(real))
+        assert impostor not in centers
+        assert sorted(centers) == sorted(real)
+
+    def test_abundant_artifact_does_not_raise_the_cutoff(self):
+        """The cutoff comes from the candidates, not from everything that was observed.
+
+        A frequent non-whitelisted artifact used to inflate mean(top n_cells) and push
+        genuine cells below the cutoff.
+        """
+        rnd = random.Random(11)
+        real = [random_barcode(rnd) for _ in range(20)]
+        counts = {bc: 60 for bc in real}
+        counts[random_barcode(rnd)] = 100000  # artifact, orders of magnitude more abundant
+        centers = self._selector(counts).select(n_cells=20, whitelist=set(real))
+        assert sorted(centers) == sorted(real)
+
+    def test_fewer_barcodes_than_requested_cells(self):
+        """Badger raised IndexError here; asking for more cells than exist must be safe."""
+        rnd = random.Random(2)
+        counts = {random_barcode(rnd): 50 for _ in range(3)}
+        assert len(self._selector(counts).select(n_cells=1000)) == 3
+
+    def test_overshooting_n_cells_does_not_scrape_the_noise_floor(self):
+        """Padding towards n_cells must stop above the singletons."""
+        rnd = random.Random(12)
+        real = [random_barcode(rnd) for _ in range(50)]
+        counts = {bc: 100 for bc in real}
+        counts.update({random_barcode(rnd): 1 for _ in range(5000)})
+        centers = self._selector(counts).select(n_cells=2000)
+        assert sorted(centers) == sorted(real)
+
+    def test_no_barcodes(self):
+        assert self._selector({}).select(n_cells=10) == []
+
+    def test_cutoff_uses_the_most_abundant_barcodes(self):
+        """The cutoff is derived from the top n_cells, not an arbitrary dict slice."""
+        rnd = random.Random(3)
+        real = [random_barcode(rnd) for _ in range(10)]
+        noise = [random_barcode(rnd) for _ in range(5000)]
+        counts = {bc: 10000 for bc in real}
+        counts.update({bc: 1 for bc in noise})
+        centers = self._selector(counts).select(n_cells=10, whitelist=set(real) | set(noise))
+        # cutoff is mean(top 10)/5 = 2000, so none of the singletons may be picked up
+        assert sorted(centers) == sorted(real)
+
+    def test_stats(self):
+        rnd = random.Random(4)
+        real = [random_barcode(rnd) for _ in range(5)]
+        selector = self._selector({bc: 100 for bc in real})
+        selector.select(n_cells=5)
+        stats = selector.stats()
+        assert stats["Cell barcodes detected"] == 5
+        assert stats["Reads exactly matching a cell barcode"] == 500
+
+
 class TestCounting:
     def test_header_is_not_counted_as_a_read(self, tmp_path):
         """Raw tables carry a plain, non-commented header, so it must be spotted by content."""
         raw = tmp_path / "raw.tsv"
         write_raw_table(raw, [("r1", "ACGTACGTACGTACGT"), ("r2", "ACGTACGTACGTACGT")])
-        graph = BarcodeGraph(barcode_length=16)
+        graph = CellBarcodeSelector(barcode_length=16)
         assert count_barcodes([str(raw)], graph) == 2
         assert graph.malformed_count == 0
         assert dict(graph.counts) == {"ACGTACGTACGTACGT": 2}
@@ -48,7 +167,7 @@ class TestCounting:
     def test_missing_barcodes_are_skipped(self, tmp_path):
         raw = tmp_path / "raw.tsv"
         write_raw_table(raw, [("r1", "ACGTACGTACGTACGT"), ("r2", NOSEQ)])
-        graph = BarcodeGraph(barcode_length=16)
+        graph = CellBarcodeSelector(barcode_length=16)
         assert count_barcodes([str(raw)], graph) == 2
         assert dict(graph.counts) == {"ACGTACGTACGTACGT": 1}
         assert graph.malformed_count == 0
@@ -57,7 +176,7 @@ class TestCounting:
         first, second = tmp_path / "a.tsv", tmp_path / "b.tsv"
         write_raw_table(first, [("r1", "ACGTACGTACGTACGT")])
         write_raw_table(second, [("r2", "ACGTACGTACGTACGT"), ("r3", "TTTTGGGGCCCCAAAA")])
-        graph = BarcodeGraph(barcode_length=16)
+        graph = CellBarcodeSelector(barcode_length=16)
         assert count_barcodes([str(first), str(second)], graph) == 3
         assert graph.counts["ACGTACGTACGTACGT"] == 2
 
