@@ -55,9 +55,9 @@ between the two families.
 **`hits_delta` counts k-mer *occurrences*, not distinct k-mers.** For low-complexity sequences
 (homopolymer runs) a single query k-mer can match many times in one indexed barcode, so the
 count can far exceed the barcode length — `hits_delta=barcode_length` does *not* disable the
-filter. The provable upper bound is `(barcode_length - kmer_size + 1)²`; see
-`BarcodeGraph._no_hit_pruning()`. This pruning is one of the reasons per-read whitelist
-matching misses error-bearing barcodes (`.claude/BARCODE_GRAPH_CORRECTION.md`).
+filter. The provable upper bound is `(barcode_length - kmer_size + 1)²`. This pruning is one of the
+reasons per-read whitelist matching misses error-bearing barcodes on a large whitelist
+(`.claude/CELL_BARCODE_SELECTION.md`).
 
 ## Performance
 

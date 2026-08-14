@@ -1,4 +1,4 @@
-name: Barcode Mouse 10x Graph Correction
+name: Barcode Mouse 10x Cell Selection
 
 on:
   workflow_dispatch:
@@ -51,7 +51,7 @@ jobs:
     if: needs.check-changes.outputs.has_changes == 'true'
     runs-on:
       labels: [isoquant]
-    name: 'Running graph barcode correction QC'
+    name: 'Running cell barcode detection QC'
 
     steps:
       - name: 'Cleanup'
@@ -67,7 +67,7 @@ jobs:
 
       # 5000 simulated cells, reads called against a 7.4M stock-sized whitelist.
       # Per-read whitelist matching degenerates into exact matching at this whitelist size,
-      # so this step is the baseline the graph step has to beat.
+      # so this step is the baseline the detection step has to beat.
       - name: 'Mouse 10x 5k, stock whitelist, per-read matching'
         if: always()
         shell: bash
@@ -77,22 +77,22 @@ jobs:
           export PATH=$PATH:${{env.BIN_PATH}}
           python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.yaml -o ${{env.OUTPUT_BASE}}
 
-      - name: 'Mouse 10x 5k, stock whitelist, graph correction'
+      - name: 'Mouse 10x 5k, stock whitelist, detected cell barcodes'
         if: always()
         shell: bash
         env:
-          STEP_NAME: Mouse.10x.5k.stock_whitelist.graph
+          STEP_NAME: Mouse.10x.5k.stock_whitelist.detected
         run: |
           export PATH=$PATH:${{env.BIN_PATH}}
           python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.yaml -o ${{env.OUTPUT_BASE}}
 
-      # Guards the split-mode path: raw extraction accepts every barcode window, so
-      # wrong-strand duplicates would surface here as inflated molecule counts.
-      - name: 'Mouse 10x concat (split), stock whitelist, graph correction'
+      # Guards the split-mode path: pass 1 accepts every barcode window, so wrong-strand
+      # duplicates would surface here as inflated molecule counts.
+      - name: 'Mouse 10x concat (split), stock whitelist, detected cell barcodes'
         if: always()
         shell: bash
         env:
-          STEP_NAME: Mouse.10x_concat.realistic.stock_whitelist.graph
+          STEP_NAME: Mouse.10x_concat.realistic.stock_whitelist.detected
         run: |
           export PATH=$PATH:${{env.BIN_PATH}}
           python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.yaml -o ${{env.OUTPUT_BASE}}
