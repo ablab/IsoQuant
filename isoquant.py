@@ -957,9 +957,11 @@ def _check_barcode_input_files(args):
     if hasattr(args, 'molecule') and args.molecule:
         check_file_exists(args.molecule, "Molecule definition file")
 
-    # Check barcode whitelist files
+    # Check barcode whitelist files; AUTO_BARCODES asks for detection, it is not a path
     if hasattr(args, 'barcode_whitelist') and args.barcode_whitelist:
         for wl_file in args.barcode_whitelist:
+            if wl_file == AUTO_BARCODES:
+                continue
             check_file_exists(wl_file, "Barcode whitelist file")
 
 
