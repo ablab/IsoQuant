@@ -86,7 +86,8 @@ class TenXBarcodeDetector:
             self.max_barcodes_hits = 20
             self.min_matching_kmers = 1
             self.min_score = 14
-            self.score_diff = 0
+            # a read that two barcodes explain equally well cannot be assigned to either
+            self.score_diff = 1
         else:
             barcode_bit_list = [str_to_2bit(b) for b in barcode_list]
             self.barcode_indexer = Array2BitKmerIndexer(barcode_bit_list, kmer_size=self.k, seq_len=self.BARCODE_LEN_10X)
