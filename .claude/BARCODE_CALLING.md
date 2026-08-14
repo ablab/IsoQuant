@@ -2,9 +2,9 @@
 
 This document describes the barcode calling subsystem for single-cell and spatial transcriptomics.
 
-For graph-based barcode correction — the alternative to per-read whitelist matching, used when
-the stock 10x whitelists make matching degenerate into exact matching — see
-`.claude/BARCODE_GRAPH_CORRECTION.md`.
+For cell barcode detection — how `--n_cells` turns the whitelist into a candidate pool rather
+than the cell list, used when the stock 10x whitelists make per-read matching degenerate into
+exact matching — see `.claude/CELL_BARCODE_SELECTION.md`.
 
 ## Directory Structure
 
