@@ -83,6 +83,14 @@ def select_cell_barcodes(raw_barcode_files: List[str], output_file: str,
         logger.warning("No barcodes were extracted, cannot detect cell barcodes")
 
     whitelist = load_whitelist(barcode_whitelist)
+    if whitelist is None:
+        # Counts alone cannot tell a cell from a recurring extraction artifact: a
+        # mis-anchored barcode window repeats across reads and looks exactly like an
+        # abundant cell. A whitelist rejects those, because an artifact is not a valid
+        # protocol barcode. Measured on ONT cDNA R10.4: 8 such artifacts among 5008
+        # detected barcodes cost 5 points of precision.
+        logger.warning("No barcode whitelist given, cell barcodes are selected on read counts alone. "
+                       "Supplying the protocol whitelist as a candidate pool is more accurate.")
     requested_cells = None if n_cells == AUTO else n_cells
     centers = graph.select_cluster_centers(n_cells=requested_cells, whitelist=whitelist,
                                            interval=n_cells_interval)
