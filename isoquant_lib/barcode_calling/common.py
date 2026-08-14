@@ -125,6 +125,12 @@ def align_pattern_ssw(sequence, start, end, pattern, min_score=0):
 
 
 def find_candidate_with_max_score_ssw(barcode_matches: list, read_sequence, min_score=10, score_diff=0, sufficient_score=0):
+    """Pick the barcode aligning best to read_sequence, or None if the choice is ambiguous.
+
+    `score_diff` is the margin the winner must have over the runner-up. A tie means two
+    different barcodes explain the read equally well, so there is no basis to pick either;
+    such reads are dropped rather than assigned arbitrarily.
+    """
     best_match = [0, 0, 0]
     best_barcode = None
     second_best_score = 0
@@ -144,17 +150,26 @@ def find_candidate_with_max_score_ssw(barcode_matches: list, read_sequence, min_
             best_match[0] = alignment.optimal_score
             best_match[1] = alignment.reference_start - alignment.read_start
             best_match[2] = alignment.reference_end + (len(barcode) - alignment.read_end)
-        elif alignment.optimal_score == best_match[0] and alignment.reference_start < best_match[1]:
-            best_barcode = barcode
-            second_best_score = best_match[0]
-            best_match[1] = alignment.reference_start - alignment.read_start
-            best_match[2] = alignment.reference_end + (len(barcode) - alignment.read_end)
+        elif alignment.optimal_score == best_match[0]:
+            # A tie leaves a zero margin whatever the alignment offset. Recording it only
+            # when the newcomer aligned further left (as this used to) hid the common case
+            # of two barcodes tying at the same offset.
+            if barcode != best_barcode:
+                second_best_score = alignment.optimal_score
+            if alignment.reference_start < best_match[1]:
+                best_barcode = barcode
+                best_match[1] = alignment.reference_start - alignment.read_start
+                best_match[2] = alignment.reference_end + (len(barcode) - alignment.read_end)
+        elif alignment.optimal_score > second_best_score:
+            # A genuine runner-up. This was never recorded before, so second_best_score
+            # stayed 0 and the margin check below could not fail.
+            second_best_score = alignment.optimal_score
 
         if alignment.optimal_score > sufficient_score > 0:
             # dirty hack to select first "sufficiently good" alignment
             break
 
-    if best_match[0] - second_best_score < score_diff:
+    if best_barcode is None or best_match[0] - second_best_score < score_diff:
         return None, 0, 0, 0
 
     return best_barcode, best_match[0], best_match[1], best_match[2]
