@@ -1,0 +1,22 @@
+name: Mouse.10x_concat.realistic.800K
+output: /abga/work/andreyp/ci_isoquant/output
+run_type: tenX_v3_split
+reads: Mouse.10x_concat.realistic.800K.fasta
+barcodes: /abga/work/andreyp/simulation/ref/10x/human_Hipp_SN_f1_barcodes.tsv
+mode: tenX_v3_split
+threads: '16'
+baselines:
+  barcode:
+    all_correct_reads: 634108.0
+    assignment_precision: 99.8
+    assignment_recall: 86.8
+    correct_assignments: 1180341.0
+    excessive_assignments: 190.0
+    incorrect_assignments: 2286.0
+    no_barcodes_assigned: 48853.0
+    pct_all_correct: 79.26
+    pct_no_barcodes: 6.11
+    pct_some_correct: 14.44
+    some_correct_reads: 115513.0
+    total_reads: 800000.0
+    total_true_barcodes: 1359897.0

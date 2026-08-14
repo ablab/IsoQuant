@@ -1,0 +1,44 @@
+name: Mouse.ONT_simulated.R9.trunc.no_gtf
+output: /abga/work/andreyp/ci_isoquant/output
+run_type: transcripts,quantification_novel
+genome: /abga/work/andreyp/data/reference/mouse/GRCm39.primary_assembly.genome.fa
+bam: /abga/work/andreyp/ci_isoquant/data/mouse/Mouse.ONT_simulated.R9.no_gtf_Mouse.sim.ONT_R9.trunc_R9.spatial_expr_aligned_reads_3fc0dd_ba3a7a.bam
+datatype: ont
+isoquant_options: '"-t 12 --complete_genedb --force "'
+reduced_db: /abga/work/andreyp/ci_isoquant/data/ref/mouse/no_db/mouse.gencode.M26.spatial
+reference_tpm: /abga/work/andreyp/ci_isoquant/data/mouse/Mouse.ONT.R9.4.trunc.simulated.counts.tsv
+baselines:
+  transcripts:
+    full_recall: 59.6
+    full_precision: 93.5
+    known_recall: -1.0
+    known_precision: -1.0
+    novel_recall: 59.6
+    novel_precision: 93.5
+  transcripts_td50:
+    full_recall: 55.3
+    full_precision: 86.7
+    known_recall: -1.0
+    known_precision: -1.0
+    novel_recall: 55.3
+    novel_precision: 86.7
+  transcripts_td10:
+    full_recall: 33.1
+    full_precision: 52.0
+    known_recall: -1.0
+    known_precision: -1.0
+    novel_recall: 33.1
+    novel_precision: 52.0
+  quantification_novel:
+    reported_overlap: 21128.0
+    corr_overlap: 0.937
+    good_matches_overlap: 87.0
+    fair_matches_overlap: 164.0
+    false_reports_overlap: 0.0
+    missed_overlap: 0.0
+    reported_full: 22596.0
+    corr_full: 0.1127
+    good_matches_full: 87.0
+    fair_matches_full: 164.0
+    false_reports_full: 1468.0
+    missed_full: 14424.0

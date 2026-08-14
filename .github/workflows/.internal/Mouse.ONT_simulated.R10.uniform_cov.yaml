@@ -1,0 +1,16 @@
+name: Mouse.ONT_simulated.R10.uniform_cov
+output: /abga/work/andreyp/ci_isoquant/output
+run_type: assignment
+genome: /abga/work/andreyp/data/reference/mouse/GRCm39.primary_assembly.genome.fa
+genedb: /abga/work/andreyp/data/reference/mouse/gencode.vM26.annotation.db
+reads: /abga/work/andreyp/simulation/data/uniform_cov/Mouse.ONT_R10.no_trunc.uniform_cov_aligned_reads.fasta.gz
+datatype: ont
+isoquant_options: '"-t 16 --complete_genedb --no_model_construction --force "'
+baselines:
+  assignment:
+    mapping_precision: 97.9
+    mapping_recall: 96.59
+    assignment_precision: 99.44
+    assignment_recall: 97.63
+    overall_precision: 97.89
+    overall_recall: 95.27

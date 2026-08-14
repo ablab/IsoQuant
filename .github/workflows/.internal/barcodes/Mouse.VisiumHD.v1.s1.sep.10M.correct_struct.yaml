@@ -1,0 +1,30 @@
+name: Mouse.VisiumHD.v1.s1.sep.10M.correct_struct
+output: /abga/work/andreyp/ci_isoquant/output
+run_type: single
+reads: Mouse.VisiumHD.v1.s1.sep.10M.correct_struct.800K.fastq.gz
+barcodes: visium_v1_hd.slide1.barcodes1.tsv visium_v1_hd.slide1.barcodes2.tsv
+mode: visium_hd
+threads: '8'
+qa_mode: visium_hd
+baselines:
+  barcode:
+    barcoded_reads: 611984.0
+    correct_barcodes: 597182.0
+    precision: 97.58
+    precision_at_26: 97.58
+    precision_at_27: 97.68
+    precision_at_28: 97.95
+    precision_at_29: 98.7
+    precision_at_30: 99.45
+    precision_at_31: 99.74
+    recall: 74.65
+    recall_at_26: 74.65
+    recall_at_27: 74.42
+    recall_at_28: 72.75
+    recall_at_29: 67.17
+    recall_at_30: 46.66
+    recall_at_31: 15.13
+    total_reads: 800000.0
+    umi_within_1: 572429.0
+    umi_within_2: 592269.0
+    umi_within_3: 602252.0

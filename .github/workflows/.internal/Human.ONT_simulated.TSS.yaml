@@ -1,0 +1,41 @@
+name: Human.ONT_simulated.TSS
+output: /abga/work/andreyp/ci_isoquant/output
+run_type: transcripts,tss_prediction
+genome: /abga/work/andreyp/data/reference/human/GRCh38.primary_assembly.genome.fa
+genedb: /abga/work/andreyp/data/reference/human/gencode.v44.annotation.gtf.db
+bam: /abga/work/andreyp/ci_isoquant/data/human_tss/OUT_simulated_aligned_reads_human_5502a8_9831b5_093b11.bam
+simulated_counts: /abga/work/andreyp/ci_isoquant/data/human_tss/quantified_tr_human_tss_1.tsv
+reference_tss_gtf: /abga/work/andreyp/ci_isoquant/data/human_tss/updated_human_tss_1.gtf
+reduced_db: /abga/work/andreyp/ci_isoquant/data/simulated_truth/Human.ONT_simulated.TSS
+datatype: ont
+isoquant_options: '"-t 16 --complete_genedb --force --fl_data
+  "'
+baselines:
+  transcripts:
+    full_recall: 81.1
+    full_precision: 96.1
+    known_recall: 93.1
+    known_precision: 89.7
+    novel_recall: 44.9
+    novel_precision: 94.7
+  transcripts_td50:
+    full_recall: 78.6
+    full_precision: 93.2
+    known_recall: 93.0
+    known_precision: 89.6
+    novel_recall: 44.7
+    novel_precision: 94.3
+  transcripts_td10:
+    full_recall: 74.8
+    full_precision: 88.6
+    known_recall: 93.0
+    known_precision: 89.6
+    novel_recall: 42.7
+    novel_precision: 90.1
+  tss_prediction:
+    precision: 97.7606
+    recall: 70.0891
+    precision_known: 97.3647
+    recall_known: 65.4734
+    precision_novel: 98.4814
+    recall_novel: 80.2744

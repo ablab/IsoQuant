@@ -1,0 +1,32 @@
+name: Human.Curio.custom_sc.small
+output: /abga/work/andreyp/ci_isoquant/output
+run_type: single
+reads: Human.Curio.A0079_044.curio_model.800K.fasta.gz
+mode: custom_sc
+molecule: curio.small.mdf
+threads: '8'
+qa_mode: curio
+baselines:
+  barcode:
+    barcoded_reads: 600815.0
+    correct_barcodes: 599887.0
+    precision: 99.85
+    precision_at_10: 99.85
+    precision_at_11: 99.85
+    precision_at_12: 99.85
+    precision_at_13: 99.85
+    precision_at_14: 99.98
+    precision_at_9: 99.85
+    recall: 74.99
+    recall_at_10: 74.99
+    recall_at_11: 74.99
+    recall_at_12: 74.99
+    recall_at_13: 74.99
+    recall_at_14: 71.83
+    recall_at_9: 74.99
+    total_reads: 800000.0
+    umi_within_1: 501350.0
+    umi_within_2: 547822.0
+    umi_within_3: 554341.0
+    unique_detected_barcodes: 66059.0
+    unique_true_barcodes: 66600.0

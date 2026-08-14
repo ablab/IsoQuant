@@ -1,0 +1,40 @@
+name: Human.ONT_simulated.polyA_2
+output: /abga/work/andreyp/ci_isoquant/output
+run_type: transcripts,polya_prediction
+genome: /abga/work/andreyp/data/reference/human/GRCh38.primary_assembly.genome.fa
+genedb: /abga/work/andreyp/data/reference/human/gencode.v44.annotation.gtf.db
+bam: /abga/work/andreyp/ci_isoquant/data/human_polya_2/OUT_simulated_aligned_reads_human_polya_2_189ab6_2f2f39_174f3f.bam
+simulated_counts: /abga/work/andreyp/ci_isoquant/data/human_polya_2/quantified_tr_human_2.tsv
+reference_polya_gtf: /abga/work/andreyp/ci_isoquant/data/human_polya_2/updated_human_2.gtf
+reduced_db: /abga/work/andreyp/ci_isoquant/data/simulated_truth/Human.ONT_simulated.polyA_2
+datatype: ont
+isoquant_options: '"-t 16 --complete_genedb --force "'
+baselines:
+  transcripts:
+    full_recall: 83.1
+    full_precision: 97.6
+    known_recall: 94.3
+    known_precision: 89.7
+    novel_recall: 40.9
+    novel_precision: 95.0
+  transcripts_td50:
+    full_recall: 79.9
+    full_precision: 93.8
+    known_recall: 94.2
+    known_precision: 89.6
+    novel_recall: 40.6
+    novel_precision: 94.5
+  transcripts_td10:
+    full_recall: 74.7
+    full_precision: 87.8
+    known_recall: 94.2
+    known_precision: 89.6
+    novel_recall: 35.7
+    novel_precision: 82.9
+  polya_prediction:
+    precision: 97.5906
+    recall: 68.1447
+    precision_known: 97.0485
+    recall_known: 65.6902
+    precision_novel: 98.6773
+    recall_novel: 73.5633

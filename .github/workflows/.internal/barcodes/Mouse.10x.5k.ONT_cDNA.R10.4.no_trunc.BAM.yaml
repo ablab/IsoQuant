@@ -1,0 +1,32 @@
+name: Mouse.10x.5k.ONT_cDNA.R10.4.no_trunc.BAM
+output: /abga/work/andreyp/ci_isoquant/output
+run_type: single
+reads: Mouse.10x.5k.ONT_cDNA.R10.4.no_trunc.bam
+barcodes: 10xMultiome_5K.tsv
+mode: tenX_v3
+threads: '8'
+qa_mode: tenX_v3
+baselines:
+  barcode:
+    barcoded_reads: 1795424.0
+    correct_barcodes: 1791294.0
+    precision: 99.77
+    precision_at_11: 99.77
+    precision_at_12: 99.77
+    precision_at_13: 99.77
+    precision_at_14: 99.77
+    precision_at_15: 99.96
+    precision_at_16: 100.0
+    recall: 89.56
+    recall_at_11: 89.56
+    recall_at_12: 89.56
+    recall_at_13: 89.56
+    recall_at_14: 89.56
+    recall_at_15: 81.58
+    recall_at_16: 77.29
+    total_reads: 2000000.0
+    umi_within_1: 1649487.0
+    umi_within_2: 1711837.0
+    umi_within_3: 1752059.0
+    unique_detected_barcodes: 5000.0
+    unique_true_barcodes: 5000.0

@@ -1,0 +1,11 @@
+name: SRIV.Set4.ONT_R10.opts2
+output: /abga/work/andreyp/ci_isoquant/output
+run_type: transcripts
+genome: /abga/work/andreyp/ci_isoquant/data/ref/SIRV4/SIRV_isoforms_multi-fasta_200709a.fasta
+genedb: /abga/work/andreyp/ci_isoquant/data/ref/SIRV4/SIRV.reduced.gtf
+reads: /abga/work/andreyp/data/sirvs/Lexogen.SIRVs.Set4.ONT_cDNA.R10.4.copy.fq
+datatype: pacbio
+isoquant_options: '" --complete_genedb --fl_data --min_mapq 3 --inconsistent_mapq_cutoff
+  10 --simple_alignments_mapq_cutoff 5  --normalization_method usable_reads
+  "'
+reduced_db: /abga/work/andreyp/ci_isoquant/data/ref/SIRV4/SIRV_isoforms_multi-fasta-annotation

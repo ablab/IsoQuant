@@ -1,0 +1,32 @@
+name: Mouse.VisiumHD.custom_sc.small
+output: /abga/work/andreyp/ci_isoquant/output
+run_type: single
+reads: Mouse.VisiumHD.v1.s1.sep.10M.correct_struct.800K.fastq.gz
+mode: custom_sc
+molecule: visium.small.mdf
+threads: '8'
+qa_mode: visium_hd
+baselines:
+  barcode:
+    barcoded_reads: 528375.0
+    correct_barcodes: 480176.0
+    precision: 90.88
+    precision_at_26: 0.0
+    precision_at_27: 0.0
+    precision_at_28: 0.0
+    precision_at_29: 0.0
+    precision_at_30: 0.0
+    precision_at_31: 0.0
+    recall: 60.02
+    recall_at_26: 0.0
+    recall_at_27: 0.0
+    recall_at_28: 0.0
+    recall_at_29: 0.0
+    recall_at_30: 0.0
+    recall_at_31: 0.0
+    total_reads: 800000.0
+    umi_within_1: 494689.0
+    umi_within_2: 514900.0
+    umi_within_3: 524185.0
+    unique_detected_barcodes: 457184.0
+    unique_true_barcodes: 644619.0
