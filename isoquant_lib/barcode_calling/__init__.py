@@ -71,9 +71,8 @@ from .detect_barcodes import (
     BARCODE_FILES_REQUIRED,
 )
 
-# Graph-based barcode correction
-from .barcode_graph import BarcodeGraph, bounded_distance, estimate_cell_number
-from .correct_barcodes import select_cell_barcodes
+# Cell barcode detection
+from .cell_selection import CellBarcodeSelector, estimate_cell_number, select_cell_barcodes
 
 __all__ = [
     # Indexers
@@ -124,9 +123,8 @@ __all__ = [
     'create_barcode_caller',
     'BARCODE_CALLING_MODES',
     'BARCODE_FILES_REQUIRED',
-    # Graph-based correction
-    'BarcodeGraph',
-    'bounded_distance',
+    # Cell barcode detection
+    'CellBarcodeSelector',
     'estimate_cell_number',
     'select_cell_barcodes',
 ]
