@@ -1,5 +1,5 @@
-# Baseline for the above: the same reads and whitelist with per-read whitelist matching,
-# which degenerates into exact matching at this whitelist size.
+# Baseline: the stock-sized whitelist taken at face value as the cell list, which makes
+# per-read matching degenerate into exact matching. Paired with the .detected config below.
 name: Mouse.10x.5k.stock_whitelist
 output: /abga/work/andreyp/ci_isoquant/output
 run_type: single
@@ -8,11 +8,8 @@ barcodes: /abga/work/andreyp/ci_isoquant/data/barcodes/10x.stocklike_7.4M.txt
 mode: tenX_v3
 threads: '16'
 qa_mode: tenX_v3
-detect_options: "--barcode_correction whitelist"
 baselines:
   barcode:
-    barcoded_reads: 447939.0
-    correct_barcodes: 446130.0
     precision: 99.60
     recall: 74.36
     total_reads: 600000.0

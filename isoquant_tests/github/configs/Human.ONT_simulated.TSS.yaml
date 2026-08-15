@@ -12,26 +12,26 @@ isoquant_options: '"-t 16 --complete_genedb --force --fl_data
   "'
 baselines:
   transcripts:
-    full_recall: 81.1
-    full_precision: 96.1
-    known_recall: 93.1
-    known_precision: 89.7
-    novel_recall: 44.9
+    full_recall: 84.9
+    full_precision: 96.3
+    known_recall: 95.0
+    known_precision: 89.6
+    novel_recall: 50.4
     novel_precision: 94.7
   transcripts_td50:
-    full_recall: 78.6
-    full_precision: 93.2
-    known_recall: 93.0
+    full_recall: 82.5
+    full_precision: 93.6
+    known_recall: 94.9
     known_precision: 89.6
-    novel_recall: 44.7
+    novel_recall: 50.2
     novel_precision: 94.3
   transcripts_td10:
-    full_recall: 74.8
-    full_precision: 88.6
-    known_recall: 93.0
+    full_recall: 77.3
+    full_precision: 87.7
+    known_recall: 94.9
     known_precision: 89.6
-    novel_recall: 42.7
-    novel_precision: 90.1
+    novel_recall: 44.9
+    novel_precision: 84.4
   tss_prediction:
     precision: 97.7606
     recall: 70.0891

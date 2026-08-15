@@ -1,0 +1,16 @@
+# Same reads and whitelist, but --n_cells makes the whitelist a pool to detect cell
+# barcodes from. Expected to match what a hand-supplied 5000-barcode cell list achieves.
+name: Mouse.10x.5k.stock_whitelist.detected
+output: /abga/work/andreyp/ci_isoquant/output
+run_type: single
+reads: Mouse.10x.5k.no_truncation.NewStereoQ.600k.fq.gz
+barcodes: /abga/work/andreyp/ci_isoquant/data/barcodes/10x.stocklike_7.4M.txt
+mode: tenX_v3
+threads: '16'
+qa_mode: tenX_v3
+detect_options: "--n_cells auto"
+baselines:
+  barcode:
+    precision: 99.75
+    recall: 87.33
+    total_reads: 600000.0
