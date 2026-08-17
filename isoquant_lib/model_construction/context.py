@@ -125,9 +125,10 @@ class ModelConstructionContext:
         self.args = args
         self.id_distributor = id_distributor
         self.string_pools = string_pools
-        # Predicted polyA / TSS sites for this gene (genomic positions), reused
-        # from the per-gene terminal-position counters to refine intron-graph
-        # terminal vertices.
+        # Predicted polyA / TSS sites for this gene as (transcript_id, genomic
+        # position), reused from the per-gene terminal-position counters to
+        # refine intron-graph terminal vertices. The transcript id lets the
+        # graph admit a prediction only on its own transcript's terminal intron.
         self.polya_predictions = polya_predictions
         self.tss_predictions = tss_predictions
         self.store = store

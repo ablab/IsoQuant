@@ -18,7 +18,7 @@ trained offline with ``scripts/train_polya_tss_model.py``.
 
 import logging
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -122,10 +122,12 @@ class TerminalCounter(AbstractCounter):
         # emitted output independent of loader granularity (a transcript whose
         # reads span several gene blocks must not be split into partial rows).
         self._all_transcripts: dict = {}
-        # Genomic positions predicted for the most recently flushed gene, so
-        # transcript discovery can reuse them to refine intron-graph terminal
-        # vertices (set by flush()).
-        self.last_gene_predictions: list = []
+        # (transcript_id, genomic position) predicted for the most recently
+        # flushed gene, so transcript discovery can reuse them to refine
+        # intron-graph terminal vertices (set by flush()). The transcript id is
+        # kept so a prediction is only applied to its own transcript's terminal
+        # intron -- a gene block mixes several genes and both strands.
+        self.last_gene_predictions: List[Tuple[str, int]] = []
 
     @property
     def model(self) -> XGBClassifier:
@@ -222,11 +224,19 @@ class TerminalCounter(AbstractCounter):
         the accumulated reads are then merged into :attr:`_all_transcripts` so
         the emitted output is still computed once over each transcript's full
         histogram in :meth:`dump`. Grouped and training counters keep
-        accumulating across the chromosome and emit only in :meth:`dump`."""
+        accumulating across the chromosome and emit only in :meth:`dump`.
+
+        Each prediction is paired with the reference transcript it was computed
+        for. A gene block spans several genes (often on both strands), so a bare
+        position list lets one transcript's site be applied to a neighbour's
+        intron; the intron graph uses the transcript id to admit a prediction
+        only on that transcript's own terminal intron."""
         if not self.ignore_read_groups or self._collecting_training:
             return
         rows = self._predict_rows()
-        self.last_gene_predictions = rows['prediction'].tolist() if rows is not None else []
+        self.last_gene_predictions = (list(zip(rows['transcript_id'].tolist(),
+                                               rows['prediction'].tolist()))
+                                      if rows is not None else [])
         self._merge_into_all()
         self.transcripts = {}
 
