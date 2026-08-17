@@ -7,10 +7,12 @@
 """Unit tests for ``IntronPathProcessor.thread_ends`` / ``thread_starts``
 terminal-vertex selection.
 
-Regression cover for issue #415: a confirmed-TSS vertex is attached without a
-coverage cutoff, so it must claim only the reads that end at it and must not
-enter the extreme / second-last comparison that decides whether the ordinary
-read-end population is full-length.
+Regression cover for issue #415. A confirmed-TSS vertex claims the reads that
+terminate at it (proximity, mirroring the trusted-polyA lookup) before the
+extreme / second-last comparison runs. It also takes part in that comparison,
+which is safe because ``_attach_side`` only keeps bare read termini that lie
+beyond every confirmed site on the same side -- so a bare vertex is always the
+outermost candidate, never an inner truncation cluster.
 """
 
 import types
@@ -40,22 +42,23 @@ def _processor(intron, outgoing=(), incoming=(), apa_delta=50, delta=5):
 
 # -- thread_ends --------------------------------------------------------------
 
-def test_dominant_read_end_survives_a_more_extreme_tss_vertex():
-    # Issue #415: the 835-read TRAF6 terminus at 36510313 with a 2-read TSS
-    # vertex 57 bp further right. Reads of the dominant cluster must still get
-    # their vertex instead of being rejected for not passing the TSS one.
-    intron = (36501538, 36510047)
-    p = _processor(intron, outgoing=[(TerminalVertex.read_end, 36510313),
-                                     (TerminalVertex.tss_right, 36510370)])
-    assert p.thread_ends(intron, 36510300, trusted=False) == (TerminalVertex.read_end, 36510313)
-    assert p.thread_ends(intron, 36510313, trusted=False) == (TerminalVertex.read_end, 36510313)
-
-
 def test_tss_vertex_claims_reads_that_end_at_it():
-    intron = (36501538, 36510047)
-    p = _processor(intron, outgoing=[(TerminalVertex.read_end, 36510313),
-                                     (TerminalVertex.tss_right, 36510370)])
-    assert p.thread_ends(intron, 36510385, trusted=False) == (TerminalVertex.tss_right, 36510370)
+    # The proximity claim runs first, so a read terminating at the TSS reaches it
+    # even though the bare read-end vertex is the outermost candidate. Without it
+    # the extreme rule would hand this read the 1300 vertex instead.
+    intron = (100, 200)
+    p = _processor(intron, outgoing=[(TerminalVertex.tss_right, 1000),
+                                     (TerminalVertex.read_end, 1300)])
+    assert p.thread_ends(intron, 1010, trusted=False) == (TerminalVertex.tss_right, 1000)
+
+
+def test_bare_read_end_beyond_a_tss_vertex_is_reachable():
+    # The arrangement _attach_side now guarantees: the bare cluster lies beyond
+    # every confirmed site, so its own reads reach it through the extreme rule.
+    intron = (100, 200)
+    p = _processor(intron, outgoing=[(TerminalVertex.tss_right, 1000),
+                                     (TerminalVertex.read_end, 1300)])
+    assert p.thread_ends(intron, 1290, trusted=False) == (TerminalVertex.read_end, 1300)
 
 
 def test_read_ending_before_an_inner_read_end_cluster_is_still_rejected():
@@ -69,15 +72,15 @@ def test_read_ending_before_an_inner_read_end_cluster_is_still_rejected():
 
 # -- thread_starts ------------------------------------------------------------
 
-def test_dominant_read_start_survives_a_more_extreme_tss_vertex():
-    intron = (1000, 2000)
-    p = _processor(intron, incoming=[(TerminalVertex.read_start, 800),
-                                     (TerminalVertex.tss_left, 740)])
-    assert p.thread_starts(intron, 810, trusted=False) == (TerminalVertex.read_start, 800)
-
-
 def test_tss_left_vertex_claims_reads_that_start_at_it():
     intron = (1000, 2000)
-    p = _processor(intron, incoming=[(TerminalVertex.read_start, 800),
-                                     (TerminalVertex.tss_left, 740)])
-    assert p.thread_starts(intron, 730, trusted=False) == (TerminalVertex.tss_left, 740)
+    p = _processor(intron, incoming=[(TerminalVertex.tss_left, 800),
+                                     (TerminalVertex.read_start, 500)])
+    assert p.thread_starts(intron, 790, trusted=False) == (TerminalVertex.tss_left, 800)
+
+
+def test_bare_read_start_beyond_a_tss_vertex_is_reachable():
+    intron = (1000, 2000)
+    p = _processor(intron, incoming=[(TerminalVertex.tss_left, 800),
+                                     (TerminalVertex.read_start, 500)])
+    assert p.thread_starts(intron, 510, trusted=False) == (TerminalVertex.read_start, 500)

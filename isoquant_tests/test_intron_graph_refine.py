@@ -151,6 +151,46 @@ def test_attach_side_accepts_sibling_isoform_tss_prediction():
     assert (TerminalVertex.tss_right, 1000) in g.outgoing_edges[intron]
 
 
+def test_attach_side_drops_bare_termini_inward_of_a_confirmed_tss():
+    # Symmetric to the polyA rule: a terminus that is neither confirmed itself
+    # nor beyond every confirmed site on this side is a truncated version of one
+    # of them, so it must not seed a bare read-end vertex of its own.
+    intron = (100, 200)
+    g = _one_gene_graph(intron, apa_delta=10, tss_predictions=[("T", 1000)])
+    g.cluster_polya_positions = lambda positions, i, read_end: {}
+    captured = {}
+
+    def fake_cluster(extra, read_end, cutoff):
+        captured["extra"] = dict(extra)
+        return {}
+
+    g.cluster_terminal_positions = fake_cluster
+    # 1005 snaps to the TSS; 800 is inward of it; 1200 is a genuine extension.
+    g._attach_side([intron], {intron: {}},
+                   {intron: {1005: 6, 800: 4, 1200: 2}}, read_end=True)
+
+    assert 800 not in captured["extra"]
+    assert 1200 in captured["extra"]
+    assert 1005 not in captured["extra"]  # consumed by the TSS bucket
+
+
+def test_attach_side_tss_peak_raises_cutoff_for_bare_termini():
+    intron = (100, 200)
+    g = _one_gene_graph(intron, apa_delta=10, tss_predictions=[("T", 1000)])
+    g.params.terminal_position_rel = 0.5
+    g.cluster_polya_positions = lambda positions, i, read_end: {}
+    captured = {}
+
+    def fake_cluster(extra, read_end, cutoff):
+        captured["cutoff"] = cutoff
+        return {}
+
+    g.cluster_terminal_positions = fake_cluster
+    g._attach_side([intron], {intron: {}}, {intron: {1005: 6, 1200: 2}}, read_end=True)
+
+    assert captured["cutoff"] == 3.0  # 6 reads at the TSS peak * 0.5
+
+
 def test_attach_side_ignores_prediction_inside_the_intron():
     # A predicted position must lie beyond the intron, inside the terminal exon.
     intron = (100, 2000)
