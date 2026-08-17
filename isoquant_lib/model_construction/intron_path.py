@@ -108,9 +108,12 @@ class IntronPathProcessor:
             if abs(v[1] - end) <= self.params.apa_delta:
                 return v
 
-        # consider all terminal position available for intron (bare read ends and
-        # confirmed polyA ends)
+        # consider all terminal position available for intron (bare read ends,
+        # confirmed 5' TSS ends, and confirmed polyA ends). A TSS vertex is safe
+        # to compare against here because the bare read-end cluster is now built
+        # only from termini beyond every confirmed site on this side.
         all_possible_ends = sorted(list(self.intron_graph.get_outgoing(intron, TerminalVertex.read_end)) +
+                                   list(self.intron_graph.get_outgoing(intron, TerminalVertex.tss_right)) +
                                    list(possible_polyas), key=lambda x: x[1])
         if len(all_possible_ends) == 0:
             return None
@@ -146,6 +149,7 @@ class IntronPathProcessor:
                 return v
 
         all_possible_starts = sorted(list(self.intron_graph.get_incoming(intron, TerminalVertex.read_start)) +
+                                     list(self.intron_graph.get_incoming(intron, TerminalVertex.tss_left)) +
                                      list(possible_polyas), key=lambda x: x[1])
         if len(all_possible_starts) == 0:
             return None

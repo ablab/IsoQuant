@@ -549,11 +549,21 @@ class IntronGraph:
         extra_positions = {}
         for intron in introns:
             clustered_polyas = polya_positions[intron]
+            clustered_tss = tss_positions[intron]
             cutoff = self.params.terminal_position_abs
-            if clustered_polyas:
-                cutoff = max(cutoff, max(clustered_polyas.values()) * self.params.terminal_position_rel)
+            # Confirmed termini on this side, whichever evidence confirmed them:
+            # a polyA/polyT tail (per-read) or a TSS peak (per-transcript). Both
+            # raise the cutoff for the leftover bare termini and both push the
+            # "beyond the furthest confirmed site" boundary outward -- a read that
+            # neither carries its own evidence nor extends past every confirmed
+            # site is a truncated version of one of them, not a new terminus.
+            confirmed = dict(clustered_polyas)
+            for position, count in clustered_tss.items():
+                confirmed[position] = confirmed.get(position, 0) + count
+            if confirmed:
+                cutoff = max(cutoff, max(confirmed.values()) * self.params.terminal_position_rel)
                 extra = {}
-                furthest = max(clustered_polyas.keys()) if read_end else min(clustered_polyas.keys())
+                furthest = max(confirmed.keys()) if read_end else min(confirmed.keys())
                 for position, count in remaining_terminal_positions[intron].items():
                     if read_end and position >= furthest + self.params.apa_delta:
                         extra[position] = count
