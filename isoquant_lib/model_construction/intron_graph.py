@@ -8,7 +8,7 @@
 import logging
 import queue
 from collections import defaultdict
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 from isoquant_lib.common import find_closest, overlaps
 
@@ -147,17 +147,21 @@ class IntronCollector:
 
 class IntronGraph:
     def __init__(self, params, gene_info, read_assignments,
-                 polya_predictions: Optional[List[int]] = None,
-                 tss_predictions: Optional[List[int]] = None):
+                 polya_predictions: Optional[List[Tuple[str, int]]] = None,
+                 tss_predictions: Optional[List[Tuple[str, int]]] = None):
         self.params = params
         self.gene_info = gene_info
         self.read_assignments = read_assignments
 
-        # Predicted polyA / TSS sites for this gene (genomic positions), reused
-        # from the per-gene terminal-position counters. Clustering stays the
-        # terminal-vertex SOURCE; these only refine vertex coordinates (snap to
-        # the nearest predicted site). None when unavailable (no annotation for
-        # polyA, no --fl_data for TSS) -> no refinement, pure clustering.
+        # Predicted polyA / TSS sites for this gene as (transcript_id, genomic
+        # position), reused from the per-gene terminal-position counters.
+        # Clustering stays the terminal-vertex SOURCE; these only refine vertex
+        # coordinates (snap to the nearest predicted site). None when
+        # unavailable (no annotation for polyA, no --fl_data for TSS) -> no
+        # refinement, pure clustering. The transcript id matters because a gene
+        # block spans several genes on both strands: a prediction is admitted
+        # only on its own transcript's terminal intron for the side in question
+        # (see _admissible_predictions).
         self.polya_predictions = polya_predictions
         self.tss_predictions = tss_predictions
 
@@ -436,6 +440,68 @@ class IntronGraph:
         self._attach_side(introns, polya_ends, read_ends, read_end=True)
         self._attach_side(introns, polyt_starts, read_starts, read_end=False)
 
+    def _gene_terminal_introns(self, read_end: bool) -> Dict:
+        """gene_id -> the graph introns that are terminal, on this genomic side,
+        for at least one of the gene's annotated isoforms."""
+        gene_terminals = defaultdict(set)
+        for transcript_id, transcript_introns in self.gene_info.all_isoforms_introns.items():
+            if not transcript_introns:
+                # mono-exon transcript: no intron to hang a terminal vertex on
+                continue
+            gene_id = self.gene_info.gene_id_map.get(transcript_id)
+            if gene_id is None:
+                continue
+            terminal_intron = tuple(transcript_introns[-1] if read_end else transcript_introns[0])
+            gene_terminals[gene_id].add(self.intron_collector.substitute(terminal_intron))
+        return gene_terminals
+
+    def _admissible_predictions(self, introns: List,
+                                predictions: Optional[List[Tuple[str, int]]],
+                                read_end: bool) -> Dict:
+        """Map each graph intron to the predicted terminal positions it may use.
+
+        A prediction was computed for one reference transcript, but a gene block
+        spans several genes (usually both strands), so the raw position list is
+        shared by every intron in the block -- that is how a neighbouring gene's
+        TSS could be attached as a terminal vertex of an unrelated transcript
+        (issue #415: RAG1's TSS landing on TRAF6's last intron).
+
+        A prediction is admitted for intron I on this genomic side only when I is
+        a terminal intron, on that side, of some isoform of the prediction's own
+        GENE: the last intron for the genomic-right side, the first for the
+        genomic-left one. Gene rather than transcript scope, because reads are
+        assigned to one reference isoform while the site itself is usually shared
+        by its siblings, whose terminal introns differ -- restricting to the
+        predicting transcript alone discards those legitimate matches (measurably
+        so on dense overlapping isoform sets such as SIRVs).
+
+        The side rule is purely positional and needs no strand test: a '+'
+        transcript's TSS is genomic-left and so can only ever match via a first
+        intron, a '-' transcript's via a last one. Reference introns are mapped
+        through the collector's correction map because graph introns are
+        clustered.
+        """
+        admissible = defaultdict(set)
+        if not predictions:
+            return defaultdict(list)
+        intron_set = set(introns)
+        gene_terminals = self._gene_terminal_introns(read_end)
+        for transcript_id, position in predictions:
+            gene_id = self.gene_info.gene_id_map.get(transcript_id)
+            if gene_id is None:
+                continue
+            for graph_intron in gene_terminals[gene_id]:
+                if graph_intron not in intron_set:
+                    continue
+                # the terminal position must lie beyond the intron, inside the
+                # isoform's terminal exon
+                if read_end and position <= graph_intron[1]:
+                    continue
+                if not read_end and position >= graph_intron[0]:
+                    continue
+                admissible[graph_intron].add(int(position))
+        return defaultdict(list, {k: sorted(v) for k, v in admissible.items()})
+
     def _attach_side(self, introns: List, polya_confirmed_positions: dict,
                      read_terminal_positions: dict, read_end: bool) -> None:
         # Clustering stays the vertex SOURCE (recall identical to the ad-hoc
@@ -443,11 +509,15 @@ class IntronGraph:
         # terminal-position counters) only REFINE vertex coordinates, so we
         # never emit fewer terminal vertices than clustering alone.
 
+        # Predictions usable per intron on this side (see _admissible_predictions).
+        polya_admissible = self._admissible_predictions(introns, self.polya_predictions, read_end)
+        tss_admissible = self._admissible_predictions(introns, self.tss_predictions, read_end)
+
         # Step 1: polyA / polyT confirmed terminal positions per intron.
         polya_positions = {}
         for intron in introns:
             clustered = self.cluster_polya_positions(polya_confirmed_positions[intron], intron, read_end)
-            polya_positions[intron] = self._refine_positions(clustered, self.polya_predictions)
+            polya_positions[intron] = self._refine_positions(clustered, polya_admissible[intron])
 
         # Step 1.5: TSS-prediction-confirmed terminal positions. Symmetric to the
         # tail-confirmed polyA vertices above: a read terminus at a predicted TSS is
@@ -456,14 +526,17 @@ class IntronGraph:
         # alt-TSS peak. TSS is genomic-left for '+' and genomic-right for '-', so
         # tss_predictions are honoured on both sides; confirmed positions are pulled
         # out of the cutoff path. Inert without --fl_data (tss_predictions is None).
+        # Only this intron's own transcript's TSS predictions are eligible, so a
+        # neighbouring gene's site cannot spawn a vertex here.
         tss_positions = {}
         remaining_terminal_positions = {}
         for intron in introns:
             confirmed = {}
             remaining = {}
+            intron_tss = tss_admissible[intron]
             for position, count in read_terminal_positions[intron].items():
-                nearest, diff = (find_closest(position, self.tss_predictions)
-                                 if self.tss_predictions else (None, None))
+                nearest, diff = (find_closest(position, intron_tss)
+                                 if intron_tss else (None, None))
                 if nearest is not None and diff <= self.params.apa_delta:
                     confirmed[nearest] = confirmed.get(nearest, 0) + count  # snap to prediction
                 else:
@@ -502,12 +575,12 @@ class IntronGraph:
         # the prediction set for THIS genomic side: polyA (3') for read ends
         # (read_end=True), TSS (5') for read starts (read_end=False). Using TSS
         # for both sides would snap 3' read ends onto 5' sites.
-        terminal_predictions = self.polya_predictions if read_end else self.tss_predictions
+        terminal_admissible = polya_admissible if read_end else tss_admissible
         terminal_positions = {}
         for intron in introns:
             clustered = self.cluster_terminal_positions(extra_positions[intron],
                                                         read_end=read_end, cutoff=cutoffs[intron])
-            terminal_positions[intron] = self._refine_positions(clustered, terminal_predictions)
+            terminal_positions[intron] = self._refine_positions(clustered, terminal_admissible[intron])
 
         # Step 4: attach terminal vertices.
         polya_vertex = TerminalVertex.polya if read_end else TerminalVertex.polyt
