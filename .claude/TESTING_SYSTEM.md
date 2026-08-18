@@ -385,9 +385,8 @@ All barcode tests check for commits in last 7 days before running (skip if no ch
 
 ### Self-Hosted Runners
 
-Tests run on servers with label `isoquant`:
-- `dx3` - dx3-523-28534.ad.helsinki.fi
-- `dx4` - Available for SSH access
+Tests run on the lab's self-hosted runners, registered with the label `isoquant`.
+Ask a maintainer for the host names and SSH access.
 
 Data and configs are shared via `/abga/work/andreyp/ci_isoquant/`
 
@@ -556,7 +555,7 @@ See `.claude/BARCODE_CALLING.md` for detailed documentation of universal calling
 ### Single Test
 
 ```bash
-# On dx3 or dx4 server
+# On a self-hosted runner
 cd /path/to/IsoQuant2
 export PATH=$PATH:/abga/work/andreyp/ci_isoquant/bin/
 
@@ -584,7 +583,7 @@ python3 tests/github/run_pipeline.py \
 
 ```bash
 # From another machine
-ssh dx3  # or ssh dx4
+ssh <runner-host>
 cd /home/andreyp/IsoQuant2
 # Run tests as above
 ```
