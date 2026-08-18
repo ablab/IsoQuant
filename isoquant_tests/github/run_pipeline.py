@@ -767,9 +767,16 @@ def verify_config_inputs(config_file: str, deep: bool = False) -> int:
     log.info('== Verifying test inputs against data manifest ==')
     try:
         from data_manifest import DEFAULT_MANIFEST, do_verify
+        from data_manifest import log as manifest_log
     except ImportError as e:
         log.warning("Could not import data_manifest (%s), skipping input verification", e)
         return 0
+
+    # data_manifest configures logging only when run as a script; route its output
+    # through this runner's handlers so the check is visible in CI logs.
+    manifest_log.handlers = log.handlers
+    manifest_log.setLevel(log.level)
+    manifest_log.propagate = False
 
     if not os.path.exists(DEFAULT_MANIFEST):
         log.warning("No data manifest at %s, skipping input verification", DEFAULT_MANIFEST)
