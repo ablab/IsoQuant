@@ -92,7 +92,7 @@ format the user is moving away from — not recommended.
 - Unit: extend `isoquant_tests/test_umi_filtering.py` — assert the extra round writes
   a column survivor-ID file and that `write_read_info_in_parallel` produces a
   header + one line per survivor with the 18-column `read_info` layout.
-- End-to-end (SC data on dx3/dx4): run a `visium_hd` sample with
+- End-to-end (SC data on a self-hosted runner): run a `visium_hd` sample with
   `--barcode2barcode file.tsv:0:1,2` **without** `--large_output allinfo`; confirm
   `…UMI_filtered.barcode_barcode_col0.ED4.read_info.tsv.gz` (and col1) exist,
   are non-empty, share the main read_info header, and that line counts match the
