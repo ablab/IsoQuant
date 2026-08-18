@@ -322,8 +322,12 @@ def create_barcode_caller(args):
     logger.info("Creating barcode detector for mode %s" % args.mode.name)
 
     if not getattr(args, "whitelist_matching", True):
-        # Raw extraction mode: the whitelist is not needed here at all, it is only used
-        # later by the graph-based correction stage to filter candidate cluster centers.
+        # First pass of cell barcode detection: emit barcode windows verbatim so they can be
+        # counted. No whitelist is needed here; it is only used afterwards, to filter the
+        # candidate cell barcodes.
+        if not args.mode.supports_cell_barcode_detection():
+            logger.critical("Mode %s cannot extract barcodes without a whitelist" % args.mode.name)
+            sys.exit(IsoQuantExitCode.INCOMPATIBLE_OPTIONS)
         return BARCODE_CALLING_MODES[args.mode](None, whitelist_matching=False)
 
     if args.mode == IsoQuantMode.custom_sc:
