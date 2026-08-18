@@ -1,7 +1,7 @@
 name: Mouse.10x_concat.realistic.800K
 output: /abga/work/andreyp/ci_isoquant/output
 run_type: tenX_v3_split
-reads: Mouse.10x_concat.realistic.800K.fasta
+reads: /abga/work/andreyp/ci_isoquant/data/barcodes/Mouse.10x_concat.realistic.800K.fasta
 barcodes: /abga/work/andreyp/simulation/ref/10x/human_Hipp_SN_f1_barcodes.tsv
 mode: tenX_v3_split
 threads: '16'

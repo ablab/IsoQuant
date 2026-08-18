@@ -1,48 +1,63 @@
-# CI test configs (snapshot)
+# CI test configs
 
-Version-controlled copy of the IsoQuant CI test configurations that normally live on the
-self-hosted runners at `/abga/work/andreyp/ci_isoquant/data/`.
+The configurations every IsoQuant CI test runs from. **CI reads these files**, not a
+copy on the runners: each workflow sets
 
-## Why they are here
+```yaml
+CFG_DIR: ${{github.workspace}}/isoquant_tests/github/configs
+```
 
-The configs carry the embedded `baselines:` sections that every CI test is checked against.
-They used to exist only on the runner filesystem, with no history — a baseline update left no
-record of what changed or why. This directory gives them git history, next to the runner
-scripts in `isoquant_tests/github/` that consume them.
+so the checked-out repository is the single source of truth. Editing a config here
+changes what CI does on the next run.
 
 ## What is here
 
-| Path | Count | Contents |
-|------|-------|----------|
-| `*.yaml` | 62 | Pipeline test configs, consumed by `run_pipeline.py` |
-| `barcodes/*.yaml` | 23 | Barcode calling test configs, consumed by `run_barcode_test.py` |
-| `fusion/*.yaml` | 2 | Fusion detection test configs |
-| `groups/*.yaml` | 2 | IsoQuant `--yaml` dataset descriptors used as input by the grouped tests |
+| Path | Count | Consumed by |
+|------|-------|-------------|
+| `*.yaml` | 62 | `run_pipeline.py` |
+| `barcodes/*.yaml` | 23 | `run_barcode_test.py` |
+| `fusion/*.yaml` | 2 | `run_pipeline.py` (`run_type: fusion`) |
+| `groups/*.yaml` | 2 | IsoQuant `--yaml` dataset descriptors, referenced by the grouped tests |
+| `data_manifest.tsv` | 1 | `data_manifest.py` - size + SHA-256 of every input file |
 
-See `.claude/TESTING_SYSTEM.md` for the config format, run types, baseline sections and the
-`update_defaults.py` workflow.
+See `.claude/TESTING_SYSTEM.md` for the config format, run types and baseline sections.
 
-## Important: this is a snapshot, not the live copy
+## Updating baselines
 
-CI reads the configs from `CFG_DIR: /abga/work/andreyp/ci_isoquant/data` (set in each
-workflow), **not** from this directory. Editing a file here changes nothing about what CI
-runs.
-
-That means the two copies drift apart whenever baselines are updated on the runner. After
-running `update_defaults.py`, re-sync with:
+Baselines live in the `baselines:` section of each config. After a run whose results
+you accept:
 
 ```bash
-SRC=/abga/work/andreyp/ci_isoquant/data
-DST=isoquant_tests/github/configs
-cp -p "$SRC"/*.yaml "$DST"/
-cp -p "$SRC"/barcodes/*.yaml "$DST"/barcodes/
-cp -p "$SRC"/fusion/*.yaml "$DST"/fusion/
-cp -p "$SRC"/groups/*.yaml "$DST"/groups/
+python3 isoquant_tests/github/update_defaults.py --branch master \
+    isoquant_tests/github/configs/MyTest.yaml
+git add isoquant_tests/github/configs/MyTest.yaml
+git commit -m "update MyTest baselines: <why they moved>"
 ```
 
-and commit the diff, so the reason for each baseline change is recorded.
+Because the configs are version-controlled and CI reads them directly, every baseline
+change is a reviewable diff with a reason attached. This replaced an earlier
+arrangement where the configs lived only on the runners and drifted from the
+repository copy, which happened three times in the first four days.
 
-Pointing `CFG_DIR` at this directory would remove the drift entirely;
-`.claude/TESTING_SYSTEM.md` lists that as a high-priority improvement.
+## Paths must stay absolute
 
-Snapshot taken 2026-08-18 from `/abga/work/andreyp/ci_isoquant/data/`.
+All path values are absolute. The runners resolve relative paths against the config
+file's own directory (`fix_path()`), so a relative path would break the moment the
+config directory moves. Keep new entries absolute.
+
+## Input data
+
+The large inputs (genomes, BAMs, annotations) stay on shared storage and are *not* in
+git. `data_manifest.tsv` records each one's size and SHA-256 so a baseline can be tied
+to specific input bytes:
+
+```bash
+# after adding or replacing an input file
+python3 isoquant_tests/github/data_manifest.py generate
+
+# check inputs are unchanged (size only; --deep re-hashes)
+python3 isoquant_tests/github/data_manifest.py verify --deep
+```
+
+`run_pipeline.py` runs the fast check automatically before each test; disable with
+`--verify_inputs off`.

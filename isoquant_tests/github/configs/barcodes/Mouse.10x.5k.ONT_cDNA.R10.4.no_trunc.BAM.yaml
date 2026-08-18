@@ -1,8 +1,8 @@
 name: Mouse.10x.5k.ONT_cDNA.R10.4.no_trunc.BAM
 output: /abga/work/andreyp/ci_isoquant/output
 run_type: single
-reads: Mouse.10x.5k.ONT_cDNA.R10.4.no_trunc.bam
-barcodes: 10xMultiome_5K.tsv
+reads: /abga/work/andreyp/ci_isoquant/data/barcodes/Mouse.10x.5k.ONT_cDNA.R10.4.no_trunc.bam
+barcodes: /abga/work/andreyp/ci_isoquant/data/barcodes/10xMultiome_5K.tsv
 mode: tenX_v3
 threads: '8'
 qa_mode: tenX_v3

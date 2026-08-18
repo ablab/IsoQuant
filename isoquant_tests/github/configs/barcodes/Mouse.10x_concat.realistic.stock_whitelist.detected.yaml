@@ -4,7 +4,7 @@
 name: Mouse.10x_concat.realistic.stock_whitelist.detected
 output: /abga/work/andreyp/ci_isoquant/output
 run_type: tenX_v3_split
-reads: Mouse.10x_concat.realistic.800K.fasta
+reads: /abga/work/andreyp/ci_isoquant/data/barcodes/Mouse.10x_concat.realistic.800K.fasta
 barcodes: /abga/work/andreyp/ci_isoquant/data/barcodes/10x.stocklike_hipp_7.4M.txt
 mode: tenX_v3_split
 threads: '16'

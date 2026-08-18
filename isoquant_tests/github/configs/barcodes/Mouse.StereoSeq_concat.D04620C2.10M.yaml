@@ -1,8 +1,8 @@
 name: Mouse.StereoSeq_concat.D04620C2_full
 output: /abga/work/andreyp/ci_isoquant/output/
 run_type: stereo_split
-reads: Mouse.StereoSeq_concat.D04620C2.10M.800K.fasta
-barcodes: D04620C2.barcodeToPos.tsv
+reads: /abga/work/andreyp/ci_isoquant/data/barcodes/Mouse.StereoSeq_concat.D04620C2.10M.800K.fasta
+barcodes: /abga/work/andreyp/ci_isoquant/data/barcodes/D04620C2.barcodeToPos.tsv
 mode: stereoseq
 threads: '8'
 qa_mode: stereo_split

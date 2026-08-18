@@ -1,9 +1,9 @@
 name: Human.Curio.custom_sc.large
 output: /abga/work/andreyp/ci_isoquant/output
 run_type: single
-reads: Human.Curio.A0079_044.curio_model.800K.fasta.gz
+reads: /abga/work/andreyp/ci_isoquant/data/barcodes/Human.Curio.A0079_044.curio_model.800K.fasta.gz
 mode: custom_sc
-molecule: curio.large.mdf
+molecule: /abga/work/andreyp/ci_isoquant/data/barcodes/curio.large.mdf
 threads: '8'
 qa_mode: curio
 baselines:
