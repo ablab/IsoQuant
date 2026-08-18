@@ -1,9 +1,9 @@
 name: Mouse.VisiumHD.custom_sc.small
 output: /abga/work/andreyp/ci_isoquant/output
 run_type: single
-reads: Mouse.VisiumHD.v1.s1.sep.10M.correct_struct.800K.fastq.gz
+reads: /abga/work/andreyp/ci_isoquant/data/barcodes/Mouse.VisiumHD.v1.s1.sep.10M.correct_struct.800K.fastq.gz
 mode: custom_sc
-molecule: visium.small.mdf
+molecule: /abga/work/andreyp/ci_isoquant/data/barcodes/visium.small.mdf
 threads: '8'
 qa_mode: visium_hd
 baselines:

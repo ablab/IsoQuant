@@ -1,7 +1,7 @@
 name: RESUME2.SIRVs.R10
 label: SRIV.Set4.ONT_R10
 output: /abga/work/andreyp/ci_isoquant/output
-resume: resume/SRIV.Set4.ONT_R10.resume2
+resume: /abga/work/andreyp/ci_isoquant/data/resume/SRIV.Set4.ONT_R10.resume2
 run_type: transcripts
 reduced_db: /abga/work/andreyp/ci_isoquant/data/ref/SIRV4/SIRV_isoforms_multi-fasta-annotation
 baselines:

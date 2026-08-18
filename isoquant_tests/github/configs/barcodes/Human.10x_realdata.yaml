@@ -1,11 +1,11 @@
 name: Human.10x_realdata
 output: /abga/work/andreyp/ci_isoquant/output
 run_type: tenX_v3_split
-reads: Human.10x_realdata.sci_uniq_reads.fastq.gz
-barcodes: Human.10x_realdata.barcodes.tsv
+reads: /abga/work/andreyp/ci_isoquant/data/barcodes/Human.10x_realdata.sci_uniq_reads.fastq.gz
+barcodes: /abga/work/andreyp/ci_isoquant/data/barcodes/Human.10x_realdata.barcodes.tsv
 mode: tenX_v3_split
 threads: '8'
-truth_file: Human.10x_realdata.truth.tsv
+truth_file: /abga/work/andreyp/ci_isoquant/data/barcodes/Human.10x_realdata.truth.tsv
 truth_barcode_col: '4'
 truth_umi_col: '7'
 baselines:

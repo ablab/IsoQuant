@@ -1,8 +1,8 @@
 name: Human.Curio.A0079_044.ONT
 output: /abga/work/andreyp/ci_isoquant/output/
 run_type: single
-barcodes: A0079_044_BeadBarcodes.tsv
-reads: Human.Curio.A0079_044.curio_model.800K.fasta.gz
+barcodes: /abga/work/andreyp/ci_isoquant/data/barcodes/A0079_044_BeadBarcodes.tsv
+reads: /abga/work/andreyp/ci_isoquant/data/barcodes/Human.Curio.A0079_044.curio_model.800K.fasta.gz
 mode: curio
 threads: '8'
 qa_mode: curio

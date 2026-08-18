@@ -1,9 +1,9 @@
 name: Mouse.10x.custom_sc.large
 output: /abga/work/andreyp/ci_isoquant/output
 run_type: single
-reads: Mouse.10x.5k.no_truncation.NewStereoQ.600k.fq.gz
+reads: /abga/work/andreyp/ci_isoquant/data/barcodes/Mouse.10x.5k.no_truncation.NewStereoQ.600k.fq.gz
 mode: custom_sc
-molecule: 10x.large.mdf
+molecule: /abga/work/andreyp/ci_isoquant/data/barcodes/10x.large.mdf
 threads: '8'
 qa_mode: tenX_v3
 baselines:

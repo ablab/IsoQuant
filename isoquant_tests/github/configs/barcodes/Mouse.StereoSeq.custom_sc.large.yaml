@@ -1,9 +1,9 @@
 name: Mouse.StereoSeq.custom_sc.large
 output: /abga/work/andreyp/ci_isoquant/output
 run_type: single
-reads: Mouse.StereoSeq.custom_sc.1M.fa
+reads: /abga/work/andreyp/ci_isoquant/data/barcodes/Mouse.StereoSeq.custom_sc.1M.fa
 mode: custom_sc
-molecule: stereo.large.mdf
+molecule: /abga/work/andreyp/ci_isoquant/data/barcodes/stereo.large.mdf
 threads: '8'
 qa_mode: stereo
 baselines:

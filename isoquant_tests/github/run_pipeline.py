@@ -136,6 +136,9 @@ def parse_args():
     parser.add_argument("--output", "-o", type=str, help="Output file name")
     parser.add_argument("--additional_options", "-a", type=str, help="additional options for IsoQuant")
     parser.add_argument("config_file", metavar="config_file", type=str, help="configuration .info file")
+    parser.add_argument("--verify_inputs", type=str, choices=["off", "fast", "deep"], default="fast",
+                        help="check test inputs against data_manifest.tsv before running "
+                             "(fast = size only, deep = re-hash) [%(default)s]")
 
     args = parser.parse_args()
     return args
@@ -754,6 +757,28 @@ def check_output_files(out_dir, label, file_list):
     return missing_files
 
 
+def verify_config_inputs(config_file: str, deep: bool = False) -> int:
+    """Check this config's input files against the committed data manifest.
+
+    Catches an input that has been moved, truncated or replaced before the run
+    starts, so it surfaces as a clear error instead of an unexplained baseline
+    drift later. A missing manifest is not an error - the check simply no-ops.
+    """
+    log.info('== Verifying test inputs against data manifest ==')
+    try:
+        from data_manifest import DEFAULT_MANIFEST, do_verify
+    except ImportError as e:
+        log.warning("Could not import data_manifest (%s), skipping input verification", e)
+        return 0
+
+    if not os.path.exists(DEFAULT_MANIFEST):
+        log.warning("No data manifest at %s, skipping input verification", DEFAULT_MANIFEST)
+        return 0
+
+    return do_verify(config_dir=os.path.dirname(os.path.realpath(config_file)),
+                     manifest_file=DEFAULT_MANIFEST, deep=deep, single_config=config_file)
+
+
 def main():
     args = parse_args()
     set_logger(args, log)
@@ -775,6 +800,11 @@ def main():
         if k not in config_dict:
             log.error(k + " is not set in the config")
             sys.exit(IsoQuantExitCode.MISSING_REQUIRED_OPTION)
+
+    if args.verify_inputs != "off":
+        err_code = verify_config_inputs(config_file, deep=args.verify_inputs == "deep")
+        if err_code != 0:
+            return err_code
 
     err_code = run_isoquant(args, config_dict)
     if err_code != 0:

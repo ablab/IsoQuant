@@ -7,7 +7,7 @@ on:
 
 env:
   LAUNCHER: ${{github.workspace}}/isoquant_tests/github/run_barcode_test.py
-  CFG_DIR: /abga/work/andreyp/ci_isoquant/data/barcodes
+  CFG_DIR: ${{github.workspace}}/isoquant_tests/github/configs/barcodes
   BIN_PATH: /abga/work/andreyp/ci_isoquant/bin/
   OUTPUT_BASE: /abga/work/andreyp/ci_isoquant/output/${{github.ref_name}}/barcodes/
 
