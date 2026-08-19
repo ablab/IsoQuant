@@ -11,7 +11,7 @@ Supports 10x Genomics v3 single-cell and Visium HD spatial platforms.
 """
 
 import logging
-from typing import List
+from typing import List, Optional
 
 from .. import ArrayKmerIndexer, Array2BitKmerIndexer
 from ..indexers import KmerIndexer
@@ -38,15 +38,42 @@ class TenXBarcodeDetector:
     TERMINAL_MATCH_DELTA = 2
     STRICT_TERMINAL_MATCH_DELTA = 1
 
-    def __init__(self, barcode_list: List[str]):
+    # R1 anchoring thresholds for whitelist matching mode
+    R1_MIN_SCORE = 11
+    # Relaxed anchoring used in raw extraction mode: more reads yield a barcode window,
+    # errors are corrected later by the graph-based stage instead of being rejected here.
+    RAW_R1_MIN_SCORE = 9
+    RAW_TERMINAL_MATCH_DELTA = 4
+    # Maximum plausible distance between the R1 end and polyT: R1...BC(16)...UMI(12)...polyT
+    MAX_R1_POLYT_DISTANCE = 50
+
+    def __init__(self, barcode_list: Optional[List[str]], whitelist_matching: bool = True):
         """
         Initialize 10x detector.
 
         Args:
-            barcode_list: List of known barcodes (whitelist)
-            umi_list: Optional list of known UMIs for validation
+            barcode_list: List of known barcodes (whitelist); ignored (and may be None)
+                when whitelist_matching is False
+            whitelist_matching: when False, emit the raw barcode window instead of matching
+                it against the whitelist. The whitelist index is then not built at all,
+                which also keeps the detector cheap to ship to worker processes.
         """
         self.r1_indexer = KmerIndexer([TenXBarcodeDetector.R1], kmer_size=7)
+        self.whitelist_matching = whitelist_matching
+        if not whitelist_matching:
+            self.barcode_indexer = None
+            self.max_barcodes_hits = 0
+            self.min_matching_kmers = 0
+            self.min_score = 0
+            self.score_diff = 0
+            self.r1_min_score = self.RAW_R1_MIN_SCORE
+            self.r1_terminal_delta = self.RAW_TERMINAL_MATCH_DELTA
+            logger.info("Barcodes will be extracted verbatim so that cell barcodes "
+                        "can be detected from their counts")
+            return
+
+        self.r1_min_score = self.R1_MIN_SCORE
+        self.r1_terminal_delta = self.TERMINAL_MATCH_DELTA
         bc_length = len(barcode_list[0])
         bc_count = len(barcode_list)
         if bc_count > 1000000:
@@ -59,7 +86,8 @@ class TenXBarcodeDetector:
             self.max_barcodes_hits = 20
             self.min_matching_kmers = 1
             self.min_score = 14
-            self.score_diff = 0
+            # a read that two barcodes explain equally well cannot be assigned to either
+            self.score_diff = 1
         else:
             barcode_bit_list = [str_to_2bit(b) for b in barcode_list]
             self.barcode_indexer = Array2BitKmerIndexer(barcode_bit_list, kmer_size=self.k, seq_len=self.BARCODE_LEN_10X)
@@ -85,20 +113,77 @@ class TenXBarcodeDetector:
         read_result = self._find_barcode_umi_fwd(read_id, sequence)
         if read_result.polyT != -1:
             read_result.set_strand("+")
-        if read_result.is_valid():
+        # In raw extraction mode almost every forward hit is "valid" (any window is accepted),
+        # so the early return would never let the reverse strand be considered.
+        if self.whitelist_matching and read_result.is_valid():
             return read_result
 
         rev_seq = reverese_complement(sequence)
         read_rev_result = self._find_barcode_umi_fwd(read_id, rev_seq)
         if read_rev_result.polyT != -1:
             read_rev_result.set_strand("-")
-        if read_rev_result.is_valid():
+        if self.whitelist_matching and read_rev_result.is_valid():
             return read_rev_result
 
+        if not self.whitelist_matching:
+            return self._pick_raw_strand(read_result, read_rev_result)
         return read_result if read_result.more_informative_than(read_rev_result) else read_rev_result
+
+    def _raw_strand_score(self, result: TenXBarcodeDetectionResult):
+        """Rank a raw-mode detection by how well R1 and polyT frame a barcode and UMI.
+
+        Whitelist mode picks the strand on which the barcode matched, which is strong
+        evidence. Raw mode has no such signal -- every window is accepted and BC_score is
+        always 0, which leaves more_informative_than comparing polyT positions, i.e. picking
+        essentially at random. Use the molecule structure instead: on the correct strand R1
+        and polyT sit about BARCODE_LEN + UMI_LEN apart.
+        """
+        if not result.is_valid():
+            return 0, 0
+        if result.r1 == -1 or result.polyT == -1:
+            return 1, 0
+        span = result.polyT - result.r1
+        if span <= 0 or span > self.MAX_R1_POLYT_DISTANCE:
+            return 1, 0
+        return 2, -abs(span - (self.BARCODE_LEN_10X + self.UMI_LEN))
+
+    def _pick_raw_strand(self, fwd_result: TenXBarcodeDetectionResult,
+                         rev_result: TenXBarcodeDetectionResult) -> TenXBarcodeDetectionResult:
+        """Choose between the two orientations of a raw-mode detection (ties go forward)."""
+        if self._raw_strand_score(rev_result) > self._raw_strand_score(fwd_result):
+            return rev_result
+        return fwd_result
 
     # Maximum search margin before polyT for direct barcode search (beyond BC+UMI region)
     BARCODE_SEARCH_MARGIN = 30
+
+    def _make_umi_result(self, read_id: str, sequence: str, barcode: str, bc_score: int,
+                         barcode_end: int, polyt_start: int, r1_end: int) -> TenXBarcodeDetectionResult:
+        """Build a result by reading the UMI that follows a barcode ending at barcode_end."""
+        potential_umi_start = barcode_end + 1
+        potential_umi_end = polyt_start - 1
+        if potential_umi_end - potential_umi_start <= 5:
+            potential_umi_end = potential_umi_start + self.UMI_LEN - 1
+        potential_umi = sequence[potential_umi_start:potential_umi_end + 1]
+        logger.debug("Potential UMI: %s" % potential_umi)
+
+        if not potential_umi:
+            return TenXBarcodeDetectionResult(read_id, barcode, BC_score=bc_score,
+                                              polyT=polyt_start, r1=r1_end)
+        good_umi = self.UMI_LEN - self.UMI_LEN_DELTA <= len(potential_umi) <= self.UMI_LEN + self.UMI_LEN_DELTA
+        return TenXBarcodeDetectionResult(read_id, barcode, potential_umi, bc_score, good_umi,
+                                          polyT=polyt_start, r1=r1_end)
+
+    def _extract_raw_barcode(self, read_id: str, sequence: str, barcode_start: int,
+                             polyt_start: int, r1_end: int) -> TenXBarcodeDetectionResult:
+        """Emit the barcode window verbatim, without matching it against a whitelist."""
+        barcode_end = barcode_start + self.BARCODE_LEN_10X - 1
+        potential_barcode = sequence[barcode_start:barcode_end + 1]
+        if len(potential_barcode) < self.BARCODE_LEN_10X:
+            return TenXBarcodeDetectionResult(read_id, polyT=polyt_start, r1=r1_end)
+        logger.debug("Raw barcode: %s" % potential_barcode)
+        return self._make_umi_result(read_id, sequence, potential_barcode, 0,
+                                     barcode_end, polyt_start, r1_end)
 
     def _find_barcode_near_polyt(self, read_id: str, sequence: str,
                                  polyt_start: int) -> TenXBarcodeDetectionResult:
@@ -106,7 +191,13 @@ class TenXBarcodeDetector:
 
         Used when R1 linker is not detected (partial/error-corrupted R1).
         The polyT anchor constrains the barcode position: BC(16)...UMI(12)...polyT.
+
+        Not available in raw extraction mode: without a whitelist there is nothing to
+        anchor the barcode window against, so "no R1" means "no barcode".
         """
+        if not self.whitelist_matching:
+            return TenXBarcodeDetectionResult(read_id, polyT=polyt_start)
+
         search_start = max(0, polyt_start - self.BARCODE_LEN_10X - self.UMI_LEN - self.BARCODE_SEARCH_MARGIN)
         search_region = sequence[search_start:polyt_start]
         if len(search_region) < self.BARCODE_LEN_10X:
@@ -145,8 +236,8 @@ class TenXBarcodeDetector:
             r1_occurrences = self.r1_indexer.get_occurrences(sequence[0:polyt_start + 1])
             r1_start, r1_end = detect_exact_positions(sequence, 0, polyt_start + 1,
                                                       self.r1_indexer.k, self.R1,
-                                                      r1_occurrences, min_score=11,
-                                                      end_delta=self.TERMINAL_MATCH_DELTA)
+                                                      r1_occurrences, min_score=self.r1_min_score,
+                                                      end_delta=self.r1_terminal_delta)
             if r1_start is None:
                 r1_start, r1_end = detect_exact_positions(sequence, 0, polyt_start + 1,
                                                           self.r1_indexer.k, self.R1,
@@ -179,6 +270,9 @@ class TenXBarcodeDetector:
                 polyt_start += search_start
 
         barcode_start = r1_end + 1
+        if not self.whitelist_matching:
+            return self._extract_raw_barcode(read_id, sequence, barcode_start, polyt_start, r1_end)
+
         barcode_end = r1_end + self.BARCODE_LEN_10X + 1
         potential_barcode = sequence[barcode_start:barcode_end + 1]
         logger.debug("Barcode: %s" % (potential_barcode))
@@ -196,21 +290,8 @@ class TenXBarcodeDetector:
         logger.debug("Found: %s %d-%d" % (barcode, bc_start, bc_end))
         # position of barcode end in the reference: end of potential barcode minus bases to the alignment end
         read_barcode_end = barcode_start + bc_end - 1
-        potential_umi_start = read_barcode_end + 1
-        potential_umi_end = polyt_start - 1
-        if potential_umi_end - potential_umi_start <= 5:
-            potential_umi_end = potential_umi_start + self.UMI_LEN - 1
-        potential_umi = sequence[potential_umi_start:potential_umi_end + 1]
-        logger.debug("Potential UMI: %s" % potential_umi)
-
-        good_umi = False
-        umi = potential_umi
-        if self.UMI_LEN - self.UMI_LEN_DELTA <= len(umi) <= self.UMI_LEN + self.UMI_LEN_DELTA:
-            good_umi = True
-
-        if not umi:
-            return TenXBarcodeDetectionResult(read_id, barcode, BC_score=bc_score, polyT=polyt_start, r1=r1_end)
-        return TenXBarcodeDetectionResult(read_id, barcode, umi, bc_score, good_umi, polyT=polyt_start, r1=r1_end)
+        return self._make_umi_result(read_id, sequence, barcode, bc_score,
+                                     read_barcode_end, polyt_start, r1_end)
 
     def find_barcode_umi_no_polya(self, read_id: str, sequence: str) -> TenXBarcodeDetectionResult:
         """Find barcode without polyA requirement."""
@@ -243,9 +324,9 @@ class TenXv2BarcodeDetector(TenXBarcodeDetector):
     """TenX v2 barcode detector."""
     UMI_LEN = 10
 
-    def __init__(self, barcode_list: List[str]):
+    def __init__(self, barcode_list: Optional[List[str]], whitelist_matching: bool = True):
         """Initialize TenX v2 detector."""
-        super().__init__(barcode_list)
+        super().__init__(barcode_list, whitelist_matching)
 
 
 class VisiumHDBarcodeDetector:
@@ -437,14 +518,12 @@ class TenXSplittingBarcodeDetector(TenXBarcodeDetector):
     DEFAULT_POLYT_STEP = 100
     MIN_SPLIT_STEP = 150
 
-    def __init__(self, barcode_list: List[str]):
-        super().__init__(barcode_list)
+    def __init__(self, barcode_list: Optional[List[str]], whitelist_matching: bool = True):
+        super().__init__(barcode_list, whitelist_matching)
         from ..indexers import KmerIndexer as _KmerIndexer
         self.tso_indexer = _KmerIndexer([self.TSO], kmer_size=9)
 
-    # Maximum allowed distance between R1 end and polyT for a valid split detection.
-    # Expected: R1...BC(16)...UMI(12)...polyT = ~28bp, allow generous margin.
-    MAX_R1_POLYT_DISTANCE = 50
+    # MAX_R1_POLYT_DISTANCE (inherited): R1...BC(16)...UMI(12)...polyT = ~28bp plus margin
 
     def _find_barcode_umi_fwd_local(self, read_id: str, sequence: str) -> TenXBarcodeDetectionResult:
         """Find barcode near polyT only — no fallback to full-read R1 search.
@@ -459,8 +538,8 @@ class TenXSplittingBarcodeDetector(TenXBarcodeDetector):
         r1_occurrences = self.r1_indexer.get_occurrences(sequence[0:polyt_start + 1])
         r1_start, r1_end = detect_exact_positions(sequence, 0, polyt_start + 1,
                                                   self.r1_indexer.k, self.R1,
-                                                  r1_occurrences, min_score=11,
-                                                  end_delta=self.TERMINAL_MATCH_DELTA)
+                                                  r1_occurrences, min_score=self.r1_min_score,
+                                                  end_delta=self.r1_terminal_delta)
 
         if r1_start is None:
             r1_start, r1_end = detect_exact_positions(sequence, 0, polyt_start + 1,
@@ -472,6 +551,9 @@ class TenXSplittingBarcodeDetector(TenXBarcodeDetector):
             return TenXBarcodeDetectionResult(read_id, polyT=polyt_start)
 
         barcode_start = r1_end + 1
+        if not self.whitelist_matching:
+            return self._extract_raw_barcode(read_id, sequence, barcode_start, polyt_start, r1_end)
+
         barcode_end = r1_end + self.BARCODE_LEN_10X + 1
         potential_barcode = sequence[barcode_start:barcode_end + 1]
         matching_barcodes = self.barcode_indexer.get_occurrences(potential_barcode,
@@ -486,17 +568,8 @@ class TenXSplittingBarcodeDetector(TenXBarcodeDetector):
             return TenXBarcodeDetectionResult(read_id, polyT=polyt_start, r1=r1_end)
 
         read_barcode_end = barcode_start + bc_end - 1
-        potential_umi_start = read_barcode_end + 1
-        potential_umi_end = polyt_start - 1
-        if potential_umi_end - potential_umi_start <= 5:
-            potential_umi_end = potential_umi_start + self.UMI_LEN - 1
-        potential_umi = sequence[potential_umi_start:potential_umi_end + 1]
-
-        good_umi = self.UMI_LEN - self.UMI_LEN_DELTA <= len(potential_umi) <= self.UMI_LEN + self.UMI_LEN_DELTA
-        if not potential_umi:
-            return TenXBarcodeDetectionResult(read_id, barcode, BC_score=bc_score, polyT=polyt_start, r1=r1_end)
-        return TenXBarcodeDetectionResult(read_id, barcode, potential_umi, bc_score, good_umi,
-                                          polyT=polyt_start, r1=r1_end)
+        return self._make_umi_result(read_id, sequence, barcode, bc_score,
+                                     read_barcode_end, polyt_start, r1_end)
 
     def _find_barcode_umi_split_fwd(self, read_id: str, sequence: str,
                                     offset: int = 0) -> TenXSplitBarcodeDetectionResult:
@@ -628,5 +701,5 @@ class TenXv2SplittingBarcodeDetector(TenXSplittingBarcodeDetector):
     # RC of v2 TSO oligo (AAGCAGTGGTATCAACGCAGAGTAC) as it appears in the read after polyT
     TSO = "GTACTCTGCGTTGATACCACTGCTT"
 
-    def __init__(self, barcode_list: List[str]):
-        super().__init__(barcode_list)
+    def __init__(self, barcode_list: Optional[List[str]], whitelist_matching: bool = True):
+        super().__init__(barcode_list, whitelist_matching)

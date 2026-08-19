@@ -1,11 +1,15 @@
+# 10x v2 chemistry: mode must be tenX_v2 so the UMI is read as 10bp, not 12bp.
+# Barcode metrics are unaffected by that (the barcode window is cut at a fixed
+# offset from R1 either way); only the umi_within_* baselines moved.
 name: Mouse.10x.v2.737K.full
 output: /abga/work/andreyp/ci_isoquant/output
 run_type: single
 reads: /abga/work/andreyp/simulation/data/10x/Mouse_M36.10x_v2.737K-august-2016.10M_aligned_reads.fasta.gz
 barcodes: /abga/work/andreyp/simulation/ref/10x/737K-august-2016.txt
-mode: tenX_v3
+mode: tenX_v2
+detect_options: "--split_molecules false"
 threads: '16'
-qa_mode: tenX_v3
+qa_mode: tenX_v2
 baselines:
   barcode:
     barcoded_reads: 5909019.0
@@ -25,8 +29,8 @@ baselines:
     recall_at_15: 58.71
     recall_at_16: 58.71
     total_reads: 10000000.0
-    umi_within_1: 4428008.0
-    umi_within_2: 5196104.0
-    umi_within_3: 5674811.0
+    umi_within_1: 4529836.0
+    umi_within_2: 5226559.0
+    umi_within_3: 5698536.0
     unique_detected_barcodes: 560847.0
     unique_true_barcodes: 552857.0

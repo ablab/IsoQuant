@@ -4,6 +4,7 @@ run_type: single
 reads: /abga/work/andreyp/ci_isoquant/data/barcodes/Mouse.10x.5k.ONT_cDNA.R10.4.no_trunc.bam
 barcodes: /abga/work/andreyp/ci_isoquant/data/barcodes/10xMultiome_5K.tsv
 mode: tenX_v3
+detect_options: "--split_molecules false"
 threads: '8'
 qa_mode: tenX_v3
 baselines:

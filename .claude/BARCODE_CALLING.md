@@ -2,10 +2,14 @@
 
 This document describes the barcode calling subsystem for single-cell and spatial transcriptomics.
 
+For cell barcode detection — how `--n_cells` turns the whitelist into a candidate pool rather
+than the cell list, used when the stock 10x whitelists make per-read matching degenerate into
+exact matching — see `.claude/CELL_BARCODE_SELECTION.md`.
+
 ## Directory Structure
 
 ```
-src/barcode_calling/
+isoquant_lib/barcode_calling/
 ├── __init__.py                    # Re-exports all public classes
 ├── common.py                      # Utilities (str_to_2bit, bit_to_str, find_polyt_start, etc.)
 │
@@ -78,8 +82,8 @@ matches = indexer.get_occurrences(sequence, max_hits=10, min_kmers=2)
 
 **Curio Platform (formerly DoubleBarcodeDetector):**
 - `CurioBarcodeDetector` - Main detector
-- `CurioBruteForceDetector` - Exact linker matching (faster, less tolerant)
-- `CurioIlluminaDetector` - Optimized for Illumina short reads
+- `CurioIlluminaDetector` - Optimized for Illumina short reads (exported, but not reachable
+  from any `IsoQuantMode`)
 
 **Stereo-seq Platform:**
 - `StereoBarcodeDetector` - Standard single-barcode mode
@@ -206,11 +210,8 @@ The `BARCODE_CALLING_MODES` dictionary maps IsoQuantMode to detector class:
 BARCODE_CALLING_MODES = {
     IsoQuantMode.tenX_v3: TenXBarcodeDetector,
     IsoQuantMode.tenX_v2: TenXv2BarcodeDetector,
-    IsoQuantMode.tenX_v3_split: TenXSplittingBarcodeDetector,
-    IsoQuantMode.tenX_v2_split: TenXv2SplittingBarcodeDetector,
     IsoQuantMode.curio: CurioBarcodeDetector,
-    IsoQuantMode.stereoseq_nosplit: SharedMemoryStereoBarcodeDetector,
-    IsoQuantMode.stereoseq: SharedMemoryStereoSplittingBarcodeDetector,
+    IsoQuantMode.stereoseq: SharedMemoryStereoBarcodeDetector,
     IsoQuantMode.visium_5prime: TenXBarcodeDetector,
     IsoQuantMode.visium_hd: VisiumHDBarcodeDetector,
 }
@@ -240,23 +241,23 @@ BARCODE_CALLING_MODES = {
 1. Create result class in `callers/base.py` if needed
 2. Create detector class in appropriate file (or new file)
 3. Add to `callers/__init__.py` exports
-4. Add to `src/barcode_calling/__init__.py` exports
+4. Add to `isoquant_lib/barcode_calling/__init__.py` exports
 5. Add to `detect_barcodes.py` BARCODE_CALLING_MODES
 6. Update BARCODE_FILES_REQUIRED if whitelist format differs
 
 ## Barcode/UMI Pipeline Integration
 
 Barcode/UMI data is integrated into `ReadAssignment` objects (loaded once during read collection, persisted through pipeline):
-- `ReadAssignment.barcode` and `.umi` fields in `src/isoform_assignment.py`
-- Loaded from split barcode files during `collect_reads_in_parallel()` in `src/dataset_processor.py`
-- `AlignmentCollector` (`src/alignment_processor.py`) receives `barcode_dict`, populates fields
-- `UMIFilter` (`src/barcode_calling/umi_filtering.py`) reads barcode/umi directly from ReadAssignment
+- `ReadAssignment.barcode` and `.umi` fields in `isoquant_lib/assignment/isoform_assignment.py`
+- Loaded from split barcode files during `collect_reads_in_parallel()` in `isoquant_lib/dataset_processor.py`
+- `AlignmentCollector` (`isoquant_lib/alignment/alignment_processor.py`) receives `barcode_dict`, populates fields
+- `UMIFilter` (`isoquant_lib/barcode_calling/umi_filtering.py`) reads barcode/umi directly from ReadAssignment
 - Barcode table splitting at pipeline start (`split_read_barcode_table()`), each file loaded once
 
 ## Barcode-Spot Grouping
 
 Groups read counts by cell type/spatial region instead of individual barcodes.
-- `BarcodeSpotGrouper` in `src/read_groups.py` — maps read_id -> barcode -> spot/cell type
+- `BarcodeSpotGrouper` in `isoquant_lib/assignment/read_groups.py` — maps read_id -> barcode -> spot/cell type
 - CLI: `--read_group barcode_spot` or `--read_group barcode_spot:FILE`
 - Works with multi-grouping: `--read_group tag:CB file_name barcode_spot`
 
@@ -280,11 +281,11 @@ TTTTAAAA    spot_B    region_1
 
 **Implementation across files**:
 - `isoquant.py`: CLI argument + file existence check
-- `src/read_groups.py`: `barcode_barcode` handling in `parse_grouping_spec()`, `get_grouping_strategy_names()`, `get_grouping_pool_types()`. Reuses `BarcodeSpotGrouper` and `SharedTableData`. Also `load_barcode2barcode_mapping()` helper
-- `src/barcode_calling/umi_filtering.py`: `UMIFilter` accepts optional `barcode_remap: Dict[str, str]`. When set, `process_single_chr()` uses remapped key instead of barcode for grouping in `gene_barcode_dict`
-- `src/parallel_workers.py`: `filter_umis_in_parallel()` accepts `barcode_remap` and `output_prefix_override` params. Forces `output_filtered_reads=False` when remap is active
-- `src/dataset_processor.py`: After standard dedup loop, iterates spot columns calling `filter_umis_in_parallel()` with column-specific `barcode_remap` and prefix
-- `src/file_naming.py`: `umi_barcode2barcode_prefix()`, `umi_barcode2barcode_global_lock()` helpers
+- `isoquant_lib/assignment/read_groups.py`: `barcode_barcode` handling in `parse_grouping_spec()`, `get_grouping_strategy_names()`, `get_grouping_pool_types()`. Reuses `BarcodeSpotGrouper` and `SharedTableData`. Also `load_barcode2barcode_mapping()` helper
+- `isoquant_lib/barcode_calling/umi_filtering.py`: `UMIFilter` accepts optional `barcode_remap: Dict[str, str]`. When set, `process_single_chr()` uses remapped key instead of barcode for grouping in `gene_barcode_dict`
+- `isoquant_lib/parallel_workers.py`: `filter_umis_in_parallel()` accepts `barcode_remap` and `output_prefix_override` params. Forces `output_filtered_reads=False` when remap is active
+- `isoquant_lib/dataset_processor.py`: After standard dedup loop, iterates spot columns calling `filter_umis_in_parallel()` with column-specific `barcode_remap` and prefix
+- `isoquant_lib/utils/file_naming.py`: `umi_barcode2barcode_prefix()`, `umi_barcode2barcode_global_lock()` helpers
 
 **Read grouping**: `--read_group barcode_barcode` works identically to `barcode_spot` but reads from `--barcode2barcode`. Auto-added when `--barcode2barcode` is set (same pattern as `--barcode2spot` auto-adds `barcode_spot`).
 
@@ -300,7 +301,7 @@ Reads barcodes and UMIs directly from BAM tags (e.g. cellranger output) instead 
 
 **Behavior**:
 - Bypasses barcode calling entirely — no FASTQ, no whitelist needed
-- `AlignmentCollector` (`src/alignment_processor.py`) reads `CB` and `UB` tags from each BAM record
+- `AlignmentCollector` (`isoquant_lib/alignment/alignment_processor.py`) reads `CB` and `UB` tags from each BAM record
 - If `--strip_barcode_suffix` is set, removes the portion after the last `-` in the barcode (e.g. `ATCG-1` → `ATCG`)
 - Barcode/UMI populated into `ReadAssignment` objects, same as normal barcode calling path
 - Compatible with all downstream features: UMI dedup, read grouping, barcode2barcode
@@ -308,9 +309,9 @@ Reads barcodes and UMIs directly from BAM tags (e.g. cellranger output) instead 
 
 **Implementation across files**:
 - `isoquant.py`: CLI arguments (`--barcoded_bam`, `--barcode_tag`, `--umi_tag`, `--strip_barcode_suffix`), validation
-- `src/alignment_processor.py`: `AlignmentCollector.__init__` stores tag names and suffix stripping flag; `_collect_alignments_with_barcodes()` and `_process_alignment_group()` read tags from `pysam.AlignedSegment`
-- `src/dataset_processor.py`: Skips barcode table loading when `barcoded_bam` is set
-- `src/read_groups.py`: `barcode_spot` and `barcode_barcode` grouping accept `barcoded_bam` as valid barcode source
+- `isoquant_lib/alignment/alignment_processor.py`: `AlignmentCollector.__init__` stores tag names and suffix stripping flag; `_collect_alignments_with_barcodes()` and `_process_alignment_group()` read tags from `pysam.AlignedSegment`
+- `isoquant_lib/dataset_processor.py`: Skips barcode table loading when `barcoded_bam` is set
+- `isoquant_lib/assignment/read_groups.py`: `barcode_spot` and `barcode_barcode` grouping accept `barcoded_bam` as valid barcode source
 
 **Data prep utility**: `misc/inject_bam_tags.py` — injects CB/UB tags from a `barcoded_reads.tsv` file into an existing BAM. Used to create test data from IsoQuant's own barcode calling output. Supports `--suffix` to add cellranger-style `-1` suffixes.
 
@@ -320,7 +321,7 @@ Custom molecule structures via Molecule Definition Files (MDF), any sequencing p
 
 **CLI**: `isoquant.py --molecule molecule_definition.mdf ...`
 
-**Location**: `src/barcode_calling/callers/`
+**Location**: `isoquant_lib/barcode_calling/callers/`
 
 **Key Files**:
 - `molecule_structure.py` - MDF parsing, ElementType enum, MoleculeElement/MoleculeStructure

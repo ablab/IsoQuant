@@ -3,20 +3,21 @@ output: /abga/work/andreyp/ci_isoquant/output
 run_type: tenX_v3_split
 reads: /abga/work/andreyp/simulation/data/10x_concat_realistic/Human.10x_concat.curiole_trunc_aligned_reads.fasta.gz
 barcodes: /abga/work/andreyp/simulation/ref/10x/human_Hipp_SN_f1_barcodes.tsv
-mode: tenX_v3_split
+mode: tenX_v3
+detect_options: "--split_molecules true"
 threads: '16'
 baselines:
   barcode:
-    all_correct_reads: 299058
-    assignment_precision: 98.90
+    all_correct_reads: 298993.0
+    assignment_precision: 98.91
     assignment_recall: 31.55
-    correct_assignments: 858224
+    correct_assignments: 858109.0
     excessive_assignments: 112
-    incorrect_assignments: 9531
-    no_barcodes_assigned: 945518
+    incorrect_assignments: 9397.0
+    no_barcodes_assigned: 945658.0
     pct_all_correct: 18.69
-    pct_no_barcodes: 59.09
+    pct_no_barcodes: 59.10
     pct_some_correct: 21.64
-    some_correct_reads: 346291
+    some_correct_reads: 346297.0
     total_reads: 1600000
     total_true_barcodes: 2720212

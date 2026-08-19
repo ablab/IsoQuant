@@ -65,10 +65,16 @@ from .detect_barcodes import (
     process_single_thread,
     process_in_parallel,
     get_umi_length,
+    get_barcode_length,
+    detect_cell_barcode_list,
+    count_barcodes_in_reads,
     create_barcode_caller,
     BARCODE_CALLING_MODES,
     BARCODE_FILES_REQUIRED,
 )
+
+# Cell barcode detection
+from .cell_selection import CellBarcodeSelector, estimate_cell_number, select_cell_barcodes
 
 __all__ = [
     # Indexers
@@ -115,7 +121,14 @@ __all__ = [
     'process_single_thread',
     'process_in_parallel',
     'get_umi_length',
+    'get_barcode_length',
+    'detect_cell_barcode_list',
+    'count_barcodes_in_reads',
     'create_barcode_caller',
     'BARCODE_CALLING_MODES',
     'BARCODE_FILES_REQUIRED',
+    # Cell barcode detection
+    'CellBarcodeSelector',
+    'estimate_cell_number',
+    'select_cell_barcodes',
 ]

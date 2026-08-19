@@ -168,7 +168,10 @@ class ArrayKmerIndexer:
     Memory usage: O(4^k) array entries. Best for k <= 8.
     """
 
-    # Nucleotide to 2-bit encoding (A=00, C=01, G=10, T=11)
+    # Nucleotide to 2-bit encoding (A=00, C=01, G=10, T=11).
+    # NOTE: this differs from common.NUCL2BIN (A,C,T,G = 0,1,2,3, derived from the ASCII code).
+    # Both are self-consistent, but this index is built and queried from strings only, so
+    # codes must never be exchanged with the common.str_to_2bit family.
     NUCL2BIN: Dict[str, int] = {'A': 0, 'C': 1, 'G': 2, 'T': 3, 'a': 0, 'c': 1, 'g': 2, 't': 3}
 
     def __init__(self, known_strings: Iterable[str], kmer_size: int = 6):

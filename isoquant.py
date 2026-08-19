@@ -40,7 +40,10 @@ import gffutils
 import pyfaidx
 
 from isoquant_lib.utils.error_codes import IsoQuantExitCode
-from isoquant_lib.modes import IsoQuantMode, ISOQUANT_MODES, AnalysisType, ANALYSIS_ALIASES, ANALYSIS_CHOICES
+from isoquant_lib.modes import (IsoQuantMode, ISOQUANT_MODES, AnalysisType, ANALYSIS_ALIASES, ANALYSIS_CHOICES,
+                                BarcodeCorrectionMethod, LARGE_WHITELIST_SIZE, AUTO_BARCODES,
+                                DEPRECATED_MODE_ALIASES, SPLIT_MOLECULES_CHOICES, SPLIT_MOLECULES_TRUE,
+                                SPLIT_MOLECULES_FALSE, SPLIT_MOLECULES_AUTO)
 from isoquant_lib.gtf2db import convert_gtf_to_db
 from isoquant_lib.utils.read_mapper import (
     DATA_TYPE_ALIASES,
@@ -59,7 +62,8 @@ from isoquant_lib.quantification.long_read_counter import COUNTING_STRATEGIES, C
 from isoquant_lib.utils.input_data_storage import InputDataStorage, InputDataType
 from isoquant_lib.assignment.multimap_resolver import MultimapResolvingStrategy
 from isoquant_lib.utils.stats import combine_counts
-from isoquant_lib.barcode_calling import process_single_thread, process_in_parallel, get_umi_length
+from isoquant_lib.barcode_calling import (process_single_thread, process_in_parallel, get_umi_length,
+                                          get_barcode_length, detect_cell_barcode_list)
 from isoquant_lib.common import setup_worker_logging, _get_log_params
 
 
@@ -284,10 +288,19 @@ def parse_args(cmd_args=None, namespace=None):
                                    type=int, default=-1)
 
     # SC ARGUMENTS
-    add_option_to_group(sc_args_group, "--mode", "-m", type=str, choices=ISOQUANT_MODES,
-                                   help="IsoQuant mode [%s]" % IsoQuantMode.bulk.name, default=IsoQuantMode.bulk.name)
+    add_option_to_group(sc_args_group, "--mode", "-m", type=str,
+                                   choices=ISOQUANT_MODES + list(DEPRECATED_MODE_ALIASES),
+                                   help="IsoQuant mode [%s]" % IsoQuantMode.bulk.name, default=IsoQuantMode.bulk.name,
+                                   metavar="{%s}" % ",".join(ISOQUANT_MODES))
+    add_option_to_group(sc_args_group, "--split_molecules", type=str, choices=SPLIT_MOLECULES_CHOICES,
+                                   default=None,
+                                   help="split reads containing several cDNA molecules ligated end to end: "
+                                        "%s splits wherever the protocol allows it, %s also fails for protocols "
+                                        "that cannot [%s]" % (SPLIT_MOLECULES_AUTO, SPLIT_MOLECULES_TRUE,
+                                                              SPLIT_MOLECULES_AUTO))
     add_option_to_group(sc_args_group, '--barcode_whitelist', type=str, nargs='+',
-                                   help='file(s) with barcode whitelist(s) for barcode calling')
+                                   help='file(s) with barcode whitelist(s) for barcode calling, '
+                                        'or "%s" to detect cell barcodes from the data' % AUTO_BARCODES)
     add_option_to_group(sc_args_group, "--barcoded_reads", type=str, nargs='+',
                                    help='TSV file(s) with barcoded reads')
     add_option_to_group(sc_args_group, "--barcoded_bam", action='store_true', default=False,
@@ -297,6 +310,20 @@ def parse_args(cmd_args=None, namespace=None):
     add_option_to_group(sc_args_group, "--molecule", type=str,
                                    help='molecule definition file (MDF) for custom_sc mode: '
                                         'defines molecule structure for universal barcode extraction')
+    add_option_to_group(sc_args_group, "--n_cells", type=str,
+                                   help='expected number of cell-associated barcodes, or "%s" to estimate it '
+                                        'from the barcode count distribution. When set, the whitelist is '
+                                        'treated as a pool to select cell barcodes from; when omitted, the '
+                                        'whitelist is taken to be the cell barcodes themselves' % AUTO_BARCODES)
+    add_additional_option_to_group(sc_args_group, "--n_cells_interval", type=int, default=25,
+                                   help='percentage by which the number of selected barcodes may differ '
+                                        'from --n_cells [25]')
+    add_additional_option_to_group(sc_args_group, "--barcode_correction", type=str,
+                                   choices=[e.name for e in BarcodeCorrectionMethod],
+                                   default=BarcodeCorrectionMethod.auto.name,
+                                   help="override how the barcode list is obtained: match reads against the "
+                                        "given whitelist, or select cell barcodes from read counts first "
+                                        "[%s: decided by --n_cells]" % BarcodeCorrectionMethod.auto.name)
     add_additional_option_to_group(sc_args_group, "--barcode_tag", type=str, default="CB",
                                    help='BAM tag for cell barcode [CB]')
     add_additional_option_to_group(sc_args_group, "--umi_tag", type=str, default="UB",
@@ -715,10 +742,140 @@ def _dedup_read_group_specs(args):
         args.read_group = updated_specs
 
 
+def _count_whitelist_barcodes(whitelist_files):
+    total = 0
+    for file_name in whitelist_files:
+        handle = gzip.open(file_name, "rt") if file_name.endswith(("gz", "gzip")) else open(file_name)
+        with handle:
+            total += sum(1 for _ in handle)
+    return total
+
+
+def _resolve_n_cells(args):
+    """Normalise --n_cells to an int, the string AUTO_BARCODES, or None."""
+    if args.n_cells is None:
+        return None
+    if args.n_cells == AUTO_BARCODES:
+        return AUTO_BARCODES
+    try:
+        n_cells = int(args.n_cells)
+    except ValueError:
+        logger.critical('--n_cells must be a positive integer or "%s"' % AUTO_BARCODES)
+        sys.exit(IsoQuantExitCode.INVALID_PARAMETER)
+    if n_cells <= 0:
+        logger.critical("--n_cells must be positive")
+        sys.exit(IsoQuantExitCode.INVALID_PARAMETER)
+    return n_cells
+
+
+def _resolve_barcode_correction(args):
+    """Decide whether cell barcodes are supplied or detected from the data.
+
+    --n_cells decides what the whitelist means: unset, it is the set of cell barcodes and
+    reads are matched straight against it; set, it is a pool to select cell barcodes from,
+    which needs an extra pass over the reads to count what was actually sequenced.
+    Sets args.detect_cell_barcodes and normalises args.n_cells.
+    """
+    args.detect_cell_barcodes = False
+    args.n_cells = _resolve_n_cells(args)
+    whitelist_is_auto = args.barcode_whitelist == [AUTO_BARCODES]
+
+    # nothing to detect when barcodes come ready-made
+    if args.barcoded_reads or args.barcoded_bam:
+        return
+
+    requested = BarcodeCorrectionMethod[args.barcode_correction]
+    if requested == BarcodeCorrectionMethod.whitelist:
+        if whitelist_is_auto:
+            logger.critical('--barcode_correction whitelist cannot be used with --barcode_whitelist %s'
+                            % AUTO_BARCODES)
+            sys.exit(IsoQuantExitCode.INCOMPATIBLE_OPTIONS)
+        return
+
+    # a detected whitelist needs a cell count; without one, estimate it
+    if whitelist_is_auto and args.n_cells is None:
+        args.n_cells = AUTO_BARCODES
+
+    detect = whitelist_is_auto or args.n_cells is not None or requested == BarcodeCorrectionMethod.graph
+    if not detect:
+        if args.barcode_whitelist:
+            _warn_on_large_whitelist(args)
+        return
+
+    if not args.mode.supports_cell_barcode_detection():
+        logger.critical("Detecting cell barcodes from the data is not supported for mode %s" % args.mode.name)
+        sys.exit(IsoQuantExitCode.INCOMPATIBLE_OPTIONS)
+
+    if requested == BarcodeCorrectionMethod.graph and args.n_cells is None:
+        args.n_cells = AUTO_BARCODES
+    args.detect_cell_barcodes = True
+
+
+def _warn_on_large_whitelist(args):
+    """A big whitelist taken as the cell list makes per-read matching demand exact matches."""
+    barcode_count = _count_whitelist_barcodes(args.barcode_whitelist)
+    if barcode_count <= LARGE_WHITELIST_SIZE:
+        return
+    logger.warning("Barcode whitelist contains %d barcodes and is treated as the list of cell barcodes. "
+                   "Matching every read against a list this large effectively requires an exact match, "
+                   "so reads carrying a sequencing error in the barcode will be lost." % barcode_count)
+    logger.warning('Set --n_cells (or --n_cells %s) to select cell barcodes from the whitelist instead.'
+                   % AUTO_BARCODES)
+
+
+def _resolve_deprecated_mode(args):
+    """Translate a superseded mode name into a chemistry plus a --split_molecules default."""
+    alias = DEPRECATED_MODE_ALIASES.get(args.mode)
+    if not alias:
+        return
+    mode_name, splits = alias
+    replacement = "--mode %s --split_molecules %s" % (
+        mode_name, SPLIT_MOLECULES_TRUE if splits else SPLIT_MOLECULES_FALSE)
+    logger.warning("Mode %s is deprecated, use `%s` instead" % (args.mode, replacement))
+    args.mode = mode_name
+    # only a default: an explicit --split_molecules wins
+    if args.split_molecules is None:
+        args.split_molecules = SPLIT_MOLECULES_TRUE if splits else SPLIT_MOLECULES_FALSE
+
+
+def _resolve_split_molecules(args):
+    """Turn --split_molecules into a bool, refusing to silently ignore an impossible request."""
+    requested = args.split_molecules or SPLIT_MOLECULES_AUTO
+    supported = args.mode.supports_molecule_splitting()
+
+    if requested == SPLIT_MOLECULES_FALSE:
+        args.split_molecules = False
+        return
+    if requested == SPLIT_MOLECULES_TRUE and not supported:
+        logger.critical("Mode %s cannot split reads into separate molecules. Drop "
+                        "--split_molecules %s, or use --split_molecules %s to let IsoQuant "
+                        "decide per protocol." % (args.mode.name, SPLIT_MOLECULES_TRUE, SPLIT_MOLECULES_AUTO))
+        sys.exit(IsoQuantExitCode.INCOMPATIBLE_OPTIONS)
+
+    args.split_molecules = supported
+    if args.split_molecules:
+        logger.info("Reads will be split into separate cDNA molecules")
+
+
+def _validate_barcode_whitelist(args):
+    """The whitelist is either a set of files or the literal AUTO_BARCODES, never both."""
+    if not args.barcode_whitelist or AUTO_BARCODES not in args.barcode_whitelist:
+        return
+    if len(args.barcode_whitelist) > 1:
+        logger.critical('--barcode_whitelist %s cannot be combined with whitelist files' % AUTO_BARCODES)
+        sys.exit(IsoQuantExitCode.INVALID_PARAMETER)
+    if not args.mode.supports_cell_barcode_detection():
+        logger.critical('--barcode_whitelist %s is not supported for mode %s, please provide a whitelist file'
+                        % (AUTO_BARCODES, args.mode.name))
+        sys.exit(IsoQuantExitCode.INCOMPATIBLE_OPTIONS)
+
+
 def _validate_barcode_calling(args):
     args.umi_length = 0
+    args.detect_cell_barcodes = False
     if not args.mode.needs_barcode_calling():
         return
+    _validate_barcode_whitelist(args)
     barcode_sources = sum([bool(args.barcode_whitelist), bool(args.barcoded_reads), bool(args.barcoded_bam)])
     if barcode_sources > 1:
         logger.critical("Options --barcode_whitelist, --barcoded_reads, and --barcoded_bam are mutually exclusive")
@@ -736,6 +893,8 @@ def _validate_barcode_calling(args):
     else:
         args.umi_length = get_umi_length(args.mode)
 
+    _resolve_barcode_correction(args)
+
 
 def check_input_params(args):
     if not _validate_data_type_and_input(args):
@@ -744,7 +903,9 @@ def check_input_params(args):
         return False
 
     if not isinstance(args.mode, IsoQuantMode):
+        _resolve_deprecated_mode(args)
         args.mode = IsoQuantMode[args.mode]
+    _resolve_split_molecules(args)
 
     # translate --analysis (and the deprecated stage flags) into internal booleans
     resolve_analyses(args)
@@ -842,9 +1003,11 @@ def _check_barcode_input_files(args):
     if hasattr(args, 'molecule') and args.molecule:
         check_file_exists(args.molecule, "Molecule definition file")
 
-    # Check barcode whitelist files
+    # Check barcode whitelist files; AUTO_BARCODES asks for detection, it is not a path
     if hasattr(args, 'barcode_whitelist') and args.barcode_whitelist:
         for wl_file in args.barcode_whitelist:
+            if wl_file == AUTO_BARCODES:
+                continue
             check_file_exists(wl_file, "Barcode whitelist file")
 
 
@@ -1232,7 +1395,7 @@ def prepare_reference_genome(args):
 
 class BarcodeCallingArgs:
     def __init__(self, input, barcode_whitelist, mode, output, out_fasta, tmp_dir, threads,
-                 molecule: str = None):
+                 molecule: str = None, whitelist_matching: bool = True, split_molecules: bool = False):
         self.input = input  # Can be a single file (str) or list of files
         self.barcodes = barcode_whitelist
         self.mode = mode
@@ -1241,6 +1404,75 @@ class BarcodeCallingArgs:
         self.tmp_dir = tmp_dir
         self.threads = threads
         self.molecule = molecule
+        # when False the detector emits raw barcode windows so cell barcodes can be detected
+        self.whitelist_matching = whitelist_matching
+        # selects the splitting detector, and makes the caller expect one result per molecule
+        self.split_molecules = split_molecules
+
+
+def _run_barcode_calling(bc_args, threads):
+    """Run one barcode calling pass in a child process.
+
+    Read chunks are not cleared by the GC when barcode calling ends, leaving the main
+    IsoQuant process holding ~2.5 GB for nothing; once 16 workers are forked later that
+    becomes threads x 2.5 GB. Running in a child process gives the memory back.
+    """
+    log_file, log_level = _get_log_params()
+    with ProcessPoolExecutor(max_workers=1,
+                             initializer=setup_worker_logging,
+                             initargs=(log_file, log_level)) as proc:
+        if threads == 1:
+            future_res = proc.submit(process_single_thread, bc_args)
+        else:
+            future_res = proc.submit(process_in_parallel, bc_args)
+
+    concurrent.futures.wait([future_res], return_when=concurrent.futures.ALL_COMPLETED)
+    if future_res.exception() is not None:
+        raise future_res.exception()
+
+
+def detect_cell_barcodes(args, sample, input_files, threads):
+    """First pass: extract barcode windows verbatim, then derive the cell barcode list.
+
+    Returns the path of the detected cell barcode list, which the second pass then uses as
+    its whitelist.
+    """
+    if args.resume and os.path.exists(sample.raw_barcodes_done):
+        logger.info("Cell barcodes were detected during the previous run, skipping")
+        return sample.out_cell_barcodes_tsv
+    if os.path.exists(sample.raw_barcodes_done):
+        os.remove(sample.raw_barcodes_done)
+
+    logger.info("Extracting barcodes from %d file(s) to detect cell barcodes" % len(input_files))
+    # No FASTA and no barcode table here: only the counts matter, and writing a row per read
+    # would cost gigabytes of intermediate. In splitting modes the reads are split by the
+    # second pass, whose extraction is the one whose results are kept.
+    raw_args = BarcodeCallingArgs(input_files, args.barcode_whitelist, args.mode,
+                                  None, None, sample.aux_dir, threads,
+                                  molecule=getattr(args, 'molecule', None),
+                                  whitelist_matching=False,
+                                  split_molecules=args.split_molecules)
+
+    # counting and selection run as one child process so the count table, which is large and
+    # not reclaimed promptly, never lives in the main process
+    log_file, log_level = _get_log_params()
+    with ProcessPoolExecutor(max_workers=1,
+                             initializer=setup_worker_logging,
+                             initargs=(log_file, log_level)) as proc:
+        future_res = proc.submit(detect_cell_barcode_list,
+                                 raw_args,
+                                 sample.out_cell_barcodes_tsv,
+                                 get_barcode_length(args.mode),
+                                 args.n_cells,
+                                 args.n_cells_interval,
+                                 sample.out_cell_barcodes_stats)
+
+    concurrent.futures.wait([future_res], return_when=concurrent.futures.ALL_COMPLETED)
+    if future_res.exception() is not None:
+        raise future_res.exception()
+
+    open(sample.raw_barcodes_done, "w").close()
+    return sample.out_cell_barcodes_tsv
 
 
 def call_barcodes(args):
@@ -1259,7 +1491,7 @@ def call_barcodes(args):
 
         output_fasta_list = None
         new_reads = []
-        if args.mode.produces_new_fasta():
+        if args.split_molecules:
             output_fasta_list = [sample.split_reads_fasta + "_%d.fa" % i for i in range(len(input_files))]
             new_reads = [[fasta] for fasta in output_fasta_list]
 
@@ -1268,7 +1500,7 @@ def call_barcodes(args):
         if all_done and args.resume:
             logger.info("Barcodes were called during the previous run, skipping")
             sample.barcoded_reads.extend(output_barcodes_list)
-            if args.mode.produces_new_fasta():
+            if args.split_molecules:
                 sample.file_list = new_reads
             continue
 
@@ -1277,27 +1509,17 @@ def call_barcodes(args):
             if os.path.exists(barcodes_done):
                 os.remove(barcodes_done)
 
-            bc_threads = 1 if args.mode.enforces_single_thread() else args.threads
-            bc_args = BarcodeCallingArgs(input_files, args.barcode_whitelist, args.mode,
-                                         output_barcodes_list, output_fasta_list, sample.aux_dir, bc_threads,
-                                         molecule=getattr(args, 'molecule', None))
-            # Launching barcode calling in a separate process has the following reason:
-            # Read chunks are not cleared by the GC in the end of barcode calling, leaving the main
-            # IsoQuant process to consume ~2,5 GB even when barcode calling is done.
-            # Once 16 child processes are created later, IsoQuant instantly takes threads x 2,5 GB for nothing.
-            log_file, log_level = _get_log_params()
-            with ProcessPoolExecutor(max_workers=1,
-                                     initializer=setup_worker_logging,
-                                     initargs=(log_file, log_level)) as proc:
-                logger.info("Detecting barcodes for %d file(s)" % len(input_files))
-                if bc_threads == 1:
-                    future_res = proc.submit(process_single_thread, bc_args)
-                else:
-                    future_res = proc.submit(process_in_parallel, bc_args)
+        bc_threads = 1 if args.mode.enforces_single_thread() else args.threads
+        barcode_files = args.barcode_whitelist
+        if args.detect_cell_barcodes:
+            barcode_files = [detect_cell_barcodes(args, sample, input_files, bc_threads)]
 
-            concurrent.futures.wait([future_res],  return_when=concurrent.futures.ALL_COMPLETED)
-            if future_res.exception() is not None:
-                raise future_res.exception()
+        bc_args = BarcodeCallingArgs(input_files, barcode_files, args.mode,
+                                     output_barcodes_list, output_fasta_list, sample.aux_dir, bc_threads,
+                                     molecule=getattr(args, 'molecule', None),
+                                     split_molecules=args.split_molecules)
+        logger.info("Detecting barcodes for %d file(s)" % len(input_files))
+        _run_barcode_calling(bc_args, bc_threads)
 
         # Mark all files as done and add to barcoded_reads
         for i, (input_file, output_barcodes, barcodes_done) in enumerate(zip(input_files, output_barcodes_list, barcodes_done_list)):
@@ -1305,7 +1527,7 @@ def call_barcodes(args):
             open(barcodes_done, "w").close()
             logger.info("Processed %s, barcodes are stored in %s" % (input_file, output_barcodes))
 
-        if args.mode.produces_new_fasta():
+        if args.split_molecules:
             logger.info("Reads were split during barcode calling")
             logger.info("The following files will be used instead of original reads %s " % ", ".join(map(lambda x: x[0], new_reads)))
             sample.file_list = new_reads
