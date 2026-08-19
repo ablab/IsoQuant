@@ -28,7 +28,7 @@ from isoquant_lib.barcode_calling.detect_barcodes import (
     get_barcode_length,
     BARCODE_CALLING_MODES,
 )
-from isoquant_lib.barcode_calling.cell_selection import select_cell_barcodes
+from isoquant_lib.barcode_calling.detect_barcodes import detect_cell_barcode_list
 
 logger = logging.getLogger('IsoQuant')
 
@@ -202,21 +202,15 @@ def main(sys_argv):
         os.makedirs(out_dir, exist_ok=True)
 
     if args.detect_cell_barcodes:
-        # first pass: extract barcodes verbatim so they can be counted. No FASTA here, the
-        # second pass does the extraction whose results are kept.
+        # first pass: extract barcodes only to count them. Nothing is written, and no FASTA
+        # is produced -- the second pass does the extraction whose results are kept.
         final_output_tsv, final_out_fasta = args.output_tsv, args.out_fasta
-        args.output_tsv = [name.replace(".barcoded_reads.tsv", ".raw_barcodes.tsv")
-                           for name in final_output_tsv]
-        args.out_fasta = None
+        args.output_tsv, args.out_fasta = None, None
         args.whitelist_matching = False
-        run_barcode_calling(args)
-
-        cell_barcodes = select_cell_barcodes(args.output_tsv, args.output + ".cell_barcodes.tsv",
-                                             args.barcodes,
-                                             barcode_length=get_barcode_length(args.mode),
-                                             n_cells=args.n_cells,
-                                             n_cells_interval=args.n_cells_interval,
-                                             stats_file=args.output + ".cell_barcodes.stats")
+        cell_barcodes = detect_cell_barcode_list(args, args.output + ".cell_barcodes.tsv",
+                                                 get_barcode_length(args.mode),
+                                                 args.n_cells, args.n_cells_interval,
+                                                 args.output + ".cell_barcodes.stats")
         # second pass: ordinary barcode calling against the detected cell barcodes
         args.barcodes = [cell_barcodes]
         args.output_tsv, args.out_fasta = final_output_tsv, final_out_fasta
