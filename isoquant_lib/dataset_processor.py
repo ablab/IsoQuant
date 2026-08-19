@@ -36,6 +36,7 @@ from isoquant_lib.utils.serialization import (
 from isoquant_lib.utils.stats import EnumStats
 from isoquant_lib.utils.file_utils import (merge_files, merge_counts, gzip_file_in_place,
                                           resolve_optionally_gzipped)
+from isoquant_lib.utils.bam_utils import merge_bam_files, write_unmapped_bam
 from .alignment.alignment_processor import AlignmentType
 from .assignment.read_groups import prepare_read_groups, get_grouping_strategy_names
 from .assignment.assignment_io import IOSupport, ReadInfoPrinter, VoidPrinter
@@ -53,6 +54,7 @@ from isoquant_lib.utils.file_naming import (
     umi_filtered_global_lock_file_name,
     umi_filtered_lock_file_name,
     umi_output_prefix,
+    tagged_bam_fragment_name,
 )
 from isoquant_lib.model_construction.transcript_printer import GFFPrinter, VoidTranscriptPrinter
 from .barcode_calling.umi_filtering import create_transcript_info_dict
@@ -63,6 +65,8 @@ from .parallel_workers import (
     collect_reads_in_parallel,
     construct_models_in_parallel,
     filter_umis_in_parallel,
+    write_deduplicated_bam_in_parallel,
+    write_tagged_bam_in_parallel,
 )
 
 logger = logging.getLogger('IsoQuant')
@@ -191,6 +195,16 @@ class DatasetProcessor:
                 self.split_read_barcode_table(sample, split_barcodes_dict)
                 open(barcode_split_done, "w").close()
 
+            if large_output_enabled(self.args, "tagged_bam"):
+                self.write_tagged_bam(sample)
+        elif large_output_enabled(self.args, "tagged_bam"):
+            if getattr(self.args, 'barcoded_bam', False):
+                logger.warning("--large_output tagged_bam is redundant with --barcoded_bam: the input "
+                               "alignments already carry the tags, skipping")
+            else:
+                logger.warning("--large_output tagged_bam has no effect in %s mode, which has no "
+                               "barcodes to tag with, skipping" % self.args.mode.name)
+
         if self.args.read_assignments:
             saves_file = self.args.read_assignments[0]
             logger.info('Using read assignments from {}*'.format(saves_file))
@@ -204,6 +218,9 @@ class DatasetProcessor:
 
             if self.args.mode.needs_pcr_deduplication():
                 self.filter_umis(sample)
+                # the survivors files live under out_raw_file and are deleted by clean_up
+                if large_output_enabled(self.args, "deduplicated_bam"):
+                    self.write_deduplicated_bam(sample)
 
         total_assignments, polya_found, self.all_read_groups = self.load_read_info(saves_file)
 
@@ -729,6 +746,56 @@ class DatasetProcessor:
                 open(bc2bc_lock, "w").close()
 
         open(umi_filtering_done, "w").close()
+
+    def map_over_chromosomes(self, worker, sample, *extra_args):
+        """Run worker(sample, chr_id, *extra_args) for every chromosome, in parallel."""
+        gen = (worker, itertools.repeat(sample), self.get_chr_list(),
+               *(itertools.repeat(a) for a in extra_args))
+        if self.args.threads > 1:
+            gc.collect()
+            mp_context = multiprocessing.get_context('fork')
+            log_file, log_level = _get_log_params()
+            with ProcessPoolExecutor(max_workers=self.args.threads, mp_context=mp_context,
+                                     initializer=setup_worker_logging,
+                                     initargs=(log_file, log_level)) as proc:
+                return list(proc.map(*gen, chunksize=1))
+        return list(map(*gen))
+
+    def write_tagged_bam(self, sample):
+        """A copy of the input BAM(s) with barcode and UMI tags, keeping every alignment.
+
+        Purely a side output: the barcode table split it reads from happens regardless, and
+        nothing downstream looks at the result.
+        """
+        logger.info("Writing tagged BAM")
+        fragments = self.map_over_chromosomes(write_tagged_bam_in_parallel, sample, self.args)
+
+        # fetch() by chromosome never returns unmapped reads, so they need a pass of their own
+        unmapped_fragment = tagged_bam_fragment_name(sample.out_raw_file, "unmapped")
+        bam_files = [f[0] for f in sample.file_list]
+        if write_unmapped_bam(bam_files, unmapped_fragment):
+            fragments.append(unmapped_fragment)
+        else:
+            os.remove(unmapped_fragment)
+
+        merged = merge_bam_files(sample.out_tagged_bam, fragments, self.args.threads)
+        if merged is None:
+            logger.warning("No alignments to tag, %s was not written" % sample.out_tagged_bam)
+        else:
+            logger.info("Tagged BAM saved to %s" % merged)
+        return merged
+
+    def write_deduplicated_bam(self, sample):
+        """A primary-only BAM of the reads that survived UMI filtering, carrying their tags."""
+        logger.info("Writing deduplicated BAM")
+        fragments = self.map_over_chromosomes(write_deduplicated_bam_in_parallel, sample, self.args)
+        merged = merge_bam_files(sample.out_deduplicated_bam, fragments, self.args.threads)
+        if merged is None:
+            logger.warning("No reads survived UMI filtering, %s was not written"
+                           % sample.out_deduplicated_bam)
+        else:
+            logger.info("Deduplicated BAM saved to %s" % merged)
+        return merged
 
     def compress_barcode_tables(self, sample):
         """Gzip the barcoded read tables once nothing needs them any more.

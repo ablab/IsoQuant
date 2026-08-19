@@ -64,13 +64,14 @@ from isoquant_lib.assignment.multimap_resolver import MultimapResolvingStrategy
 from isoquant_lib.utils.stats import combine_counts
 from isoquant_lib.barcode_calling import (process_single_thread, process_in_parallel, get_umi_length,
                                           get_barcode_length, detect_cell_barcode_list)
-from isoquant_lib.common import setup_worker_logging, _get_log_params
+from isoquant_lib.common import setup_worker_logging, _get_log_params, large_output_enabled
 
 
 logger = logging.getLogger('IsoQuant')
 
 # Large output file types for --large_output option
-LARGE_OUTPUT_TYPES = ["read_info", "read_assignments", "corrected_bed", "read2transcripts", "allinfo", "none"]
+LARGE_OUTPUT_TYPES = ["read_info", "read_assignments", "corrected_bed", "read2transcripts", "allinfo",
+                      "tagged_bam", "deduplicated_bam", "none"]
 
 
 def bool_str(s):
@@ -460,22 +461,21 @@ def parse_args(cmd_args=None, namespace=None):
     return args, parser
 
 
-def get_bam_files_from_samples(input_data) -> list:
-    """Extract all BAM file paths from input_data.samples.
+def get_fusion_bams(args, sample) -> list:
+    """BAMs fusion detection should read for one sample.
 
-    Returns a list of BAM file paths (long-read and Illumina).
+    Prefer the deduplicated BAM when the run produced one: PCR duplicates would otherwise
+    count as independent support for the same breakpoint. It is primary-only, which is all
+    fusion detection looks at anyway, and records are copied verbatim so the SA tags and
+    soft clips it works from are intact.
     """
-    bam_files: list[str] = []
-    for sample in input_data.samples:
-        for lib in sample.file_list:
-            for in_file in lib:
-                bam_files.append(in_file)
-        if getattr(sample, "illumina_bam", None):
-            bam_files.extend(sample.illumina_bam)
-    return [f for f in bam_files if os.path.isfile(f)]
+    dedup_bam = getattr(sample, "out_deduplicated_bam", None)
+    if large_output_enabled(args, "deduplicated_bam") and dedup_bam and os.path.isfile(dedup_bam):
+        return [dedup_bam]
+    return [f for lib in sample.file_list for f in lib if os.path.isfile(f)]
 
 
-def run_fusion_detection_on_samples(fd, samples: list) -> dict:
+def run_fusion_detection_on_samples(fd, samples: list, args) -> dict:
     """Run fusion detection per sample using a shared FusionDetector.
 
     The report is written alongside the other per-sample outputs as
@@ -484,13 +484,14 @@ def run_fusion_detection_on_samples(fd, samples: list) -> dict:
     Args:
         fd: FusionDetector instance (initialized with first BAM, will be reused)
         samples: List of SampleData objects to process
+        args: Parsed command-line arguments, used to pick the BAMs to read
 
     Returns:
         Dictionary with summary: {"total": int, "successful": int, "failed": int, "skipped": list}
     """
     summary = {"total": 0, "successful": 0, "failed": 0, "skipped": []}
     for sample in samples:
-        sample_bams = [f for lib in sample.file_list for f in lib if os.path.isfile(f)]
+        sample_bams = get_fusion_bams(args, sample)
         if not sample_bams:
             continue
         summary["total"] += 1
@@ -842,6 +843,9 @@ def _resolve_split_molecules(args):
     """Turn --split_molecules into a bool, refusing to silently ignore an impossible request."""
     requested = args.split_molecules or SPLIT_MOLECULES_AUTO
     supported = args.mode.supports_molecule_splitting()
+    # splitting rewrites the reads, so the pieces have to be aligned afresh; with an aligned
+    # BAM on input there is no mapping stage to align them in
+    mappable = args.input_data.input_type.needs_mapping()
 
     if requested == SPLIT_MOLECULES_FALSE:
         args.split_molecules = False
@@ -851,10 +855,18 @@ def _resolve_split_molecules(args):
                         "--split_molecules %s, or use --split_molecules %s to let IsoQuant "
                         "decide per protocol." % (args.mode.name, SPLIT_MOLECULES_TRUE, SPLIT_MOLECULES_AUTO))
         sys.exit(IsoQuantExitCode.INCOMPATIBLE_OPTIONS)
+    if requested == SPLIT_MOLECULES_TRUE and not mappable:
+        logger.critical("Splitting reads into separate molecules requires them to be aligned "
+                        "afterwards, which is impossible for aligned input (%s). Provide raw reads, "
+                        "or use --split_molecules %s."
+                        % (args.input_data.input_type.name, SPLIT_MOLECULES_FALSE))
+        sys.exit(IsoQuantExitCode.INCOMPATIBLE_OPTIONS)
 
-    args.split_molecules = supported
+    args.split_molecules = supported and mappable
     if args.split_molecules:
         logger.info("Reads will be split into separate cDNA molecules")
+    elif supported:
+        logger.info("Reads are already aligned, molecule splitting is not performed")
 
 
 def _validate_barcode_whitelist(args):
@@ -1168,6 +1180,19 @@ def set_data_dependent_options(args):
                 args.read_group.append("barcode")
             logger.info("Single-cell/spatial mode: automatically adding '--read_group barcode'. "
                         "Use '--read_group none' or `--read_group no_auto` to disable.")
+
+    # Fusion detection is run on the deduplicated BAM where one exists, so that PCR duplicates
+    # do not inflate breakpoint support. Bulk has no UMIs to deduplicate by and keeps its input.
+    if (getattr(args, "fusion", False) and args.mode.needs_pcr_deduplication()
+            and not large_output_enabled(args, "deduplicated_bam")):
+        if args.large_output is None:
+            args.large_output = ["deduplicated_bam"]
+        elif "none" in args.large_output:
+            args.large_output = [t for t in args.large_output if t != "none"] + ["deduplicated_bam"]
+        else:
+            args.large_output.append("deduplicated_bam")
+        logger.info("Fusion detection in %s mode: automatically adding "
+                    "'--large_output deduplicated_bam'." % args.mode.name)
 
 
 def set_matching_options(args):
@@ -1577,7 +1602,8 @@ def run_pipeline(args):
     # Run fusion detection after isoform detection when fusion is enabled
     if getattr(args, "fusion", False):
         logger.info(" === Isoform detection completed, starting fusion detection === ")
-        bam_files = get_bam_files_from_samples(args.input_data)
+        bam_files = [bam for sample in args.input_data.samples
+                     for bam in get_fusion_bams(args, sample)]
         if not args.genedb:
             logger.warning("Fusion detection requires --genedb; skipping")
         elif not bam_files:
@@ -1586,7 +1612,7 @@ def run_pipeline(args):
             try:
                 from isoquant_lib.fusion.fusion_detector import FusionDetector
                 fd = FusionDetector(bam_files[0], args.genedb, reference_fasta=args.reference)
-                summary = run_fusion_detection_on_samples(fd, args.input_data.samples)
+                summary = run_fusion_detection_on_samples(fd, args.input_data.samples, args)
                 logger.info("Fusion detection summary: %d total, %d successful, %d failed" %
                             (summary["total"], summary["successful"], summary["failed"]))
                 logger.info(" === Fusion detection finished === ")

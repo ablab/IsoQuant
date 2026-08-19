@@ -291,10 +291,15 @@ Supported for `tenX_v3`, `tenX_v2`, `stereoseq` and `visium_5prime`. `--split_mo
 with any other mode is an error rather than a silent no-op, so a request that cannot be
 honoured never passes unnoticed.
 
-When splitting, IsoQuant writes an additional output file (`*.split_reads.fasta`) containing
+When splitting, IsoQuant writes an additional output file (`*.split_reads_<i>.fa.gz`) containing
 the extracted cDNA segments, and uses it in place of the original reads for alignment. Each
 segment is named with the original read ID plus coordinates and strand:
-`{read_id}_{start}_{end}_{strand}`.
+`{read_id}_{start}_{end}_{strand}`. The file is gzipped unless `--no_gzip` is set; minimap2
+reads it compressed, so alignment is not slowed down.
+
+Splitting rewrites the reads, so the pieces have to be aligned afresh. With aligned input
+(`--bam`) there is no alignment stage to do that in, and splitting is therefore skipped;
+`--split_molecules true` with aligned input is an error rather than a silent no-op.
 
 Splitting is worth leaving on even for libraries you do not expect to be concatenated: measured
 on non-concatenated 10x data it recovers about one extra point of recall at unchanged precision

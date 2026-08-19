@@ -144,7 +144,7 @@ class UMIFilter:
 
     def __init__(self, umi_length: int = 0, edit_distance: int = 3, disregard_length_diff: bool = True,
                  only_unique_assignments: bool = False, only_spliced_reads: bool = False,
-                 barcode_remap: Optional[Dict[str, str]] = None):
+                 barcode_remap: Optional[Dict[str, str]] = None, output_read_tags: bool = False):
         """
         Initialize UMI filter.
 
@@ -155,6 +155,8 @@ class UMIFilter:
             only_unique_assignments: Only process uniquely assigned reads
             only_spliced_reads: Only process spliced reads
             barcode_remap: Optional mapping from barcode to spot ID for spot-level dedup
+            output_read_tags: also record barcode/UMI/gene/transcript for each surviving read,
+                so a deduplicated BAM can be tagged without re-reading the assignments
         """
         self.umi_length = umi_length
         self.max_edit_distance = edit_distance
@@ -162,6 +164,7 @@ class UMIFilter:
         self.only_unique_assignments = only_unique_assignments
         self.only_spliced_reads = only_spliced_reads
         self.barcode_remap = barcode_remap
+        self.output_read_tags = output_read_tags
 
         self.selected_reads: Set[str] = set()
         self.stats: Dict[str, int] = defaultdict(int)
@@ -368,6 +371,24 @@ class UMIFilter:
             for r in self._process_duplicates(gene_dict[barcode]):
                 yield r
 
+    def _survivor_record(self, read_assignment) -> str:
+        """One line of the survivors file: the read id, plus tags when they are wanted.
+
+        Everything comes from the assignment already in hand, so no second pass is needed.
+        """
+        if not self.output_read_tags:
+            return read_assignment.read_id
+        if read_assignment.isoform_matches:
+            gene_id = read_assignment.isoform_matches[0].assigned_gene or "."
+            transcript_id = read_assignment.isoform_matches[0].assigned_transcript or "."
+        else:
+            gene_id, transcript_id = ".", "."
+        return "\t".join([read_assignment.read_id,
+                          read_assignment.barcode or "*",
+                          read_assignment.umi or "*",
+                          gene_id,
+                          transcript_id])
+
     def _process_chunk(self, gene_barcode_dict: Dict[str, Dict[str, List[ReadAssignment]]],
                        allinfo_outf, read_ids_outf=None) -> Tuple[int, int]:
         """
@@ -400,7 +421,7 @@ class UMIFilter:
                     spliced_count += 1
 
                 if read_ids_outf:
-                    read_ids_outf.write(read_assignment.read_id + "\n")
+                    read_ids_outf.write(self._survivor_record(read_assignment) + "\n")
 
                 self.selected_reads.add(read_assignment.read_id)
 

@@ -27,6 +27,8 @@ from isoquant_lib.utils.file_naming import (
     read_stat_file_name,
     transcript_stat_file_name,
     umi_filtered_lock_file_name,
+    dedup_bam_fragment_name,
+    tagged_bam_fragment_name,
     allinfo_file_name,
     allinfo_stats_file_name,
 )
@@ -38,6 +40,8 @@ from isoquant_lib.model_construction.transcript_printer import GFFPrinter, VoidT
 from .assignment.assignment_aggregator import ReadAssignmentAggregator
 from isoquant_lib.utils.string_pools import setup_string_pools
 from .common import large_output_enabled
+from isoquant_lib.utils.bam_utils import (load_barcode_umi_tags, load_survivor_tags,
+                                         write_tagged_chromosome_bam)
 
 logger = logging.getLogger('IsoQuant')
 
@@ -392,7 +396,11 @@ def filter_umis_in_parallel(sample, chr_id, chr_ids, args, edit_distance, output
     # When using barcode_remap (spot-based dedup), never produce filtered reads
     if barcode_remap:
         output_filtered_reads = False
-    umi_filter = UMIFilter(args.umi_length, edit_distance, barcode_remap=barcode_remap)
+    # a deduplicated BAM needs the tags of every surviving read, and this is the only place
+    # where the assignments carrying them are already loaded
+    output_read_tags = output_filtered_reads and large_output_enabled(args, "deduplicated_bam")
+    umi_filter = UMIFilter(args.umi_length, edit_distance, barcode_remap=barcode_remap,
+                           output_read_tags=output_read_tags)
     filtered_reads = sample.get_filtered_reads_file(chr_id) if output_filtered_reads else None
     umi_filter.process_single_chr(chr_id, sample.out_raw_file,
                                   transcript_type_dict,
@@ -405,3 +413,36 @@ def filter_umis_in_parallel(sample, chr_id, chr_ids, args, edit_distance, output
     logger.info("PCR duplicates filtered for chromosome " + chr_id)
 
     return all_info_file_name, stats_output_file_name, umi_filtered_done
+
+
+def write_deduplicated_bam_in_parallel(sample, chr_id, args):
+    """Write one chromosome of the deduplicated BAM: primary alignments of surviving reads.
+
+    Returns the fragment path, or None when nothing survived on this chromosome.
+    """
+    read_tags = load_survivor_tags(sample.get_filtered_reads_file(chr_id))
+    if not read_tags:
+        return None
+
+    bam_files = [f[0] for f in sample.file_list]
+    fragment = dedup_bam_fragment_name(sample.out_raw_file, chr_id)
+    written = write_tagged_chromosome_bam(bam_files, fragment, chr_id, read_tags,
+                                          barcode_tag=args.barcode_tag, umi_tag=args.umi_tag,
+                                          primary_only=True, keep_untagged=False)
+    logger.info("Deduplicated %d alignments for chromosome %s" % (written, chr_id))
+    return fragment
+
+
+def write_tagged_bam_in_parallel(sample, chr_id, args):
+    """Write one chromosome of the tagged BAM: every alignment, barcoded ones carrying tags.
+
+    A chromosome whose reads were all unbarcoded has no split table; its alignments are still
+    copied, just without tags, so no alignment is lost for want of a barcode.
+    """
+    read_tags = load_barcode_umi_tags(sample.get_barcodes_split_file(chr_id))
+    bam_files = [f[0] for f in sample.file_list]
+    fragment = tagged_bam_fragment_name(sample.out_raw_file, chr_id)
+    written = write_tagged_chromosome_bam(bam_files, fragment, chr_id, read_tags,
+                                          barcode_tag=args.barcode_tag, umi_tag=args.umi_tag)
+    logger.info("Tagged %d alignments for chromosome %s" % (written, chr_id))
+    return fragment

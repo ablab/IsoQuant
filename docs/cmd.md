@@ -179,6 +179,10 @@ original file name, and barcode property (e.g. cell type).
   * `corrected_bed` - BED file with corrected read exon coordinates (`*.corrected_reads.bed.gz`);
   * `read2transcripts` - reads assigned to discovered transcript models, in the unified read_info format (`*.transcript_model_reads.tsv.gz`);
   * `allinfo` - old format for UMI filtered reads for single-cell/spatial modes (`*.allinfo`);
+  * `tagged_bam` - single-cell/spatial modes only: a copy of the input alignments with the
+    detected barcode and UMI added as tags (`*.tagged.bam`), see below;
+  * `deduplicated_bam` - single-cell/spatial modes only: the UMI-deduplicated alignments with
+    barcode, UMI, gene and transcript tags (`*.deduplicated.bam`), see below;
   * `none` - do not generate any large output files (not compatible with other values).
 
 Example usage:
@@ -190,6 +194,33 @@ isoquant.py --large_output read_info read_assignments corrected_bed read2transcr
 # Disable all large output files
 isoquant.py --large_output none ...
 ```
+
+### Tagged and deduplicated BAM files
+
+Both are indexed BAM files written for single-cell and spatial modes only, and both are off by
+default. Alignment records are copied unchanged apart from the tags, so anything that reads the
+original BAM works on these too.
+
+`tagged_bam` keeps **every** alignment of the chromosomes IsoQuant processed - primary,
+secondary, supplementary and unmapped - and adds:
+
+  * `--barcode_tag` (`CB` by default) - the detected cell barcode;
+  * `--umi_tag` (`UB` by default) - the detected UMI.
+
+Reads with no barcode are kept without tags. The file is redundant when `--barcoded_bam` was
+used as input, since those alignments already carry the tags, and IsoQuant warns and skips.
+
+`deduplicated_bam` keeps only the **primary** alignments of the reads that survived UMI
+filtering - one read per detected molecule - and additionally tags:
+
+  * `GX` - the gene the read was assigned to;
+  * `TX` - the transcript the read was assigned to.
+
+A tag is omitted rather than given a placeholder value when the corresponding value is unknown,
+so novel and ambiguous reads have no `TX` tag. This file is created automatically when fusion
+detection runs in a mode with UMI deduplication, and fusion detection then reads it instead of
+the original BAM, so that PCR duplicates do not inflate breakpoint support. Bulk mode has no
+UMIs to deduplicate by and keeps using the original alignments.
 
 The `read_info.tsv` format can be also converted to old formats using the conversion script:
 ```bash

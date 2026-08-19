@@ -216,7 +216,8 @@ def prepare_read_filter(chr_id, saves_prefix, use_filtered_reads):
         return None
     filtered_reads = set()
     for line in open(filtered_reads_file_name(saves_prefix, chr_id), "r"):
-        filtered_reads.add(line.rstrip())
+        # the file carries tag columns after the read id when deduplicated_bam is requested
+        filtered_reads.add(line.rstrip().split("\t")[0])
     return filtered_reads
 
 

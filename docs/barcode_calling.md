@@ -155,7 +155,9 @@ The columns depend on the platform mode.
 
 Output contains one row per detected molecule. Read IDs include segment coordinates:
 `{original_read_id}_{start}_{end}_{strand}`.
-An additional split FASTA file (`*.split_reads.fasta`) is produced with the extracted cDNA segments.
+An additional split FASTA file (`*.split_reads_<i>.fa.gz`) is produced with the extracted cDNA
+segments, gzipped unless `--no_gzip` is set. Aligners read it compressed, so nothing downstream
+is slowed down by this.
 
 **Curio** (`curio`):
 

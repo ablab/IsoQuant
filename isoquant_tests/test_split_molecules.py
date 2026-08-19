@@ -23,9 +23,12 @@ SPLITTING_MODES = ["tenX_v3", "tenX_v2", "stereoseq", "visium_5prime"]
 NON_SPLITTING_MODES = ["curio", "visium_hd", "custom_sc"]
 
 
-def resolve(mode, split_molecules=None):
+def resolve(mode, split_molecules=None, needs_mapping=True):
     """Run the same two steps check_input_params does, and return (mode, split flag)."""
-    args = argparse.Namespace(mode=mode, split_molecules=split_molecules)
+    input_data = argparse.Namespace(
+        input_type=argparse.Namespace(name="fastq" if needs_mapping else "bam",
+                                      needs_mapping=lambda: needs_mapping))
+    args = argparse.Namespace(mode=mode, split_molecules=split_molecules, input_data=input_data)
     isoquant._resolve_deprecated_mode(args)
     args.mode = IsoQuantMode[args.mode]
     isoquant._resolve_split_molecules(args)
@@ -58,6 +61,28 @@ class TestSplitMoleculesResolution:
     @pytest.mark.parametrize("mode", SPLITTING_MODES + NON_SPLITTING_MODES)
     def test_false_never_splits(self, mode):
         assert resolve(mode, SPLIT_MOLECULES_FALSE)[1] is False
+
+
+class TestAlignedInput:
+    """Splitting rewrites the reads, so the pieces need aligning; --bam has no mapping stage.
+
+    Splitting anyway replaced file_list with a FASTA that was then opened as a BAM.
+    """
+
+    @pytest.mark.parametrize("mode", SPLITTING_MODES)
+    def test_auto_does_not_split_aligned_input(self, mode):
+        assert resolve(mode, needs_mapping=False)[1] is False
+        assert resolve(mode, SPLIT_MOLECULES_AUTO, needs_mapping=False)[1] is False
+
+    @pytest.mark.parametrize("mode", SPLITTING_MODES)
+    def test_true_aborts_on_aligned_input(self, mode):
+        with pytest.raises(SystemExit) as excinfo:
+            resolve(mode, SPLIT_MOLECULES_TRUE, needs_mapping=False)
+        assert excinfo.value.code != 0
+
+    @pytest.mark.parametrize("mode", NON_SPLITTING_MODES)
+    def test_unsupported_modes_are_unaffected(self, mode):
+        assert resolve(mode, needs_mapping=False)[1] is False
 
 
 class TestDeprecatedModeAliases:
