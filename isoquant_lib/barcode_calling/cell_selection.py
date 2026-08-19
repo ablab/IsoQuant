@@ -47,8 +47,6 @@ KNEE_MIN_DEVIATION = 1e-9
 NUCLEOTIDES = frozenset("ACGT")
 
 NOSEQ = "*"
-READ_ID_COLUMN = 0
-BARCODE_COLUMN = 1
 AUTO = "auto"
 
 
@@ -167,29 +165,6 @@ class CellBarcodeSelector:
         }
 
 
-def _is_header(fields: List[str]) -> bool:
-    """Raw tables carry a plain (non-commented) header; a barcode is never "barcode"."""
-    return fields[BARCODE_COLUMN] == "barcode" or fields[READ_ID_COLUMN].startswith("#")
-
-
-def count_barcodes(raw_barcode_files: List[str], selector: CellBarcodeSelector) -> int:
-    """Tally every extracted barcode across all raw tables. Returns the number of rows read."""
-    total_rows = 0
-    for file_name in raw_barcode_files:
-        rows = 0
-        with open(file_name) as handle:
-            for line in handle:
-                fields = line.rstrip("\n").split("\t")
-                if len(fields) <= BARCODE_COLUMN or _is_header(fields):
-                    continue
-                rows += 1
-                if fields[BARCODE_COLUMN] != NOSEQ:
-                    selector.add_barcode(fields[BARCODE_COLUMN])
-        logger.info("Read %d extracted barcodes from %s" % (rows, file_name))
-        total_rows += rows
-    return total_rows
-
-
 def load_whitelist(barcode_whitelist: Optional[List[str]]) -> Optional[Set[str]]:
     """Load the candidate pool cell barcodes are selected from, if one was supplied."""
     if not barcode_whitelist or barcode_whitelist == [AUTO]:
@@ -201,17 +176,13 @@ def load_whitelist(barcode_whitelist: Optional[List[str]]) -> Optional[Set[str]]
     return whitelist
 
 
-def select_cell_barcodes(raw_barcode_files: List[str], output_file: str,
+def select_cell_barcodes(selector: "CellBarcodeSelector", output_file: str,
                          barcode_whitelist: Optional[List[str]],
-                         barcode_length: int = 16,
                          n_cells: Union[int, str, None] = AUTO,
                          n_cells_interval: int = 25,
                          stats_file: Optional[str] = None) -> str:
-    """Detect cell barcodes from extracted barcode counts and write them to output_file."""
+    """Pick the cell barcodes out of a filled count table and write them to output_file."""
     logger.info("Detecting cell barcodes from extracted barcode counts")
-    selector = CellBarcodeSelector(barcode_length=barcode_length)
-
-    count_barcodes(raw_barcode_files, selector)
     if not selector.counts:
         logger.warning("No barcodes were extracted, cannot detect cell barcodes")
 

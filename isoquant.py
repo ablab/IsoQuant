@@ -63,7 +63,7 @@ from isoquant_lib.utils.input_data_storage import InputDataStorage, InputDataTyp
 from isoquant_lib.assignment.multimap_resolver import MultimapResolvingStrategy
 from isoquant_lib.utils.stats import combine_counts
 from isoquant_lib.barcode_calling import (process_single_thread, process_in_parallel, get_umi_length,
-                                          get_barcode_length, select_cell_barcodes)
+                                          get_barcode_length, detect_cell_barcode_list)
 from isoquant_lib.common import setup_worker_logging, _get_log_params
 
 
@@ -1437,7 +1437,6 @@ def detect_cell_barcodes(args, sample, input_files, threads):
     Returns the path of the detected cell barcode list, which the second pass then uses as
     its whitelist.
     """
-    raw_barcodes_list = [sample.raw_barcodes_tsv + "_%d.tsv" % i for i in range(len(input_files))]
     if args.resume and os.path.exists(sample.raw_barcodes_done):
         logger.info("Cell barcodes were detected during the previous run, skipping")
         return sample.out_cell_barcodes_tsv
@@ -1445,24 +1444,24 @@ def detect_cell_barcodes(args, sample, input_files, threads):
         os.remove(sample.raw_barcodes_done)
 
     logger.info("Extracting barcodes from %d file(s) to detect cell barcodes" % len(input_files))
-    # no FASTA here: in splitting modes the reads are split by the second pass, whose
-    # extraction is the one whose results are kept
+    # No FASTA and no barcode table here: only the counts matter, and writing a row per read
+    # would cost gigabytes of intermediate. In splitting modes the reads are split by the
+    # second pass, whose extraction is the one whose results are kept.
     raw_args = BarcodeCallingArgs(input_files, args.barcode_whitelist, args.mode,
-                                  raw_barcodes_list, None, sample.aux_dir, threads,
+                                  None, None, sample.aux_dir, threads,
                                   molecule=getattr(args, 'molecule', None),
                                   whitelist_matching=False,
                                   split_molecules=args.split_molecules)
-    _run_barcode_calling(raw_args, threads)
 
-    # the count table is large and not reclaimed promptly, so select in a child process too
+    # counting and selection run as one child process so the count table, which is large and
+    # not reclaimed promptly, never lives in the main process
     log_file, log_level = _get_log_params()
     with ProcessPoolExecutor(max_workers=1,
                              initializer=setup_worker_logging,
                              initargs=(log_file, log_level)) as proc:
-        future_res = proc.submit(select_cell_barcodes,
-                                 raw_barcodes_list,
+        future_res = proc.submit(detect_cell_barcode_list,
+                                 raw_args,
                                  sample.out_cell_barcodes_tsv,
-                                 args.barcode_whitelist,
                                  get_barcode_length(args.mode),
                                  args.n_cells,
                                  args.n_cells_interval,

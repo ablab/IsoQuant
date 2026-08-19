@@ -45,10 +45,10 @@ above.
 ```
                      ┌─ --n_cells unset ─────────────────────────┐
 reads ───────────────┤                                            ├─> barcoded_reads_<i>.tsv
-                     └─ --n_cells set ──> pass 1: extract verbatim
-                                          aux/<prefix>.raw_barcodes_<i>.tsv
+                     └─ --n_cells set ──> pass 1: extract and count
+                                          (in memory, nothing written)
                                                   │
-                                          count + select
+                                          select cell barcodes
                                           <prefix>.cell_barcodes.tsv   (+ .stats)
                                                   │
                                           pass 2: ordinary barcode calling
@@ -59,6 +59,12 @@ Pass 2 is the unmodified detector, so `barcoded_reads_<i>.tsv` keeps its exact f
 everything downstream (`dataset_processor.split_read_barcode_table`) is untouched. In
 splitting modes only pass 2 writes the FASTA — pass 1 is purely for counting.
 
+Pass 1 writes nothing. Workers tally barcodes into a `CellBarcodeSelector` and return count
+dicts, which the parent merges with `merge_counts`; only the counts are needed, and a barcode
+per read would cost ~126 bytes/read of intermediate — 12 GB on a 100M-read run — written and
+re-read for nothing. Counting and selection run as one child process
+(`detect_cell_barcode_list`) so the count table never reaches the main process.
+
 Resume markers: `aux/<prefix>.raw_barcodes_done` for pass 1, the existing
 `aux/<prefix>.barcodes_done_<i>.tsv` for pass 2, so a re-run reuses a detected cell list
 without repeating the extraction.
@@ -67,7 +73,8 @@ without repeating the extraction.
 
 | File | Contents |
 |---|---|
-| `isoquant_lib/barcode_calling/cell_selection.py` | `CellBarcodeSelector`, `estimate_cell_number`, `count_barcodes`, `select_cell_barcodes` |
+| `isoquant_lib/barcode_calling/cell_selection.py` | `CellBarcodeSelector`, `estimate_cell_number`, `select_cell_barcodes` |
+| `detect_barcodes.py` | `count_barcodes_in_reads`, `count_chunk`, `detect_cell_barcode_list`, `run_chunks_in_parallel` |
 | `callers/tenx.py` | `whitelist_matching` flag, `_extract_raw_barcode`, `_raw_strand_score` |
 | `isoquant.py` | `_resolve_barcode_correction`, `detect_cell_barcodes`, `_run_barcode_calling` |
 | `modes.py` | `AUTO_BARCODES`, `BarcodeCorrectionMethod`, `IsoQuantMode.supports_cell_barcode_detection()` |
@@ -97,7 +104,8 @@ Two results matter:
    selection tolerates being told 4000 or 6000 for a true 5000 (the count cutoff does the
    work; `n_cells` only bounds the search). Estimates: 5315 for a true 5000, 10389 for 8975.
 
-Cost: two passes, ~2.3x the single-pass time (100s → 235s on StereoQ, 667s → 2101s on concat).
+Cost: two passes, ~2.3x the single-pass time (100s → 240s on StereoQ, 667s → 2101s on concat).
+Pass 1 writes nothing, so the two passes cost read time but no extra disk.
 
 ### `-b auto` is measurably worse — prefer a pool
 
