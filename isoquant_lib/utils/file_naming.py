@@ -48,6 +48,15 @@ def filtered_reads_file_name(out_raw_file: str, chr_id: str):
     return out_raw_file + "_filtered_" + chr_id
 
 
+def dedup_bam_fragment_name(out_raw_file: str, chr_id: str):
+    # under out_raw_file so clean_up removes it even if the merge never happens
+    return out_raw_file + "_dedup_" + convert_chr_id_to_file_name_str(chr_id) + ".bam"
+
+
+def tagged_bam_fragment_name(out_raw_file: str, chr_id: str):
+    return out_raw_file + "_tagged_" + convert_chr_id_to_file_name_str(chr_id) + ".bam"
+
+
 def umi_filtered_reads_file_name(out_umi_filtered_tmp: str, chr_id: str, edit_distance: int):
     return out_umi_filtered_tmp + ("_%s_ED%d" % (chr_id, edit_distance))
 

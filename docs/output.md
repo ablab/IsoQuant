@@ -185,8 +185,18 @@ By default, in single-cell and spatial modes IsoQuant only performs quantificati
 UMI-filtered reads will be saved to the same [read_info format](#read-assignments). 
 All counts formats will also be identical (see above).
 
-If IsoQuant detects the barcodes, barcoded reads will be saved in [TSV format](barcode_calling.md#output).
-If barcode calling also splits the reads into individual cDNAs, a FASTA file with cDNAs will be produced.
+If IsoQuant detects the barcodes, barcoded reads will be saved in [TSV format](barcode_calling.md#output),
+gzipped once the run finishes unless `--no_gzip` is set.
+If barcode calling also splits the reads into individual cDNAs, a FASTA file with cDNAs will be
+produced, also gzipped unless `--no_gzip` is set.
+
+Two optional BAM outputs carry the same information on the alignments themselves
+(see [`--large_output`](cmd.md#--large_output) for details):
+
+* `SAMPLE_ID.tagged.bam` - all input alignments with barcode and UMI tags (only with `--large_output tagged_bam`);
+* `SAMPLE_ID.deduplicated.bam` - primary alignments of UMI-deduplicated reads, with barcode, UMI,
+  gene and transcript tags (only with `--large_output deduplicated_bam`, added automatically when
+  fusion detection is enabled).
 
 Note that transcript discovery is performed only in `bulk` mode by default.
 Single-cell and spatial modes require UMI deduplication.
