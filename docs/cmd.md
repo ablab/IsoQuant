@@ -271,16 +271,31 @@ IsoQuant mode for processing single-cell or spatial transcriptomics data. Availa
 * `bulk` - standard bulk RNA-seq mode (default)
 * `tenX_v3` - 10x Genomics single-cell 3' gene expression
 * `tenX_v2` - 10x Genomics single-cell 3' v2 gene expression
-* `tenX_v3_split` - 10x Genomics 3' v3 with [read splitting](single_cell.md#read-splitting-modes) for concatenated reads
-* `tenX_v2_split` - 10x Genomics 3' v2 with [read splitting](single_cell.md#read-splitting-modes) for concatenated reads
 * `visium_5prime` - 10x Genomics Visium 5' spatial transcriptomics
 * `visium_hd` - 10x Genomics Visium HD spatial transcriptomics
 * `curio` - Curio Bioscience spatial data
 * `stereoseq` - Stereo-seq spatial data
-* `stereoseq_nosplit` - Stereo-seq without read splitting
 * `custom_sc` - custom single-cell/spatial mode using a [molecule description file (MDF)](single_cell.md#molecule-description-format-mdf)
 
 Single-cell and spatial modes enable automatic barcode calling and UMI-based deduplication.
+
+`--split_molecules`
+
+Whether to split reads that contain several cDNA molecules ligated end to end during library
+preparation (see [read splitting](single_cell.md#read-splitting)). Accepts:
+
+* `auto` (default) - split whenever the protocol supports it, and do nothing where it does not
+* `true` - split, and stop with an error if the protocol has no splitting detector, so that a
+  request that cannot be honoured is never silently ignored
+* `false` - never split
+
+Splitting is supported for `tenX_v3`, `tenX_v2`, `stereoseq` and `visium_5prime`. It is worth
+enabling even on libraries without concatenated molecules: on non-concatenated 10x data it
+recovers about one extra point of recall at unchanged precision, at roughly twice the barcode
+calling runtime.
+
+The superseded mode names `tenX_v3_split`, `tenX_v2_split` and `stereoseq_nosplit` still work
+and are translated to the corresponding `--mode` plus `--split_molecules` combination.
 
 `--barcode_whitelist`
 

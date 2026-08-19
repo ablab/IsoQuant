@@ -210,11 +210,8 @@ The `BARCODE_CALLING_MODES` dictionary maps IsoQuantMode to detector class:
 BARCODE_CALLING_MODES = {
     IsoQuantMode.tenX_v3: TenXBarcodeDetector,
     IsoQuantMode.tenX_v2: TenXv2BarcodeDetector,
-    IsoQuantMode.tenX_v3_split: TenXSplittingBarcodeDetector,
-    IsoQuantMode.tenX_v2_split: TenXv2SplittingBarcodeDetector,
     IsoQuantMode.curio: CurioBarcodeDetector,
-    IsoQuantMode.stereoseq_nosplit: SharedMemoryStereoBarcodeDetector,
-    IsoQuantMode.stereoseq: SharedMemoryStereoSplittingBarcodeDetector,
+    IsoQuantMode.stereoseq: SharedMemoryStereoBarcodeDetector,
     IsoQuantMode.visium_5prime: TenXBarcodeDetector,
     IsoQuantMode.visium_hd: VisiumHDBarcodeDetector,
 }
