@@ -50,28 +50,39 @@ READ_CHUNK_SIZE = 100000
 BARCODE_CALLING_MODES = {
     IsoQuantMode.tenX_v3: TenXBarcodeDetector,
     IsoQuantMode.tenX_v2: TenXv2BarcodeDetector,
-    IsoQuantMode.tenX_v3_split: TenXSplittingBarcodeDetector,
-    IsoQuantMode.tenX_v2_split: TenXv2SplittingBarcodeDetector,
     IsoQuantMode.curio: CurioBarcodeDetector,
-    IsoQuantMode.stereoseq_nosplit: SharedMemoryStereoBarcodeDetector,
-    IsoQuantMode.stereoseq: SharedMemoryStereoSplittingBarcodeDetector,
+    IsoQuantMode.stereoseq: SharedMemoryStereoBarcodeDetector,
     IsoQuantMode.visium_5prime: TenXBarcodeDetector,
     IsoQuantMode.visium_hd: VisiumHDBarcodeDetector,
     IsoQuantMode.custom_sc: UniversalSingleMoleculeExtractor
 }
 
+# Detectors that find several cDNA molecules per read, used when --split_molecules is on.
+# Keys must match IsoQuantMode.supports_molecule_splitting().
+SPLITTING_BARCODE_CALLING_MODES = {
+    IsoQuantMode.tenX_v3: TenXSplittingBarcodeDetector,
+    IsoQuantMode.tenX_v2: TenXv2SplittingBarcodeDetector,
+    IsoQuantMode.stereoseq: SharedMemoryStereoSplittingBarcodeDetector,
+    # same chemistry as 10x 3', so the same splitting detector applies
+    IsoQuantMode.visium_5prime: TenXSplittingBarcodeDetector,
+}
+
 BARCODE_FILES_REQUIRED = {
     IsoQuantMode.tenX_v3: [1],
     IsoQuantMode.tenX_v2: [1],
-    IsoQuantMode.tenX_v3_split: [1],
-    IsoQuantMode.tenX_v2_split: [1],
     IsoQuantMode.curio: [1, 2],
-    IsoQuantMode.stereoseq_nosplit: [1],
     IsoQuantMode.stereoseq: [1],
     IsoQuantMode.visium_5prime: [1],
     IsoQuantMode.visium_hd: [2],
     IsoQuantMode.custom_sc: [0]
 }
+
+
+def barcode_detector_class(isoquant_mode: IsoQuantMode, split_molecules: bool):
+    """Detector for a mode, splitting molecules or not."""
+    if split_molecules:
+        return SPLITTING_BARCODE_CALLING_MODES[isoquant_mode]
+    return BARCODE_CALLING_MODES[isoquant_mode]
 
 
 def stats_file_name(file_name):
@@ -319,7 +330,9 @@ def process_chunk(read_chunk, output_file, num, out_fasta=None, barcode_detector
 
 
 def create_barcode_caller(args):
-    logger.info("Creating barcode detector for mode %s" % args.mode.name)
+    split_molecules = bool(getattr(args, "split_molecules", False))
+    logger.info("Creating barcode detector for mode %s%s" %
+                (args.mode.name, ", splitting molecules" if split_molecules else ""))
 
     if not getattr(args, "whitelist_matching", True):
         # First pass of cell barcode detection: emit barcode windows verbatim so they can be
@@ -328,7 +341,7 @@ def create_barcode_caller(args):
         if not args.mode.supports_cell_barcode_detection():
             logger.critical("Mode %s cannot extract barcodes without a whitelist" % args.mode.name)
             sys.exit(IsoQuantExitCode.INCOMPATIBLE_OPTIONS)
-        return BARCODE_CALLING_MODES[args.mode](None, whitelist_matching=False)
+        return barcode_detector_class(args.mode, split_molecules)(None, whitelist_matching=False)
 
     if args.mode == IsoQuantMode.custom_sc:
         if not args.molecule:
@@ -338,7 +351,7 @@ def create_barcode_caller(args):
             logger.critical("Molecule file %s does not exist" % args.molecule)
             sys.exit(IsoQuantExitCode.INPUT_FILE_NOT_FOUND)
 
-        return BARCODE_CALLING_MODES[args.mode](MoleculeStructure(open(args.molecule)))
+        return barcode_detector_class(args.mode, split_molecules)(MoleculeStructure(open(args.molecule)))
 
     logger.info("Using barcodes from %s" % ", ".join(args.barcodes))
     barcode_files = len(args.barcodes)
@@ -361,7 +374,7 @@ def create_barcode_caller(args):
                 logger.info("Loaded %d barcodes from %s" % (len(bc), args.barcodes[i]))
         barcodes = tuple(barcodes)
 
-    barcode_detector = BARCODE_CALLING_MODES[args.mode](barcodes)
+    barcode_detector = barcode_detector_class(args.mode, split_molecules)(barcodes)
 
     return barcode_detector
 
