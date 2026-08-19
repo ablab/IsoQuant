@@ -12,6 +12,7 @@ import sys
 
 import pysam
 
+from isoquant_lib.utils.file_utils import strip_compression_suffix
 from isoquant_lib.utils.error_codes import IsoQuantExitCode
 from isoquant_lib.utils.table_splitter import split_read_table_parallel
 
@@ -86,7 +87,7 @@ class FileNameGrouper(AbstractReadGrouper):
         self.readable_names_dict = {}
         for sample in args.input_data.samples:
             for lib in sample.file_list:
-                readable_name = os.path.splitext(os.path.basename(lib[0]))[0]
+                readable_name = os.path.splitext(os.path.basename(strip_compression_suffix(lib[0])))[0]
                 for f in lib:
                     self.readable_names_dict[f] = readable_name
 
