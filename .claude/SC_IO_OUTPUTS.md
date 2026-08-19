@@ -145,3 +145,23 @@ primary), `-m tenX_v3` with the 5K whitelist:
   the input apart from tags; SA tags preserved.
 - `tagged_bam`: 115841 records — identical to the input count, secondary and supplementary
   included; CB/UB match the barcode table exactly on all 49756 barcoded reads.
+- Both are **pure side outputs**: every other file in the run is byte-identical to a run
+  without the flag, apart from two `.gz` files whose embedded mtime differs (decompressed
+  content identical).
+- Fusion: `--analysis fusion` auto-added `deduplicated_bam` and fusion detection ran on
+  `S.deduplicated.bam`. The report is empty on this dataset, and so is a run of
+  `FusionDetector` on the original BAM — consistent, but **not** discriminating, since the
+  simulated data contains no fusions. The real evidence for fusion compatibility is the direct
+  check above that records are byte-identical apart from the tags and that SA tags survive.
+
+### Resume
+
+`--resume` restores `large_output` from the pickled `.params` (the resume parser rejects it on
+the command line), so the survivors-file format is always consistent within a run and
+`load_survivor_tags` can never meet a format the run did not write.
+
+Resuming an **interrupted** run works. Resuming a **completed** run does not, and did not
+before this branch either: `clean_up()` deletes `out_raw_file + "_*"`, which includes the
+survivors files, and `prepare_read_filter` opens them without an existence guard. Verified on
+the branch base (b59bfbcc), where the same scenario fails even earlier. `clean_up` and that
+guard are untouched here.
