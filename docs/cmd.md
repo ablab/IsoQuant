@@ -505,6 +505,10 @@ We recommend _not_ to modify these options unless you are clearly aware of their
 
 `--no_gzip`
     Do not compress large output files.
+    This also covers the single-cell outputs: the split-reads FASTA (compressed as it is
+    written, in the barcode-calling workers) and the barcoded read tables (compressed once the
+    run finishes, so they stay readable while the pipeline needs them). Neither slows any
+    subsequent step down.
 
 `--no_gtf_check`
     Do not perform input GTF checks.

@@ -39,7 +39,7 @@ PLACEHOLDERS = frozenset(("*", ".", "None"))
 def index_bam(bam_file: str, threads: int = 1) -> None:
     """Index a BAM, falling back to CSI for references too long for BAI."""
     try:
-        pysam.index(bam_file)
+        pysam.index('-@', str(threads), bam_file)
     except pysam.SamtoolsError as err:
         logger.info("Samtools failed to generate a .bai index: %s" % err)
         logger.info("Trying to build a CSI index instead")
@@ -144,7 +144,11 @@ def write_tagged_chromosome_bam(input_bams: Iterable[str], output_bam: str, chr_
 
 
 def write_unmapped_bam(input_bams: Iterable[str], output_bam: str) -> int:
-    """Copy unmapped reads, which fetch() by chromosome never returns."""
+    """Copy unmapped reads, which fetch() by chromosome never returns.
+
+    Only truly unplaced records (reference_id == -1) are taken: an unmapped read parked at a
+    reference position does come back from fetch(), and copying it here too would duplicate it.
+    """
     bam_list = list(input_bams)
     written = 0
     with pysam.AlignmentFile(bam_list[0], "rb") as template:
