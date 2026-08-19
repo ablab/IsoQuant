@@ -61,7 +61,7 @@ When multiple input files are provided, outputs are numbered: `<prefix>_0.barcod
 
 One or more barcode whitelist files. The number of files depends on the mode:
 
-* 1 file: `tenX_v3`, `tenX_v2`, `tenX_v3_split`, `tenX_v2_split`, `visium_5prime`, `stereoseq`, `stereoseq_nosplit`, `curio`
+* 1 file: `tenX_v3`, `tenX_v2`, `visium_5prime`, `stereoseq`, `curio`
 * 2 files: `visium_hd`
 * Not needed for `custom_sc` (barcodes defined in MDF file)
 
@@ -74,7 +74,7 @@ If you have a subset of barcodes from short-read data, provide them instead of t
 
 `--mode`
 
-Barcode calling mode. Available modes: `tenX_v3`, `tenX_v2`, `tenX_v3_split`, `tenX_v2_split`, `curio`, `stereoseq`, `stereoseq_nosplit`,
+Barcode calling mode. Available modes: `tenX_v3`, `tenX_v2`, `curio`, `stereoseq`,
 `visium_5prime`, `visium_hd`, `custom_sc`.
 
 `--molecule`
@@ -145,7 +145,7 @@ The columns depend on the platform mode.
 | polyT | Position of polyT tail start (-1 if not found) |
 | R1 | Position of R1 primer end (-1 if not found) |
 
-**10x Genomics split modes** (`tenX_v3_split`, `tenX_v2_split`):
+**10x Genomics with `--split_molecules`** (`tenX_v3`, `tenX_v2`):
 
 | Column | Description |
 |--------|-------------|
@@ -166,7 +166,7 @@ An additional split FASTA file (`*.split_reads.fasta`) is produced with the extr
 | linker_start | Linker start position |
 | linker_end | Linker end position |
 
-**Stereo-seq** (`stereoseq_nosplit`, `stereoseq`):
+**Stereo-seq** (`stereoseq`):
 
 | Column | Description |
 |--------|-------------|
@@ -195,17 +195,17 @@ Molecule structure:
 
 Requires 1 barcode whitelist file (e.g., the 10x `3M-february-2018.txt.gz`).
 
-### 10x Genomics split modes (`tenX_v3_split`, `tenX_v2_split`)
+### 10x Genomics with read splitting (`--split_molecules`)
 
 For concatenated ONT reads containing multiple 10x cDNA molecules.
 Uses the same molecule structure as `tenX_v3` but scans the entire read for multiple
 barcode/UMI/TSO patterns on both strands.
 
 The output includes one line per detected molecule (not per read), plus a split FASTA
-file with extracted cDNA segments. See [read splitting modes](single_cell.md#read-splitting-modes)
+file with extracted cDNA segments. See [read splitting](single_cell.md#read-splitting)
 for details.
 
-Requires 1 barcode whitelist file. Use `tenX_v2_split` for v2 chemistry (10bp UMI).
+Requires 1 barcode whitelist file. Use `--mode tenX_v2` for v2 chemistry (10bp UMI).
 
 ### Visium HD (`visium_hd`)
 
@@ -227,7 +227,7 @@ Molecule structure:
 The linker sequence anchors the barcode detection.
 Accepts 1 combined whitelist file (14bp barcodes).
 
-### Stereo-seq (`stereoseq`, `stereoseq_nosplit`)
+### Stereo-seq (`stereoseq`)
 
 Molecule structure:
 ```
@@ -235,7 +235,7 @@ Molecule structure:
 ```
 
 - `stereoseq` mode: splits concatenated reads at TSO boundaries, producing a new FASTA with individual subreads
-- `stereoseq_nosplit` mode: processes reads without splitting
+- `--split_molecules false`: processes reads without splitting
 
 ### Custom protocols (`custom_sc`)
 

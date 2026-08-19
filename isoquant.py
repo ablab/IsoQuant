@@ -1395,7 +1395,7 @@ def prepare_reference_genome(args):
 
 class BarcodeCallingArgs:
     def __init__(self, input, barcode_whitelist, mode, output, out_fasta, tmp_dir, threads,
-                 molecule: str = None, whitelist_matching: bool = True):
+                 molecule: str = None, whitelist_matching: bool = True, split_molecules: bool = False):
         self.input = input  # Can be a single file (str) or list of files
         self.barcodes = barcode_whitelist
         self.mode = mode
@@ -1404,8 +1404,10 @@ class BarcodeCallingArgs:
         self.tmp_dir = tmp_dir
         self.threads = threads
         self.molecule = molecule
-        # when False the detector emits raw barcode windows for later graph-based correction
+        # when False the detector emits raw barcode windows so cell barcodes can be detected
         self.whitelist_matching = whitelist_matching
+        # selects the splitting detector, and makes the caller expect one result per molecule
+        self.split_molecules = split_molecules
 
 
 def _run_barcode_calling(bc_args, threads):
@@ -1448,7 +1450,8 @@ def detect_cell_barcodes(args, sample, input_files, threads):
     raw_args = BarcodeCallingArgs(input_files, args.barcode_whitelist, args.mode,
                                   raw_barcodes_list, None, sample.aux_dir, threads,
                                   molecule=getattr(args, 'molecule', None),
-                                  whitelist_matching=False)
+                                  whitelist_matching=False,
+                                  split_molecules=args.split_molecules)
     _run_barcode_calling(raw_args, threads)
 
     # the count table is large and not reclaimed promptly, so select in a child process too
@@ -1514,7 +1517,8 @@ def call_barcodes(args):
 
         bc_args = BarcodeCallingArgs(input_files, barcode_files, args.mode,
                                      output_barcodes_list, output_fasta_list, sample.aux_dir, bc_threads,
-                                     molecule=getattr(args, 'molecule', None))
+                                     molecule=getattr(args, 'molecule', None),
+                                     split_molecules=args.split_molecules)
         logger.info("Detecting barcodes for %d file(s)" % len(input_files))
         _run_barcode_calling(bc_args, bc_threads)
 

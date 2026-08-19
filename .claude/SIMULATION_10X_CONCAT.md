@@ -1,4 +1,4 @@
-# Simulating Concatenated 10x Reads for tenX_v3_split / tenX_v2_split Testing
+# Simulating Concatenated 10x Reads for read splitting (--split_molecules) testing
 
 ## Overview
 
@@ -99,7 +99,7 @@ After simulation, run `detect_barcodes.py` directly on the FASTA to check split 
 ```bash
 python isoquant_lib/barcode_calling/detect_barcodes.py \
   --fastq /abga/work/andreyp/simulation/<run_name>/data/sim_10x_concat_aligned_reads.fasta \
-  --mode tenX_v3_split \
+  --mode tenX_v3 --split_molecules true \
   --barcode_whitelist /path/to/3M-february-2018.txt \
   --output_sequences \
   -o /tmp/split_test

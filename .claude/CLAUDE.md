@@ -129,8 +129,8 @@ The main processing happens in `DatasetProcessor` (`isoquant_lib/dataset_process
 **IsoQuantMode** (`isoquant_lib/modes.py`):
 - `bulk` - Standard bulk RNA-seq
 - `tenX_v3`, `tenX_v2`, `curio` - Single-cell modes
-- `tenX_v3_split`, `tenX_v2_split` - 10x split modes for concatenated ONT reads where multiple cDNA molecules are ligated end-to-end. Detects multiple barcode/UMI/TSO patterns per read, splits into individual molecule FASTA records. Uses `TenXSplittingBarcodeDetector` (see `.claude/BARCODE_CALLING.md` for algorithm details)
-- `stereoseq`, `stereoseq_nosplit`, `visium_hd`, `visium_5prime` - Spatial transcriptomics
+- Read splitting is **not** a mode: `--split_molecules {true,false,auto}` (default `auto`) decides whether concatenated ONT reads carrying several end-to-end cDNA molecules are split into individual molecule FASTA records. Supported for `tenX_v3`, `tenX_v2`, `stereoseq`, `visium_5prime` (`IsoQuantMode.supports_molecule_splitting()`); `true` on any other mode aborts rather than silently not splitting. Detector chosen by `barcode_detector_class(mode, split)` from `SPLITTING_BARCODE_CALLING_MODES` / `BARCODE_CALLING_MODES`. The superseded names `tenX_v3_split`, `tenX_v2_split`, `stereoseq_nosplit` still work via `DEPRECATED_MODE_ALIASES`. Measured: splitting *helps* even on non-concatenated 10x data (+1 point recall, unchanged precision, ~2x runtime), which is why `auto` splits by default
+- `stereoseq`, `visium_hd`, `visium_5prime` - Spatial transcriptomics
 
 Different modes trigger different processing pipelines (barcode calling, UMI deduplication, etc.)
 

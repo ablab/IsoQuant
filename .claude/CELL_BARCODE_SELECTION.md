@@ -72,7 +72,7 @@ without repeating the extraction.
 | `isoquant.py` | `_resolve_barcode_correction`, `detect_cell_barcodes`, `_run_barcode_calling` |
 | `modes.py` | `AUTO_BARCODES`, `BarcodeCorrectionMethod`, `IsoQuantMode.supports_cell_barcode_detection()` |
 
-Supported modes: `tenX_v2`, `tenX_v3`, `tenX_v2_split`, `tenX_v3_split`, `visium_5prime`.
+Supported modes: `tenX_v2`, `tenX_v3`, `visium_5prime` (with or without `--split_molecules`).
 Stereo-seq is excluded — every spot barcode there is genuine, so count-based selection does
 not apply. `custom_sc` is excluded because it is MDF-driven; extending it looks worthwhile.
 
@@ -85,7 +85,7 @@ recall / precision, measured with `misc/assess_barcode_quality.py`. "stock" is t
 |---|---|---|---|---|---|---|
 | Mouse 10x ONT StereoQ, 600k | 5000 | 87.33 / 99.75 | 74.36 / 99.60 | **87.33 / 99.75** | **87.33 / 99.75** | 87.33 / 99.75 |
 | Mouse 10x ONT cDNA R10.4, 304k | 5000 | 89.61 / 99.83 | 76.27 / 99.58 | **89.61 / 99.83** | **89.61 / 99.83** | 85.61 / 94.82 |
-| Mouse 10x concat, 800k (`tenX_v3_split`) | 8975 | 86.78 / 99.81 | 74.31 / 99.63 | **86.78 / 99.81** | **86.78 / 99.81** | 86.72 / 99.34 |
+| Mouse 10x concat, 800k (split) | 8975 | 86.78 / 99.81 | 74.31 / 99.63 | **86.78 / 99.81** | **86.78 / 99.81** | 86.72 / 99.34 |
 
 Two results matter:
 

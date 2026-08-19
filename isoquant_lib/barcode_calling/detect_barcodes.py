@@ -137,16 +137,22 @@ class SimpleReadStorage:
 
 
 class BarcodeCaller:
-    def __init__(self, output_file_name, barcode_detector, header=False, output_sequences=None):
+    def __init__(self, output_file_name, barcode_detector, header=False, output_sequences=None,
+                 split_reads=False):
+        """
+        split_reads must match the detector: a splitting detector returns one result per
+        molecule and needs _process_read_split, whatever output_sequences says. The first
+        pass of cell barcode detection splits but writes no FASTA, so the two cannot be
+        inferred from each other.
+        """
         self.barcode_detector = barcode_detector
         self.output_file_name = output_file_name
         self.output_file = open(self.output_file_name, "w")
         self.output_sequences = output_sequences
         self.output_sequences_file = None
-        self.process_function = self._process_read_normal
+        self.process_function = self._process_read_split if split_reads else self._process_read_normal
         if self.output_sequences:
             self.output_sequences_file = open(self.output_sequences, "w")
-            self.process_function = self._process_read_split
         if header:
             self.output_file.write(barcode_detector.header() + "\n")
         self.read_stat = ReadStats()
@@ -312,7 +318,7 @@ def setup_detector_worker(log_file, log_level, barcode_detector):
     _WORKER_DETECTOR["detector"] = barcode_detector
 
 
-def process_chunk(read_chunk, output_file, num, out_fasta=None, barcode_detector=None):
+def process_chunk(read_chunk, output_file, num, out_fasta=None, split_reads=False, barcode_detector=None):
     output_file += "_" + str(num)
     if out_fasta:
         out_fasta += "_" + str(num)
@@ -320,7 +326,8 @@ def process_chunk(read_chunk, output_file, num, out_fasta=None, barcode_detector
 
     if barcode_detector is None:
         barcode_detector = _WORKER_DETECTOR["detector"]
-    barcode_caller = BarcodeCaller(output_file, barcode_detector, output_sequences=out_fasta)
+    barcode_caller = BarcodeCaller(output_file, barcode_detector, output_sequences=out_fasta,
+                                   split_reads=split_reads)
     counter += barcode_caller.process_chunk(read_chunk)
     read_chunk.clear()
     barcode_caller.dump_stats()
@@ -381,6 +388,7 @@ def create_barcode_caller(args):
 
 def process_single_thread(args):
     barcode_detector = create_barcode_caller(args)
+    split_reads = bool(getattr(args, "split_molecules", False))
 
     # args.input, args.output_tsv are always lists
     # args.out_fasta is a list or None
@@ -389,7 +397,8 @@ def process_single_thread(args):
     for idx, (input_file, output_tsv, out_fasta) in enumerate(zip(args.input, args.output_tsv, out_fastas)):
         if len(args.input) > 1:
             logger.info("Processing file %d/%d: %s" % (idx + 1, len(args.input), input_file))
-        barcode_caller = BarcodeCaller(output_tsv, barcode_detector, header=True, output_sequences=out_fasta)
+        barcode_caller = BarcodeCaller(output_tsv, barcode_detector, header=True, output_sequences=out_fasta,
+                                       split_reads=split_reads)
         barcode_caller.process(input_file)
         barcode_caller.dump_stats()
         for stat_line in barcode_caller.get_stats():
@@ -400,6 +409,7 @@ def process_single_thread(args):
 
 def _process_single_file_in_parallel(input_file, output_tsv, out_fasta, args, barcode_detector):
     """Process a single file in parallel (internal helper function)."""
+    split_reads = bool(getattr(args, "split_molecules", False))
     logger.info("Processing " + input_file)
     fname, outer_ext = os.path.splitext(os.path.basename(input_file))
     low_ext = outer_ext.lower()
@@ -455,7 +465,8 @@ def _process_single_file_in_parallel(input_file, output_tsv, out_fasta, args, ba
                                               chunk,
                                               tmp_barcode_file,
                                               chunk_counter,
-                                              tmp_fasta_file))
+                                              tmp_fasta_file,
+                                              split_reads))
             chunk_counter += 1
             if chunk_counter >= args.threads:
                 break
@@ -481,7 +492,8 @@ def _process_single_file_in_parallel(input_file, output_tsv, out_fasta, args, ba
                                                           chunk,
                                                           tmp_barcode_file,
                                                           chunk_counter,
-                                                          tmp_fasta_file))
+                                                          tmp_fasta_file,
+                                                          split_reads))
                         chunk_counter += 1
                     except StopIteration:
                         reads_left = False
