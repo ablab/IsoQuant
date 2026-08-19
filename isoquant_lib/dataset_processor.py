@@ -195,15 +195,9 @@ class DatasetProcessor:
                 self.split_read_barcode_table(sample, split_barcodes_dict)
                 open(barcode_split_done, "w").close()
 
+            # nothing to tag with otherwise; the user was warned about that at startup
             if large_output_enabled(self.args, "tagged_bam"):
                 self.write_tagged_bam(sample)
-        elif large_output_enabled(self.args, "tagged_bam"):
-            if getattr(self.args, 'barcoded_bam', False):
-                logger.warning("--large_output tagged_bam is redundant with --barcoded_bam: the input "
-                               "alignments already carry the tags, skipping")
-            else:
-                logger.warning("--large_output tagged_bam has no effect in %s mode, which has no "
-                               "barcodes to tag with, skipping" % self.args.mode.name)
 
         if self.args.read_assignments:
             saves_file = self.args.read_assignments[0]

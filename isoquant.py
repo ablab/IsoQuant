@@ -570,9 +570,22 @@ def check_and_load_args(args, parser):
             if val not in LARGE_OUTPUT_TYPES:
                 logger.error("Invalid --large_output value: %s. Valid values: %s" % (val, ", ".join(LARGE_OUTPUT_TYPES)))
                 sys.exit(IsoQuantExitCode.INVALID_PARAMETER)
+        _warn_about_unusable_bam_outputs(args)
 
     save_params(args)
     return args
+
+
+def _warn_about_unusable_bam_outputs(args):
+    """Say up front when a requested BAM output cannot be produced, rather than mid-run."""
+    if not args.mode.needs_pcr_deduplication():
+        for output_type in ("tagged_bam", "deduplicated_bam"):
+            if output_type in args.large_output:
+                logger.warning("--large_output %s has no effect in %s mode, which has no barcodes "
+                               "or UMIs; it will be skipped" % (output_type, args.mode.name))
+    elif "tagged_bam" in args.large_output and getattr(args, 'barcoded_bam', False):
+        logger.warning("--large_output tagged_bam is redundant with --barcoded_bam: those "
+                       "alignments already carry the tags; it will be skipped")
 
 
 def load_previous_run(args):
