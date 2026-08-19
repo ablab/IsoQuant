@@ -19,7 +19,8 @@ import sys
 from traceback import print_exc
 
 from isoquant_lib.modes import (IsoQuantMode, BarcodeCorrectionMethod, LARGE_WHITELIST_SIZE,
-                                AUTO_BARCODES)
+                                AUTO_BARCODES, DEPRECATED_MODE_ALIASES, SPLIT_MOLECULES_CHOICES,
+                                SPLIT_MOLECULES_TRUE, SPLIT_MOLECULES_FALSE, SPLIT_MOLECULES_AUTO)
 from isoquant_lib.utils.error_codes import IsoQuantExitCode
 from isoquant_lib.barcode_calling.detect_barcodes import (
     process_single_thread,
@@ -54,7 +55,15 @@ def parse_args(sys_argv):
     parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--output", "-o", type=str, help="output prefix name", required=True)
     parser.add_argument("--barcodes", "-b", nargs='+', type=str, help="barcode whitelist(s)", required=False)
-    parser.add_argument("--mode", type=str, help="mode to be used", choices=[x.name for x in BARCODE_CALLING_MODES.keys()])
+    mode_names = [x.name for x in BARCODE_CALLING_MODES.keys()]
+    parser.add_argument("--mode", type=str, help="mode to be used",
+                        choices=mode_names + list(DEPRECATED_MODE_ALIASES),
+                        metavar="{%s}" % ",".join(mode_names))
+    parser.add_argument("--split_molecules", type=str, choices=SPLIT_MOLECULES_CHOICES, default=None,
+                        help="split reads containing several cDNA molecules ligated end to end: "
+                             "%s splits wherever the protocol allows it, %s also fails for protocols "
+                             "that cannot [%s]" % (SPLIT_MOLECULES_AUTO, SPLIT_MOLECULES_TRUE,
+                                                   SPLIT_MOLECULES_AUTO))
     parser.add_argument("--molecule", type=str, help="MDF files with molecule description (for custom_sc mode only)")
 
     parser.add_argument("--input", "-i", nargs='+', type=str, help="input reads in [gzipped] FASTA, FASTQ, BAM",
@@ -72,10 +81,35 @@ def parse_args(sys_argv):
     add_hidden_option('--debug', action='store_true', default=False, help='debug log output.')
 
     args = parser.parse_args(sys_argv)
-    args.mode = IsoQuantMode[args.mode]
     args.out_fasta = None
     args.output_tsv = None
     return args
+
+
+def resolve_deprecated_mode(args):
+    """Translate a superseded mode name into a chemistry plus a --split_molecules default."""
+    alias = DEPRECATED_MODE_ALIASES.get(args.mode)
+    if not alias:
+        return
+    mode_name, splits = alias
+    logger.warning("Mode %s is deprecated, use `--mode %s --split_molecules %s` instead" %
+                   (args.mode, mode_name, SPLIT_MOLECULES_TRUE if splits else SPLIT_MOLECULES_FALSE))
+    args.mode = mode_name
+    if args.split_molecules is None:
+        args.split_molecules = SPLIT_MOLECULES_TRUE if splits else SPLIT_MOLECULES_FALSE
+
+
+def resolve_split_molecules(args):
+    """Turn --split_molecules into a bool. See isoquant.py for the rules."""
+    requested = args.split_molecules or SPLIT_MOLECULES_AUTO
+    supported = args.mode.supports_molecule_splitting()
+    if requested == SPLIT_MOLECULES_FALSE:
+        args.split_molecules = False
+        return
+    if requested == SPLIT_MOLECULES_TRUE and not supported:
+        logger.critical("Mode %s cannot split reads into separate molecules" % args.mode.name)
+        sys.exit(IsoQuantExitCode.INCOMPATIBLE_OPTIONS)
+    args.split_molecules = supported
 
 
 def count_whitelist_barcodes(whitelist_files):
@@ -139,7 +173,7 @@ def check_args(args):
         else:
             args.output_tsv = [args.output + "_%d.barcoded_reads.tsv" % i for i in range(num_files)]
 
-    if args.out_fasta is None and args.mode.produces_new_fasta():
+    if args.out_fasta is None and args.split_molecules:
         if num_files == 1:
             args.out_fasta = [args.output + ".split_reads.fasta"]
         else:
@@ -156,6 +190,10 @@ def run_barcode_calling(args):
 def main(sys_argv):
     args = parse_args(sys_argv)
     set_logger(logger, args)
+    # resolved here rather than in parse_args so the warnings reach the configured logger
+    resolve_deprecated_mode(args)
+    args.mode = IsoQuantMode[args.mode]
+    resolve_split_molecules(args)
     check_args(args)
     resolve_cell_barcode_detection(args)
 

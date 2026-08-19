@@ -41,7 +41,9 @@ import pyfaidx
 
 from isoquant_lib.utils.error_codes import IsoQuantExitCode
 from isoquant_lib.modes import (IsoQuantMode, ISOQUANT_MODES, AnalysisType, ANALYSIS_ALIASES, ANALYSIS_CHOICES,
-                                BarcodeCorrectionMethod, LARGE_WHITELIST_SIZE, AUTO_BARCODES)
+                                BarcodeCorrectionMethod, LARGE_WHITELIST_SIZE, AUTO_BARCODES,
+                                DEPRECATED_MODE_ALIASES, SPLIT_MOLECULES_CHOICES, SPLIT_MOLECULES_TRUE,
+                                SPLIT_MOLECULES_FALSE, SPLIT_MOLECULES_AUTO)
 from isoquant_lib.gtf2db import convert_gtf_to_db
 from isoquant_lib.utils.read_mapper import (
     DATA_TYPE_ALIASES,
@@ -286,8 +288,16 @@ def parse_args(cmd_args=None, namespace=None):
                                    type=int, default=-1)
 
     # SC ARGUMENTS
-    add_option_to_group(sc_args_group, "--mode", "-m", type=str, choices=ISOQUANT_MODES,
-                                   help="IsoQuant mode [%s]" % IsoQuantMode.bulk.name, default=IsoQuantMode.bulk.name)
+    add_option_to_group(sc_args_group, "--mode", "-m", type=str,
+                                   choices=ISOQUANT_MODES + list(DEPRECATED_MODE_ALIASES),
+                                   help="IsoQuant mode [%s]" % IsoQuantMode.bulk.name, default=IsoQuantMode.bulk.name,
+                                   metavar="{%s}" % ",".join(ISOQUANT_MODES))
+    add_option_to_group(sc_args_group, "--split_molecules", type=str, choices=SPLIT_MOLECULES_CHOICES,
+                                   default=None,
+                                   help="split reads containing several cDNA molecules ligated end to end: "
+                                        "%s splits wherever the protocol allows it, %s also fails for protocols "
+                                        "that cannot [%s]" % (SPLIT_MOLECULES_AUTO, SPLIT_MOLECULES_TRUE,
+                                                              SPLIT_MOLECULES_AUTO))
     add_option_to_group(sc_args_group, '--barcode_whitelist', type=str, nargs='+',
                                    help='file(s) with barcode whitelist(s) for barcode calling, '
                                         'or "%s" to detect cell barcodes from the data' % AUTO_BARCODES)
@@ -813,6 +823,40 @@ def _warn_on_large_whitelist(args):
                    % AUTO_BARCODES)
 
 
+def _resolve_deprecated_mode(args):
+    """Translate a superseded mode name into a chemistry plus a --split_molecules default."""
+    alias = DEPRECATED_MODE_ALIASES.get(args.mode)
+    if not alias:
+        return
+    mode_name, splits = alias
+    replacement = "--mode %s --split_molecules %s" % (
+        mode_name, SPLIT_MOLECULES_TRUE if splits else SPLIT_MOLECULES_FALSE)
+    logger.warning("Mode %s is deprecated, use `%s` instead" % (args.mode, replacement))
+    args.mode = mode_name
+    # only a default: an explicit --split_molecules wins
+    if args.split_molecules is None:
+        args.split_molecules = SPLIT_MOLECULES_TRUE if splits else SPLIT_MOLECULES_FALSE
+
+
+def _resolve_split_molecules(args):
+    """Turn --split_molecules into a bool, refusing to silently ignore an impossible request."""
+    requested = args.split_molecules or SPLIT_MOLECULES_AUTO
+    supported = args.mode.supports_molecule_splitting()
+
+    if requested == SPLIT_MOLECULES_FALSE:
+        args.split_molecules = False
+        return
+    if requested == SPLIT_MOLECULES_TRUE and not supported:
+        logger.critical("Mode %s cannot split reads into separate molecules. Drop "
+                        "--split_molecules %s, or use --split_molecules %s to let IsoQuant "
+                        "decide per protocol." % (args.mode.name, SPLIT_MOLECULES_TRUE, SPLIT_MOLECULES_AUTO))
+        sys.exit(IsoQuantExitCode.INCOMPATIBLE_OPTIONS)
+
+    args.split_molecules = supported
+    if args.split_molecules:
+        logger.info("Reads will be split into separate cDNA molecules")
+
+
 def _validate_barcode_whitelist(args):
     """The whitelist is either a set of files or the literal AUTO_BARCODES, never both."""
     if not args.barcode_whitelist or AUTO_BARCODES not in args.barcode_whitelist:
@@ -859,7 +903,9 @@ def check_input_params(args):
         return False
 
     if not isinstance(args.mode, IsoQuantMode):
+        _resolve_deprecated_mode(args)
         args.mode = IsoQuantMode[args.mode]
+    _resolve_split_molecules(args)
 
     # translate --analysis (and the deprecated stage flags) into internal booleans
     resolve_analyses(args)
@@ -1443,7 +1489,7 @@ def call_barcodes(args):
 
         output_fasta_list = None
         new_reads = []
-        if args.mode.produces_new_fasta():
+        if args.split_molecules:
             output_fasta_list = [sample.split_reads_fasta + "_%d.fa" % i for i in range(len(input_files))]
             new_reads = [[fasta] for fasta in output_fasta_list]
 
@@ -1452,7 +1498,7 @@ def call_barcodes(args):
         if all_done and args.resume:
             logger.info("Barcodes were called during the previous run, skipping")
             sample.barcoded_reads.extend(output_barcodes_list)
-            if args.mode.produces_new_fasta():
+            if args.split_molecules:
                 sample.file_list = new_reads
             continue
 
@@ -1478,7 +1524,7 @@ def call_barcodes(args):
             open(barcodes_done, "w").close()
             logger.info("Processed %s, barcodes are stored in %s" % (input_file, output_barcodes))
 
-        if args.mode.produces_new_fasta():
+        if args.split_molecules:
             logger.info("Reads were split during barcode calling")
             logger.info("The following files will be used instead of original reads %s " % ", ".join(map(lambda x: x[0], new_reads)))
             sample.file_list = new_reads
