@@ -3,7 +3,8 @@ output: /abga/work/andreyp/ci_isoquant/output/
 run_type: single
 reads: /abga/work/andreyp/ci_isoquant/data/barcodes/Mouse.StereoSeq.D04620C2.10M.800K.fa
 barcodes: /abga/work/andreyp/ci_isoquant/data/barcodes/D04620C2.10M.tsv
-mode: stereoseq_nosplit
+mode: stereoseq
+detect_options: "--split_molecules false"
 threads: '8'
 qa_mode: stereo
 baselines:

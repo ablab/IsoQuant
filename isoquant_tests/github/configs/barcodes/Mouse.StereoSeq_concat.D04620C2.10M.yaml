@@ -4,6 +4,7 @@ run_type: stereo_split
 reads: /abga/work/andreyp/ci_isoquant/data/barcodes/Mouse.StereoSeq_concat.D04620C2.10M.800K.fasta
 barcodes: /abga/work/andreyp/ci_isoquant/data/barcodes/D04620C2.barcodeToPos.tsv
 mode: stereoseq
+detect_options: "--split_molecules true"
 threads: '8'
 qa_mode: stereo_split
 baselines:

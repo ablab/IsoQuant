@@ -1,4 +1,4 @@
-# Concatenated reads (tenX_v3_split), 8975 cells, cell barcodes detected from a stock-sized
+# Concatenated reads (split mode), 8975 cells, cell barcodes detected from a stock-sized
 # whitelist. Guards the split-mode path: pass 1 accepts every barcode window, so
 # wrong-strand duplicates would surface here as inflated molecule counts.
 name: Mouse.10x_concat.realistic.stock_whitelist.detected
@@ -6,9 +6,9 @@ output: /abga/work/andreyp/ci_isoquant/output
 run_type: tenX_v3_split
 reads: /abga/work/andreyp/ci_isoquant/data/barcodes/Mouse.10x_concat.realistic.800K.fasta
 barcodes: /abga/work/andreyp/ci_isoquant/data/barcodes/10x.stocklike_hipp_7.4M.txt
-mode: tenX_v3_split
+mode: tenX_v3
 threads: '16'
-detect_options: "--n_cells auto"
+detect_options: "--split_molecules true --n_cells auto"
 baselines:
   barcode:
     assignment_precision: 99.81

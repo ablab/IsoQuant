@@ -8,7 +8,7 @@ barcodes: /abga/work/andreyp/ci_isoquant/data/barcodes/10x.stocklike_7.4M.txt
 mode: tenX_v3
 threads: '16'
 qa_mode: tenX_v3
-detect_options: "--n_cells auto"
+detect_options: "--split_molecules false --n_cells auto"
 baselines:
   barcode:
     precision: 99.75

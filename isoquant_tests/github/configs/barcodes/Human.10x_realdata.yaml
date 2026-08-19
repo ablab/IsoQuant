@@ -3,7 +3,8 @@ output: /abga/work/andreyp/ci_isoquant/output
 run_type: tenX_v3_split
 reads: /abga/work/andreyp/ci_isoquant/data/barcodes/Human.10x_realdata.sci_uniq_reads.fastq.gz
 barcodes: /abga/work/andreyp/ci_isoquant/data/barcodes/Human.10x_realdata.barcodes.tsv
-mode: tenX_v3_split
+mode: tenX_v3
+detect_options: "--split_molecules true"
 threads: '8'
 truth_file: /abga/work/andreyp/ci_isoquant/data/barcodes/Human.10x_realdata.truth.tsv
 truth_barcode_col: '4'
