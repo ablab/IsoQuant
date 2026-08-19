@@ -168,6 +168,28 @@ Each extra round only writes UMI deduplicated reads in allinfo format to
 statistics to `SAMPLE_ID.UMI_filtered.barcode_barcode_col{C}.ED{N}.stats.tsv`
 (`{C}` = 0-based spot-column index).
 
+### Tagged and deduplicated BAM
+
+Two optional BAM outputs for single-cell and spatial modes, enabled with
+`--large_output tagged_bam` and `--large_output deduplicated_bam` respectively. Both are
+indexed, and alignment records are copied from the input unchanged apart from the added tags.
+
+`SAMPLE_ID.tagged.bam` holds every input alignment (primary, secondary, supplementary and
+unmapped) for the chromosomes IsoQuant processed. `SAMPLE_ID.deduplicated.bam` holds only the
+primary alignments of the reads that survived UMI deduplication - the same read set as
+`SAMPLE_ID.UMI_filtered.ED{N}.allinfo`.
+
+| Tag | Present in | Value |
+|-----|------------|-------|
+| `CB` (or `--barcode_tag`) | both | cell barcode |
+| `UB` (or `--umi_tag`) | both | UMI |
+| `GX` | deduplicated only | assigned gene ID |
+| `TX` | deduplicated only | assigned reference transcript ID |
+
+A tag is **omitted** when the value is unknown rather than being set to a placeholder, so a
+read with no barcode carries no `CB`, and a novel or ambiguous read carries no `TX` (`allinfo`
+writes `None` in the corresponding column).
+
 
 ## Quantification formats
 
