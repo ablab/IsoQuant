@@ -1492,7 +1492,10 @@ def call_barcodes(args):
         output_fasta_list = None
         new_reads = []
         if args.split_molecules:
-            output_fasta_list = [sample.split_reads_fasta + "_%d.fa" % i for i in range(len(input_files))]
+            # minimap2 reads gzipped FASTA natively, so compressing costs nothing downstream
+            fasta_suffix = ".fa.gz" if args.gzipped else ".fa"
+            output_fasta_list = [sample.split_reads_fasta + "_%d%s" % (i, fasta_suffix)
+                                 for i in range(len(input_files))]
             new_reads = [[fasta] for fasta in output_fasta_list]
 
         # Check if all files were already processed during resume

@@ -78,6 +78,8 @@ def parse_args(sys_argv):
     add_hidden_option("--n_cells_interval", type=int, default=25)
     add_hidden_option("--barcode_correction", type=str, choices=[e.name for e in BarcodeCorrectionMethod],
                       default=BarcodeCorrectionMethod.auto.name)
+    parser.add_argument("--no_gzip", help="do not gzip the split reads FASTA",
+                        dest="gzipped", action='store_false', default=True)
     add_hidden_option('--debug', action='store_true', default=False, help='debug log output.')
 
     args = parser.parse_args(sys_argv)
@@ -174,10 +176,11 @@ def check_args(args):
             args.output_tsv = [args.output + "_%d.barcoded_reads.tsv" % i for i in range(num_files)]
 
     if args.out_fasta is None and args.split_molecules:
+        suffix = ".split_reads.fasta.gz" if args.gzipped else ".split_reads.fasta"
         if num_files == 1:
-            args.out_fasta = [args.output + ".split_reads.fasta"]
+            args.out_fasta = [args.output + suffix]
         else:
-            args.out_fasta = [args.output + "_%d.split_reads.fasta" % i for i in range(num_files)]
+            args.out_fasta = [args.output + "_%d%s" % (i, suffix) for i in range(num_files)]
 
 
 def run_barcode_calling(args):

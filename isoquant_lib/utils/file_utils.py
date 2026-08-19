@@ -5,6 +5,8 @@
 # See file LICENSE for details.
 ############################################################################
 
+import glob
+import gzip
 import logging
 import os
 import re
@@ -12,6 +14,58 @@ import shutil
 from collections import defaultdict
 
 from isoquant_lib.common import rreplace
+
+GZIP_SUFFIX = ".gz"
+
+
+def open_text_write(file_name):
+    """Open for text writing, compressing when the name says so."""
+    if file_name.endswith(GZIP_SUFFIX):
+        return gzip.open(file_name, "wt")
+    return open(file_name, "w")
+
+
+def open_text_read(file_name):
+    """Open for text reading, decompressing when the name says so."""
+    if file_name.endswith(GZIP_SUFFIX):
+        return gzip.open(file_name, "rt")
+    return open(file_name, "r")
+
+
+def resolve_optionally_gzipped(file_name):
+    """Return the existing path among <file_name> and <file_name>.gz.
+
+    Outputs that are compressed once the run finishes are still referred to by their plain
+    name (in resumed runs, for instance), so readers have to accept either.
+    """
+    if os.path.exists(file_name):
+        return file_name
+    gzipped = file_name + GZIP_SUFFIX
+    if os.path.exists(gzipped):
+        return gzipped
+    return file_name
+
+
+def gzip_file_in_place(file_name, keep_original=False):
+    """Compress a finished output to <file_name>.gz. Returns the resulting path."""
+    if file_name.endswith(GZIP_SUFFIX):
+        return file_name
+    if not os.path.exists(file_name):
+        return file_name
+    gzipped = file_name + GZIP_SUFFIX
+    with open(file_name, "rb") as inf, gzip.open(gzipped, "wb") as outf:
+        shutil.copyfileobj(inf, outf)
+    if not keep_original:
+        os.remove(file_name)
+    return gzipped
+
+
+def strip_compression_suffix(file_name):
+    """Drop a trailing compression suffix so extension logic sees the real one."""
+    for suffix in (GZIP_SUFFIX, ".gzip", ".bgz"):
+        if file_name.endswith(suffix):
+            return file_name[:-len(suffix)]
+    return file_name
 
 logger = logging.getLogger('IsoQuant')
 

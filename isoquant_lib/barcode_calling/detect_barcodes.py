@@ -28,6 +28,7 @@ from Bio import SeqIO, Seq, SeqRecord
 from ..modes import IsoQuantMode
 from isoquant_lib.utils.error_codes import IsoQuantExitCode
 from ..common import setup_worker_logging, _get_log_params
+from isoquant_lib.utils.file_utils import GZIP_SUFFIX, open_text_write
 from .common import reverese_complement, load_barcodes
 from .cell_selection import NOSEQ, CellBarcodeSelector, select_cell_barcodes
 from . import (
@@ -158,7 +159,7 @@ class BarcodeCaller:
         self.output_sequences_file = None
         self.process_function = self._process_read_split if split_reads else self._process_read_normal
         if self.output_sequences:
-            self.output_sequences_file = open(self.output_sequences, "w")
+            self.output_sequences_file = open_text_write(self.output_sequences)
         if header:
             self.output_file.write(barcode_detector.header() + "\n")
         self.read_stat = ReadStats()
@@ -339,10 +340,17 @@ def setup_detector_worker(log_file, log_level, barcode_detector):
     _WORKER_DETECTOR["detector"] = barcode_detector
 
 
+def numbered_chunk_name(file_name, num):
+    """Append a chunk index, keeping any compression suffix last."""
+    if file_name.endswith(GZIP_SUFFIX):
+        return "%s_%d%s" % (file_name[:-len(GZIP_SUFFIX)], num, GZIP_SUFFIX)
+    return "%s_%d" % (file_name, num)
+
+
 def process_chunk(read_chunk, output_file, num, out_fasta=None, split_reads=False, barcode_detector=None):
     output_file += "_" + str(num)
     if out_fasta:
-        out_fasta += "_" + str(num)
+        out_fasta = numbered_chunk_name(out_fasta, num)
     counter = 0
 
     if barcode_detector is None:
@@ -572,7 +580,13 @@ def _process_single_file_in_parallel(input_file, output_tsv, out_fasta, args, ba
     os.makedirs(tmp_dir)
 
     tmp_barcode_file = os.path.join(tmp_dir, "bc")
-    tmp_fasta_file = os.path.join(tmp_dir, "subreads") if out_fasta else None
+    tmp_fasta_file = None
+    if out_fasta:
+        # compress the per-chunk temps exactly when the final file is compressed: the work
+        # then happens in the workers, and merging stays a byte concat
+        tmp_fasta_file = os.path.join(tmp_dir, "subreads")
+        if out_fasta.endswith(GZIP_SUFFIX):
+            tmp_fasta_file += GZIP_SUFFIX
     output_files = []
 
     def submit(pool, chunk, num):
@@ -586,14 +600,17 @@ def _process_single_file_in_parallel(input_file, output_tsv, out_fasta, args, ba
     run_chunks_in_parallel(read_chunk_gen, args, barcode_detector, submit, handle_result)
 
     with open(output_tsv, "w") as final_output_tsv:
-        final_output_fasta = open(out_fasta, "w") if out_fasta else None
+        # binary: concatenating gzip members byte-wise gives a valid multi-member stream,
+        # so per-chunk compression in the workers merges without re-compressing here
+        final_output_fasta = open(out_fasta, "wb") if out_fasta else None
         header = barcode_detector.header()
         final_output_tsv.write(header + "\n")
         stat_dict = defaultdict(int)
         for tmp_file, tmp_fasta in output_files:
             shutil.copyfileobj(open(tmp_file, "r"), final_output_tsv)
             if tmp_fasta and final_output_fasta:
-                shutil.copyfileobj(open(tmp_fasta, "r"), final_output_fasta)
+                with open(tmp_fasta, "rb") as tmp_fasta_handle:
+                    shutil.copyfileobj(tmp_fasta_handle, final_output_fasta)
             for line in open(stats_file_name(tmp_file), "r"):
                 v = line.strip().split("\t")
                 if len(v) != 2:

@@ -37,6 +37,7 @@ import re
 import logging
 from typing import List, Dict
 
+from isoquant_lib.utils.file_utils import strip_compression_suffix
 from isoquant_lib.assignment.read_groups import AbstractReadGrouper, get_grouping_pool_types
 from isoquant_lib.assignment.assignment_loader import load_genedb
 from .serialization import write_int, write_string, read_int, read_string
@@ -238,7 +239,7 @@ class StringPoolManager:
             # file_list is a list of lists (libraries), each library has one or more files
             for lib in sample.file_list:
                 # Get basename without extension, matching FileNameGrouper logic
-                readable_name = os.path.splitext(os.path.basename(lib[0]))[0]
+                readable_name = os.path.splitext(os.path.basename(strip_compression_suffix(lib[0])))[0]
                 file_names.add(readable_name)
 
         # Add in sorted order for deterministic IDs
