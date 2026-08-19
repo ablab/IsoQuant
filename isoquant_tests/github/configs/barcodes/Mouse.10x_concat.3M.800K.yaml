@@ -3,7 +3,8 @@ output: /abga/work/andreyp/ci_isoquant/output
 run_type: tenX_v3_split
 reads: /abga/work/andreyp/ci_isoquant/data/barcodes/Mouse.10x_concat.3M.800K.fasta
 barcodes: /abga/work/andreyp/simulation/ref/10x/3M-3pgex-may-2023.txt
-mode: tenX_v3_split
+mode: tenX_v3
+detect_options: "--split_molecules true"
 threads: '16'
 baselines:
   barcode:

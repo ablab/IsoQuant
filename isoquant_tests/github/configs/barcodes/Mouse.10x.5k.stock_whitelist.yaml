@@ -6,6 +6,7 @@ run_type: single
 reads: /abga/work/andreyp/ci_isoquant/data/barcodes/Mouse.10x.5k.no_truncation.NewStereoQ.600k.fq.gz
 barcodes: /abga/work/andreyp/ci_isoquant/data/barcodes/10x.stocklike_7.4M.txt
 mode: tenX_v3
+detect_options: "--split_molecules false"
 threads: '16'
 qa_mode: tenX_v3
 baselines:
