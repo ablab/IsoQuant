@@ -187,11 +187,27 @@ no margin over the runner-up. It never did:
   tying at the same offset — the normal case — never registered.
 - It was `0` on the ≤100k branch, which had no ambiguity check at all.
 
-Now both are tracked and `score_diff=1` on both 10x branches. Impact is small and in the right
-direction: StereoQ 87.35 → 87.33 recall / 99.73 → 99.75 precision; R10.4 89.63 → 89.61 /
-99.80 → 99.83; Human.10x_realdata 4 fewer incorrect detections. All well inside CI's ±1%
-tolerance, so no baselines needed refreshing. Curio and Stereo call this function with the
-default `score_diff=0` and are unaffected by design.
+Now both are tracked and `score_diff=1` on both 10x branches. Curio and Stereo call this
+function with the default `score_diff=0` and are unaffected by design.
+
+**The effect scales with how many ties the whitelist creates**, so it is negligible for 10x
+and large for the universal extractor (`custom_sc`), which sets `SCORE_DIFF = 1` and had the
+broken check. Measured across the full barcode CI suite:
+
+| test | whitelist | recall | precision | errors removed |
+|---|---|---|---|---|
+| tenX_v3 StereoQ | 5k cells | 87.35 → 87.33 | 99.73 → 99.75 | — |
+| tenX_v3 R10.4 | 5k cells | 89.63 → 89.61 | 99.80 → 99.83 | — |
+| 10x concat (split) | 8975 | 86.80 → 86.78 | 99.80 → 99.81 | 2286 → 2127 |
+| custom_sc 10x | 5k | 85.48 → 84.85 | 99.73 → 99.76 | 1407 → 1231 |
+| custom_sc VisiumHD large | 644k | 3.64 → 3.49 | 96.79 → **98.95** | 966 → 297 (−69%) |
+| custom_sc VisiumHD small | 644k | 60.02 → **54.93** | 90.88 → **98.95** | 48199 → 4679 (−90%) |
+
+The VisiumHD `custom_sc` cases trade real recall for large precision gains. That was accepted
+deliberately: a misassigned barcode puts a read in the wrong cell and silently corrupts that
+cell's counts, whereas a dropped read only costs depth. Baselines for the five affected
+configs were refreshed from measurement. Note the native `visium_hd` mode is unaffected — it
+uses `find_candidate_with_max_score_ssw_var_len`, a separate function.
 
 ### Cell number estimation on a flat distribution
 
