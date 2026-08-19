@@ -34,7 +34,8 @@ from isoquant_lib.utils.serialization import (
     write_string,
 )
 from isoquant_lib.utils.stats import EnumStats
-from isoquant_lib.utils.file_utils import merge_files, merge_counts
+from isoquant_lib.utils.file_utils import (merge_files, merge_counts, gzip_file_in_place,
+                                          resolve_optionally_gzipped)
 from .alignment.alignment_processor import AlignmentType
 from .assignment.read_groups import prepare_read_groups, get_grouping_strategy_names
 from .assignment.assignment_io import IOSupport, ReadInfoPrinter, VoidPrinter
@@ -134,6 +135,8 @@ class DatasetProcessor:
         logger.info("Secondary alignments will%s be used" % ("" if self.args.use_secondary else " not"))
         for sample in input_data.samples:
             self.process_sample(sample)
+        for sample in input_data.samples:
+            self.compress_barcode_tables(sample)
         self.clean_up()
         logger.info("Processed " + proper_plural_form("experiment", len(self.input_data.samples)))
 
@@ -727,11 +730,26 @@ class DatasetProcessor:
 
         open(umi_filtering_done, "w").close()
 
+    def compress_barcode_tables(self, sample):
+        """Gzip the barcoded read tables once nothing needs them any more.
+
+        They stay plain for the whole run because split_read_barcode_table reads them, and
+        only tables this run produced are touched -- files passed via --barcoded_reads belong
+        to the user and are left alone.
+        """
+        if not self.args.gzipped:
+            return
+        produced = sorted(glob.glob(sample.barcodes_tsv + "_*.tsv"))
+        for table in produced:
+            gzipped = gzip_file_in_place(table)
+            logger.info("Compressed barcode table to %s" % gzipped)
+
     def split_read_barcode_table(self, sample, split_barcodes_file_names):
         logger.info("Splitting read barcode table")
         # Supports both IsoQuant's 6-column format and third-party 3-column format
         # Only columns 0, 1, 2 (read_id, barcode, umi) are required and preserved
-        split_read_table_parallel(sample, sample.barcoded_reads, split_barcodes_file_names, self.args.threads,
+        barcode_tables = [resolve_optionally_gzipped(f) for f in sample.barcoded_reads]
+        split_read_table_parallel(sample, barcode_tables, split_barcodes_file_names, self.args.threads,
                                   read_column=0, group_columns=(1, 2), delim='\t')
         logger.info("Read barcode table was split")
 
