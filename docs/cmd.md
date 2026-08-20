@@ -217,10 +217,12 @@ filtering - one read per detected molecule - and additionally tags:
   * `TX` - the transcript the read was assigned to.
 
 A tag is omitted rather than given a placeholder value when the corresponding value is unknown,
-so novel and ambiguous reads have no `TX` tag. This file is created automatically when fusion
-detection runs in a mode with UMI deduplication, and fusion detection then reads it instead of
-the original BAM, so that PCR duplicates do not inflate breakpoint support. Bulk mode has no
-UMIs to deduplicate by and keeps using the original alignments.
+so novel and ambiguous reads have no `TX` tag.
+
+Note that this file is a **deduplicated** view, not a general-purpose replacement for the input
+alignments: it holds one read per detected molecule, keeps only reads assigned to a gene, and
+drops secondary and supplementary records. Analyses that depend on chimeric or otherwise
+inconsistent reads - fusion detection in particular - must keep reading the original BAM.
 
 The `read_info.tsv` format can be also converted to old formats using the conversion script:
 ```bash
