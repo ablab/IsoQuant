@@ -64,7 +64,7 @@ from isoquant_lib.assignment.multimap_resolver import MultimapResolvingStrategy
 from isoquant_lib.utils.stats import combine_counts
 from isoquant_lib.barcode_calling import (process_single_thread, process_in_parallel, get_umi_length,
                                           get_barcode_length, detect_cell_barcode_list)
-from isoquant_lib.common import setup_worker_logging, _get_log_params, large_output_enabled
+from isoquant_lib.common import setup_worker_logging, _get_log_params
 
 
 logger = logging.getLogger('IsoQuant')
@@ -461,21 +461,22 @@ def parse_args(cmd_args=None, namespace=None):
     return args, parser
 
 
-def get_fusion_bams(args, sample) -> list:
-    """BAMs fusion detection should read for one sample.
+def get_bam_files_from_samples(input_data) -> list:
+    """Extract all BAM file paths from input_data.samples.
 
-    Prefer the deduplicated BAM when the run produced one: PCR duplicates would otherwise
-    count as independent support for the same breakpoint. It is primary-only, which is all
-    fusion detection looks at anyway, and records are copied verbatim so the SA tags and
-    soft clips it works from are intact.
+    Returns a list of BAM file paths (long-read and Illumina).
     """
-    dedup_bam = getattr(sample, "out_deduplicated_bam", None)
-    if large_output_enabled(args, "deduplicated_bam") and dedup_bam and os.path.isfile(dedup_bam):
-        return [dedup_bam]
-    return [f for lib in sample.file_list for f in lib if os.path.isfile(f)]
+    bam_files: list[str] = []
+    for sample in input_data.samples:
+        for lib in sample.file_list:
+            for in_file in lib:
+                bam_files.append(in_file)
+        if getattr(sample, "illumina_bam", None):
+            bam_files.extend(sample.illumina_bam)
+    return [f for f in bam_files if os.path.isfile(f)]
 
 
-def run_fusion_detection_on_samples(fd, samples: list, args) -> dict:
+def run_fusion_detection_on_samples(fd, samples: list) -> dict:
     """Run fusion detection per sample using a shared FusionDetector.
 
     The report is written alongside the other per-sample outputs as
@@ -484,14 +485,13 @@ def run_fusion_detection_on_samples(fd, samples: list, args) -> dict:
     Args:
         fd: FusionDetector instance (initialized with first BAM, will be reused)
         samples: List of SampleData objects to process
-        args: Parsed command-line arguments, used to pick the BAMs to read
 
     Returns:
         Dictionary with summary: {"total": int, "successful": int, "failed": int, "skipped": list}
     """
     summary = {"total": 0, "successful": 0, "failed": 0, "skipped": []}
     for sample in samples:
-        sample_bams = get_fusion_bams(args, sample)
+        sample_bams = [f for lib in sample.file_list for f in lib if os.path.isfile(f)]
         if not sample_bams:
             continue
         summary["total"] += 1
@@ -1194,19 +1194,6 @@ def set_data_dependent_options(args):
             logger.info("Single-cell/spatial mode: automatically adding '--read_group barcode'. "
                         "Use '--read_group none' or `--read_group no_auto` to disable.")
 
-    # Fusion detection is run on the deduplicated BAM where one exists, so that PCR duplicates
-    # do not inflate breakpoint support. Bulk has no UMIs to deduplicate by and keeps its input.
-    if (getattr(args, "fusion", False) and args.mode.needs_pcr_deduplication()
-            and not large_output_enabled(args, "deduplicated_bam")):
-        if args.large_output is None:
-            args.large_output = ["deduplicated_bam"]
-        elif "none" in args.large_output:
-            args.large_output = [t for t in args.large_output if t != "none"] + ["deduplicated_bam"]
-        else:
-            args.large_output.append("deduplicated_bam")
-        logger.info("Fusion detection in %s mode: automatically adding "
-                    "'--large_output deduplicated_bam'." % args.mode.name)
-
 
 def set_matching_options(args):
     MatchingStrategy = namedtuple('MatchingStrategy',
@@ -1615,8 +1602,7 @@ def run_pipeline(args):
     # Run fusion detection after isoform detection when fusion is enabled
     if getattr(args, "fusion", False):
         logger.info(" === Isoform detection completed, starting fusion detection === ")
-        bam_files = [bam for sample in args.input_data.samples
-                     for bam in get_fusion_bams(args, sample)]
+        bam_files = get_bam_files_from_samples(args.input_data)
         if not args.genedb:
             logger.warning("Fusion detection requires --genedb; skipping")
         elif not bam_files:
@@ -1625,7 +1611,7 @@ def run_pipeline(args):
             try:
                 from isoquant_lib.fusion.fusion_detector import FusionDetector
                 fd = FusionDetector(bam_files[0], args.genedb, reference_fasta=args.reference)
-                summary = run_fusion_detection_on_samples(fd, args.input_data.samples, args)
+                summary = run_fusion_detection_on_samples(fd, args.input_data.samples)
                 logger.info("Fusion detection summary: %d total, %d successful, %d failed" %
                             (summary["total"], summary["successful"], summary["failed"]))
                 logger.info(" === Fusion detection finished === ")
