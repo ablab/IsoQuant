@@ -61,9 +61,42 @@ Built in `DatasetProcessor.write_tagged_bam`, right after the split-table block 
 `map_over_chromosomes(write_tagged_bam_in_parallel, ...)`, then merged and indexed.
 
 Every alignment is kept — primary, secondary, supplementary — plus a separate
-`write_unmapped_bam` pass, because `fetch(chr)` never returns unmapped reads. Chromosomes with
-no split table (not processed by this run) are still copied, just untagged, so the result stays
-a complete copy of what the run covered.
+`write_unmapped_bam` pass, because `fetch(chr)` never returns unmapped reads.
+
+The chromosome list comes from `references_with_alignments(bam_files)`, **not** from
+`get_chr_list()`. This was a bug found only on the full CI dataset: IsoQuant analyses the
+22 assembled mouse chromosomes, so iterating the analysed list silently dropped 1177 records
+sitting on unplaced scaffolds (`GL456382.1`, `JH584299.1`, …) — in a file documented as a copy
+of the input. The chr19 subset used during development contained no scaffolds and could not
+surface it. Empty references are filtered out via the BAM index so a fragmented assembly does
+not spawn a task per contig.
+
+Restoring the records is only half of it: they came back *untagged*, because the
+per-chromosome barcode split is driven by `split_barcodes_dict`, which was keyed on the
+analysed chromosomes too. Barcode calling runs over the whole input before any chromosome
+filtering, so the tags exist in `<prefix>.barcoded_reads_<i>.tsv` — they simply never reached a
+split file the tagging worker could read. `process_sample` now widens that dict to
+`references_with_alignments(...)` when `tagged_bam` is enabled (and only then, since it costs
+an extra pass over the barcode table).
+
+### Unmapped reads were never tagged
+
+A separate bug, on the same output, found the same way. `write_unmapped_bam` copied unplaced
+records verbatim with **no tags at all**, so on the CI dataset 3193 of the 3577 unmapped reads
+lost barcodes they genuinely had. A barcode is called from the read sequence and does not
+depend on the read aligning anywhere, so those tags are meaningful — arguably more so, since
+recovering unmapped reads per cell is a reason to want this file.
+
+They belong to no chromosome and so appear in no split table. `write_tagged_bam` therefore
+collects the unmapped read ids first (`collect_unmapped_read_ids`, a few thousand) and scans
+the whole-sample barcode table for just those (`load_barcode_umi_tags(..., read_ids=...)`),
+which keeps memory at the size of the unmapped set rather than the 1.8M-row table.
+
+Worth recording how this was nearly missed: after the scaffold fix the tag-mismatch count
+stayed at exactly 3193, and the first reading was that the scaffolds explained it — the
+arithmetic `1794571 - 1791378 = 3193` matched. It was a coincidence of two unrelated numbers.
+Checking which read ids were actually untagged showed all 3193 were unmapped, and that the
+scaffold records had contributed no new barcoded read ids at all.
 
 With `--barcoded_bam` as input there are no split tables and the input already carries the
 tags, so IsoQuant warns and skips; likewise in modes with no barcodes at all.
@@ -116,6 +149,8 @@ BAMs, exactly as it did before this branch — `get_bam_files_from_samples` is u
   merged; `None` and missing fragments are skipped (chromosomes with nothing to write)
 - `write_tagged_chromosome_bam` — the one copy loop, parameterised by `primary_only` and
   `keep_untagged`; feature 3 uses `(False, True)`, feature 4 uses `(True, False)`
+- `references_with_alignments` — every reference carrying reads, empty ones dropped via the
+  index; what the tagged BAM iterates instead of the analysed chromosome list
 - `write_unmapped_bam`
 - `load_survivor_tags` / `load_barcode_umi_tags` — the two tag sources
 - `PLACEHOLDERS = {"*", ".", "None"}` — a tag is **omitted** rather than carrying a
@@ -140,11 +175,12 @@ need re-aligning, but `--bam` input skips the mapping stage — `call_barcodes` 
 
 ## Verification performed
 
-Unit: `isoquant_tests/test_bam_utils.py` (22 tests), `isoquant_tests/test_file_compression.py`
+Unit: `isoquant_tests/test_bam_utils.py` (31 tests), `isoquant_tests/test_file_compression.py`
 (18 tests).
 
 End-to-end on chr19 of `Mouse.10x.5k.ONT_cDNA.R10.4.no_trunc.bam` (115841 records, 55392
-primary), `-m tenX_v3` with the 5K whitelist:
+primary), `-m tenX_v3` with the 5K whitelist — and then on the **full** CI dataset via
+`SC.Mouse.10x.allinfo`, which is what caught the scaffold bug above:
 
 - `deduplicated_bam`: 25056 records, 0 secondary/supplementary; read-id set is **exactly** the
   25056 rows of `allinfo`; CB/UB/GX all match `allinfo` on every row; records byte-identical to
@@ -156,6 +192,28 @@ primary), `-m tenX_v3` with the 5K whitelist:
   content identical).
 - Fusion: verified untouched — `--analysis fusion` neither enables nor reads either BAM, and
   the fusion code path is byte-identical to the branch base.
+
+On the full CI dataset (2M reads, 3660591 records) via `SC.Mouse.10x.allinfo`:
+
+- `deduplicated_bam`: 903570 records, all primary, exactly matching that run's own
+  `Total reads saved`.
+- `tagged_bam`, after all three fixes: 3660591 records (exact), 1655717 secondary and 4874
+  supplementary preserved, 3577 unmapped preserved of which 3193 barcoded, and CB/UB matching
+  the barcode table on **all 1794571** barcoded reads with 0 differences.
+- Tag *values* were never wrong at any stage — 0 conflicting and 0 extra tags throughout; every
+  defect was a read or a tag going missing, never a wrong one.
+- The `allinfo` baselines pass within tolerance on every run.
+
+### CI coverage
+
+`SC.Mouse.10x.allinfo` requests `tagged_bam deduplicated_bam`; `SC.Mouse.10x.barcoded_bam.allinfo`
+requests `deduplicated_bam` only — `tagged_bam` is deliberately omitted there because
+`--barcoded_bam` skips the split-table block it reads from, so it would warn and skip. That
+second config is worth having because it exercises the dedup BAM on the tags-read-from-BAM
+path, where the tags never pass through a barcode table at all.
+
+Note that CI *produces* these BAMs but does not assert anything about them — the baselines only
+cover `allinfo`. A crash or a knock-on regression would be caught; a wrong tag value would not.
 
 ### Resume
 
