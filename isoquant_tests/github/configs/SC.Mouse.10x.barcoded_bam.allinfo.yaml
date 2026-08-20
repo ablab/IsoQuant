@@ -6,7 +6,7 @@ genedb: /abga/work/andreyp/data/reference/mouse/gencode.vM36.basic.annotation.gt
 bam: /abga/work/andreyp/ci_isoquant/data/barcodes/Mouse.10x.5k.ONT_cDNA.R10.4.no_trunc.tagged.bam
 datatype: ont
 isoquant_options: '"-m tenX_v3 --complete_genedb --barcoded_bam --strip_barcode_suffix
-  --large_output allinfo read2transcripts -t 10"'
+  --large_output allinfo read2transcripts deduplicated_bam -t 10"'
 edit_distance: '3'
 baselines:
   allinfo:
