@@ -90,16 +90,22 @@ Two ordering constraints, both respected in `process_sample`:
 - only the first edit distance writes those files, and the `barcode2barcode` rounds never do,
   so the subset is defined by the primary dedup round.
 
-**Auto-enabled for fusion**, but only where dedup exists: `check_input_params` adds
-`deduplicated_bam` when `args.fusion` **and** `args.mode.needs_pcr_deduplication()`. Bulk keeps
-fusion on the original BAMs, since there is no UMI filtering to subset by. `get_fusion_bams()`
-then returns the dedup BAM in place of the originals, so PCR duplicates do not inflate
-breakpoint support.
+### Deliberately *not* wired into fusion detection
 
-Fusion compatibility is preserved because records are copied **verbatim** apart from the tags:
-fusion already ignores secondary and supplementary records, and reads breakpoints from the SA
-tag on the primary record plus terminal soft clips, with `realign_softclip` needing
-`query_sequence`. A primary-only subset keeps all three.
+An earlier version of this branch auto-enabled `deduplicated_bam` for fusion runs and fed it to
+`FusionDetector` in place of the original BAM, reasoning that PCR duplicates would otherwise
+inflate breakpoint support. **That was wrong and has been reverted**: fusion evidence lives in precisely the reads UMI filtering removes. The filter keeps
+one read per assigned (gene, barcode, UMI) molecule and requires a gene assignment, so chimeric
+reads spanning two genes — the inconsistent reads fusion calling is built on — are collapsed or
+dropped outright.
+
+(The secondary/supplementary dimension was in fact fine: `fusion_detector.py:470` skips both and
+takes breakpoints from the SA tag on the primary record. That is not what makes the subset
+unsuitable — the read-level filtering is.)
+
+Deduplicating for fusion, if wanted at all, belongs **inside** the fusion algorithm where it can
+see the chimeric reads before they are filtered. Fusion detection therefore reads the original
+BAMs, exactly as it did before this branch — `get_bam_files_from_samples` is untouched.
 
 ## Shared code
 
@@ -148,11 +154,8 @@ primary), `-m tenX_v3` with the 5K whitelist:
 - Both are **pure side outputs**: every other file in the run is byte-identical to a run
   without the flag, apart from two `.gz` files whose embedded mtime differs (decompressed
   content identical).
-- Fusion: `--analysis fusion` auto-added `deduplicated_bam` and fusion detection ran on
-  `S.deduplicated.bam`. The report is empty on this dataset, and so is a run of
-  `FusionDetector` on the original BAM — consistent, but **not** discriminating, since the
-  simulated data contains no fusions. The real evidence for fusion compatibility is the direct
-  check above that records are byte-identical apart from the tags and that SA tags survive.
+- Fusion: verified untouched — `--analysis fusion` neither enables nor reads either BAM, and
+  the fusion code path is byte-identical to the branch base.
 
 ### Resume
 

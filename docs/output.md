@@ -195,8 +195,7 @@ Two optional BAM outputs carry the same information on the alignments themselves
 
 * `SAMPLE_ID.tagged.bam` - all input alignments with barcode and UMI tags (only with `--large_output tagged_bam`);
 * `SAMPLE_ID.deduplicated.bam` - primary alignments of UMI-deduplicated reads, with barcode, UMI,
-  gene and transcript tags (only with `--large_output deduplicated_bam`, added automatically when
-  fusion detection is enabled).
+  gene and transcript tags (only with `--large_output deduplicated_bam`).
 
 Note that transcript discovery is performed only in `bulk` mode by default.
 Single-cell and spatial modes require UMI deduplication.
