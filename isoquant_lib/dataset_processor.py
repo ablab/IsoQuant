@@ -36,7 +36,9 @@ from isoquant_lib.utils.serialization import (
 from isoquant_lib.utils.stats import EnumStats
 from isoquant_lib.utils.file_utils import (merge_files, merge_counts, gzip_file_in_place,
                                           resolve_optionally_gzipped)
-from isoquant_lib.utils.bam_utils import merge_bam_files, write_unmapped_bam
+from isoquant_lib.utils.bam_utils import (PLACEHOLDERS, collect_unmapped_read_ids,
+                                         load_barcode_umi_tags, merge_bam_files,
+                                         references_with_alignments, write_unmapped_bam)
 from .alignment.alignment_processor import AlignmentType
 from .assignment.read_groups import prepare_read_groups, get_grouping_strategy_names
 from .assignment.assignment_io import IOSupport, ReadInfoPrinter, VoidPrinter
@@ -184,7 +186,12 @@ class DatasetProcessor:
             if self.args.barcoded_reads:
                 sample.barcoded_reads = self.args.barcoded_reads
 
-            for chr_id in self.get_chr_list():
+            # a tagged BAM copies every reference, including the unplaced scaffolds IsoQuant
+            # does not analyse, so those reads need a barcode table of their own to be tagged
+            split_chr_ids = self.get_chr_list()
+            if large_output_enabled(self.args, "tagged_bam"):
+                split_chr_ids = references_with_alignments([f[0] for f in sample.file_list])
+            for chr_id in split_chr_ids:
                 split_barcodes_dict[chr_id] = sample.barcodes_split_reads + "_" + chr_id
             barcode_split_done = split_barcodes_lock_filename(sample)
             if self.args.resume and os.path.exists(barcode_split_done):
@@ -741,9 +748,13 @@ class DatasetProcessor:
 
         open(umi_filtering_done, "w").close()
 
-    def map_over_chromosomes(self, worker, sample, *extra_args):
-        """Run worker(sample, chr_id, *extra_args) for every chromosome, in parallel."""
-        gen = (worker, itertools.repeat(sample), self.get_chr_list(),
+    def map_over_chromosomes(self, worker, sample, *extra_args, chr_ids=None):
+        """Run worker(sample, chr_id, *extra_args) for every chromosome, in parallel.
+
+        Defaults to the chromosomes this run analysed; pass chr_ids to cover others.
+        """
+        gen = (worker, itertools.repeat(sample),
+               self.get_chr_list() if chr_ids is None else chr_ids,
                *(itertools.repeat(a) for a in extra_args))
         if self.args.threads > 1:
             gc.collect()
@@ -762,12 +773,25 @@ class DatasetProcessor:
         nothing downstream looks at the result.
         """
         logger.info("Writing tagged BAM")
-        fragments = self.map_over_chromosomes(write_tagged_bam_in_parallel, sample, self.args)
-
-        # fetch() by chromosome never returns unmapped reads, so they need a pass of their own
-        unmapped_fragment = tagged_bam_fragment_name(sample.out_raw_file, "unmapped")
         bam_files = [f[0] for f in sample.file_list]
-        if write_unmapped_bam(bam_files, unmapped_fragment):
+        fragments = self.map_over_chromosomes(write_tagged_bam_in_parallel, sample, self.args,
+                                              chr_ids=references_with_alignments(bam_files))
+
+        # fetch() by chromosome never returns unmapped reads, so they need a pass of their own.
+        # They belong to no chromosome and so appear in no split table, but a barcode is called
+        # from the read sequence and does not need an alignment -- look theirs up directly.
+        unmapped_fragment = tagged_bam_fragment_name(sample.out_raw_file, "unmapped")
+        unmapped_ids = collect_unmapped_read_ids(bam_files)
+        unmapped_tags = {}
+        for table in sample.barcoded_reads:
+            unmapped_tags.update(load_barcode_umi_tags(resolve_optionally_gzipped(table),
+                                                       read_ids=unmapped_ids))
+        if write_unmapped_bam(bam_files, unmapped_fragment, unmapped_tags,
+                              self.args.barcode_tag, self.args.umi_tag):
+            # a table row exists for every read, but its barcode may be the uncalled placeholder
+            barcoded = sum(1 for tags in unmapped_tags.values() if tags[0] not in PLACEHOLDERS)
+            logger.info("Copied %d unmapped reads, %d of them barcoded"
+                        % (len(unmapped_ids), barcoded))
             fragments.append(unmapped_fragment)
         else:
             os.remove(unmapped_fragment)

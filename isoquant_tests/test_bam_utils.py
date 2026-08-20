@@ -14,9 +14,11 @@ import pytest
 from isoquant_lib.utils.bam_utils import (
     GENE_TAG,
     TRANSCRIPT_TAG,
+    collect_unmapped_read_ids,
     load_barcode_umi_tags,
     load_survivor_tags,
     merge_bam_files,
+    references_with_alignments,
     write_tagged_chromosome_bam,
     write_unmapped_bam,
 )
@@ -167,12 +169,60 @@ class TestWriteTaggedChromosomeBam:
         assert sorted(read_names(out)) == ["r1", "r2"]
 
 
+class TestReferencesWithAlignments:
+    def test_only_references_that_carry_reads(self, input_bam, tmp_path):
+        """chr2 has one read, so both chromosomes are listed; an empty one would not be."""
+        assert references_with_alignments([input_bam]) == ["chr1", "chr2"]
+
+    def test_empty_references_are_dropped(self, tmp_path):
+        """A fragmented assembly must not spawn a task per empty contig."""
+        bam = write_bam(str(tmp_path / "one.bam"), [make_read("r1", 0)])
+        assert references_with_alignments([bam]) == ["chr1"]
+
+    def test_union_across_bams(self, tmp_path):
+        first = write_bam(str(tmp_path / "a.bam"), [make_read("r1", 0)])
+        second = write_bam(str(tmp_path / "b.bam"), [make_read("r4", 1)])
+        assert references_with_alignments([first, second]) == ["chr1", "chr2"]
+
+    def test_covers_references_isoquant_would_skip(self, input_bam):
+        """The regression: scaffolds absent from the analysed chromosome list still have reads."""
+        assert "chr2" in references_with_alignments([input_bam])
+
+
 class TestWriteUnmappedBam:
     def test_only_unmapped_reads(self, input_bam, tmp_path):
         """fetch() by chromosome never returns these, so they need their own pass."""
         out = str(tmp_path / "unmapped.bam")
         assert write_unmapped_bam([input_bam], out) == 1
         assert read_names(out) == ["unmapped1"]
+
+    def test_unmapped_reads_get_tagged(self, input_bam, tmp_path):
+        """A barcode is called from the sequence, so an unaligned read still has one.
+
+        These reads belong to no chromosome and appear in no split table; copying them
+        untagged silently dropped the tags of every unmapped read.
+        """
+        out = str(tmp_path / "unmapped.bam")
+        write_unmapped_bam([input_bam], out, {"unmapped1": ("ACGT", "TTTT", None, None)})
+        with pysam.AlignmentFile(out, "rb") as inf:
+            read = next(inf.fetch(until_eof=True))
+        assert read.get_tag("CB") == "ACGT"
+        assert read.get_tag("UB") == "TTTT"
+
+    def test_untagged_unmapped_reads_are_still_copied(self, input_bam, tmp_path):
+        out = str(tmp_path / "unmapped.bam")
+        assert write_unmapped_bam([input_bam], out, {"someone_else": ("A", "C", None, None)}) == 1
+        with pysam.AlignmentFile(out, "rb") as inf:
+            assert not next(inf.fetch(until_eof=True)).has_tag("CB")
+
+
+class TestCollectUnmappedReadIds:
+    def test_finds_the_unplaced_reads(self, input_bam):
+        assert collect_unmapped_read_ids([input_bam]) == {"unmapped1"}
+
+    def test_none_when_all_aligned(self, tmp_path):
+        bam = write_bam(str(tmp_path / "a.bam"), [make_read("r1", 0)])
+        assert collect_unmapped_read_ids([bam]) == set()
 
 
 class TestMergeBamFiles:
@@ -231,6 +281,14 @@ class TestLoadBarcodeUmiTags:
         path.write_text("#read_id\tbarcode\tUMI\nr1\tACGT\tTTTT\nr2\tCCCC\tGGGG\n")
         assert load_barcode_umi_tags(str(path)) == {"r1": ("ACGT", "TTTT", None, None),
                                                     "r2": ("CCCC", "GGGG", None, None)}
+
+    def test_filtering_by_read_ids(self, tmp_path):
+        """The whole-sample table is scanned for a handful of unmapped reads."""
+        path = tmp_path / "b.tsv"
+        path.write_text("r1\tACGT\tTTTT\nr2\tCCCC\tGGGG\nr3\tAAAA\tCCCC\n")
+        assert load_barcode_umi_tags(str(path), read_ids={"r2"}) == {
+            "r2": ("CCCC", "GGGG", None, None)}
+        assert load_barcode_umi_tags(str(path), read_ids=set()) == {}
 
     def test_short_lines_are_skipped(self, tmp_path):
         path = tmp_path / "b.tsv"
