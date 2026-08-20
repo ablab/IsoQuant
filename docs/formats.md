@@ -174,10 +174,10 @@ Two optional BAM outputs for single-cell and spatial modes, enabled with
 `--large_output tagged_bam` and `--large_output deduplicated_bam` respectively. Both are
 indexed, and alignment records are copied from the input unchanged apart from the added tags.
 
-`SAMPLE_ID.tagged.bam` holds every input alignment (primary, secondary, supplementary and
-unmapped) for the chromosomes IsoQuant processed. `SAMPLE_ID.deduplicated.bam` holds only the
-primary alignments of the reads that survived UMI deduplication - the same read set as
-`SAMPLE_ID.UMI_filtered.ED{N}.allinfo`.
+`SAMPLE_ID.tagged.bam` holds every input alignment - primary, secondary, supplementary and
+unmapped, across all references including unplaced scaffolds - so its record count equals the
+input's. `SAMPLE_ID.deduplicated.bam` holds only the primary alignments of the reads that
+survived UMI deduplication - the same read set as `SAMPLE_ID.UMI_filtered.ED{N}.allinfo`.
 
 | Tag | Present in | Value |
 |-----|------------|-------|

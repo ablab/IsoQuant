@@ -201,14 +201,17 @@ Both are indexed BAM files written for single-cell and spatial modes only, and b
 default. Alignment records are copied unchanged apart from the tags, so anything that reads the
 original BAM works on these too.
 
-`tagged_bam` keeps **every** alignment of the chromosomes IsoQuant processed - primary,
-secondary, supplementary and unmapped - and adds:
+`tagged_bam` keeps **every** alignment in the input - primary, secondary, supplementary and
+unmapped, across all references including unplaced scaffolds that IsoQuant does not analyse -
+and adds:
 
   * `--barcode_tag` (`CB` by default) - the detected cell barcode;
   * `--umi_tag` (`UB` by default) - the detected UMI.
 
-Reads with no barcode are kept without tags. The file is redundant when `--barcoded_bam` was
-used as input, since those alignments already carry the tags, and IsoQuant warns and skips.
+Unmapped reads are tagged like any other: the barcode is called from the read sequence and does
+not depend on the read having aligned. Reads with no barcode are kept without tags. The file is
+redundant when `--barcoded_bam` was used as input, since those alignments already carry the
+tags, and IsoQuant warns and skips.
 
 `deduplicated_bam` keeps only the **primary** alignments of the reads that survived UMI
 filtering - one read per detected molecule - and additionally tags:
