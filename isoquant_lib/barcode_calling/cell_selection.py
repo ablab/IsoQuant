@@ -66,15 +66,24 @@ def estimate_cell_number(sorted_counts: Sequence[int]) -> int:
     dx, dy = x[-1] - x[0], y[-1] - y[0]
     norm = math.hypot(dx, dy)
     if norm == 0.0:
-        return len(counts)
+        return _no_knee(len(counts))
     distance = (dx * (y[0] - y) - (x[0] - x) * dy) / norm
 
     # A curve that never bends away from its chord has no knee to find -- every barcode
     # above the noise floor looks equally cell-like, so take all of them. Without this the
     # argmax of an all-zero array would silently report a single cell.
     if distance.max() <= KNEE_MIN_DEVIATION:
-        return len(counts)
+        return _no_knee(len(counts))
     return int(numpy.argmax(distance)) + 1
+
+
+def _no_knee(n_candidates: int) -> int:
+    """Fall back to taking every above-noise barcode, and say so."""
+    logger.warning("The barcode count distribution has no knee: all %d barcodes above the noise "
+                   "floor are equally abundant, so all of them are treated as cells. This is "
+                   "usually a sign of a failed or very shallow run. Set --n_cells explicitly if "
+                   "you know how many cells to expect." % n_candidates)
+    return n_candidates
 
 
 class CellBarcodeSelector:
