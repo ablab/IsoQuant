@@ -96,6 +96,11 @@ matches the reads against that much shorter list. See
 
 Supported for `tenX_v3`, `tenX_v2` and `visium_5prime`.
 
+`--no_gzip`
+
+Do not compress the split reads FASTA. It is gzipped by default; aligners read it compressed,
+so there is normally no reason to turn this off.
+
 `--threads` or `-t`
 
 Number of threads for parallel processing (default: 16).
@@ -174,9 +179,11 @@ of them exactly.
 
 Output contains one row per detected molecule. Read IDs include segment coordinates:
 `{original_read_id}_{start}_{end}_{strand}`.
-An additional split FASTA file (`*.split_reads_<i>.fa.gz`) is produced with the extracted cDNA
+An additional split FASTA file (`<prefix>.split_reads.fasta.gz`, numbered
+`<prefix>_<i>.split_reads.fasta.gz` for several inputs) is produced with the extracted cDNA
 segments, gzipped unless `--no_gzip` is set. Aligners read it compressed, so nothing downstream
-is slowed down by this.
+is slowed down by this. Inside the IsoQuant pipeline the same file is named
+`<prefix>.split_reads_<i>.fa.gz`.
 
 **Curio** (`curio`):
 
