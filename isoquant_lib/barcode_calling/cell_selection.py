@@ -15,12 +15,14 @@ candidates. See .claude/CELL_BARCODE_SELECTION.md.
 
 import logging
 import math
+import sys
 from collections import defaultdict
 from statistics import mean
 from typing import Dict, Iterable, List, Optional, Sequence, Set, Union
 
 import numpy
 
+from ..utils.error_codes import IsoQuantExitCode
 from .common import load_barcodes
 
 logger = logging.getLogger('IsoQuant')
@@ -202,4 +204,14 @@ def select_cell_barcodes(selector: "CellBarcodeSelector", output_file: str,
         with open(stats_file, "w") as out_stats:
             for key, value in stats.items():
                 out_stats.write("%s\t%d\n" % (key, value))
+
+    # the second pass would be handed an empty barcode list and fail deep inside the
+    # detector, so say what went wrong while the counts are still at hand
+    if not centers:
+        logger.critical("No cell barcodes were detected: %d distinct barcodes were extracted from "
+                        "the reads and %d were malformed. Check that --mode matches the protocol, "
+                        "that the whitelist belongs to this chemistry, and that the reads are not "
+                        "already trimmed of their barcodes."
+                        % (stats["Distinct barcodes extracted"], stats["Malformed barcodes skipped"]))
+        sys.exit(IsoQuantExitCode.BARCODE_WHITELIST_MISSING)
     return output_file
