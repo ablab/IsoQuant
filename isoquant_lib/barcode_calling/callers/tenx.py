@@ -40,8 +40,7 @@ class TenXBarcodeDetector:
 
     # R1 anchoring thresholds for whitelist matching mode
     R1_MIN_SCORE = 11
-    # Relaxed anchoring used in raw extraction mode: more reads yield a barcode window,
-    # errors are corrected later by the graph-based stage instead of being rejected here.
+    # relaxed for raw extraction, where a rejected window cannot be recovered later
     RAW_R1_MIN_SCORE = 9
     RAW_TERMINAL_MATCH_DELTA = 4
     # Maximum plausible distance between the R1 end and polyT: R1...BC(16)...UMI(12)...polyT
@@ -55,8 +54,7 @@ class TenXBarcodeDetector:
             barcode_list: List of known barcodes (whitelist); ignored (and may be None)
                 when whitelist_matching is False
             whitelist_matching: when False, emit the raw barcode window instead of matching
-                it against the whitelist. The whitelist index is then not built at all,
-                which also keeps the detector cheap to ship to worker processes.
+                it; no whitelist index is built
         """
         self.r1_indexer = KmerIndexer([TenXBarcodeDetector.R1], kmer_size=7)
         self.whitelist_matching = whitelist_matching
@@ -113,8 +111,8 @@ class TenXBarcodeDetector:
         read_result = self._find_barcode_umi_fwd(read_id, sequence)
         if read_result.polyT != -1:
             read_result.set_strand("+")
-        # In raw extraction mode almost every forward hit is "valid" (any window is accepted),
-        # so the early return would never let the reverse strand be considered.
+        # in raw mode any window is accepted, so an early return here would never let the
+        # reverse strand be considered
         if self.whitelist_matching and read_result.is_valid():
             return read_result
 
@@ -132,11 +130,8 @@ class TenXBarcodeDetector:
     def _raw_strand_score(self, result: TenXBarcodeDetectionResult):
         """Rank a raw-mode detection by how well R1 and polyT frame a barcode and UMI.
 
-        Whitelist mode picks the strand on which the barcode matched, which is strong
-        evidence. Raw mode has no such signal -- every window is accepted and BC_score is
-        always 0, which leaves more_informative_than comparing polyT positions, i.e. picking
-        essentially at random. Use the molecule structure instead: on the correct strand R1
-        and polyT sit about BARCODE_LEN + UMI_LEN apart.
+        Raw mode has no barcode match to pick the strand on, so use the molecule structure:
+        on the correct strand R1 and polyT sit about BARCODE_LEN + UMI_LEN apart.
         """
         if not result.is_valid():
             return 0, 0
@@ -192,8 +187,8 @@ class TenXBarcodeDetector:
         Used when R1 linker is not detected (partial/error-corrupted R1).
         The polyT anchor constrains the barcode position: BC(16)...UMI(12)...polyT.
 
-        Not available in raw extraction mode: without a whitelist there is nothing to
-        anchor the barcode window against, so "no R1" means "no barcode".
+        Not available in raw mode: with no whitelist to anchor the window against,
+        "no R1" means "no barcode".
         """
         if not self.whitelist_matching:
             return TenXBarcodeDetectionResult(read_id, polyT=polyt_start)

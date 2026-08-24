@@ -127,9 +127,8 @@ def align_pattern_ssw(sequence, start, end, pattern, min_score=0):
 def find_candidate_with_max_score_ssw(barcode_matches: list, read_sequence, min_score=10, score_diff=0, sufficient_score=0):
     """Pick the barcode aligning best to read_sequence, or None if the choice is ambiguous.
 
-    `score_diff` is the margin the winner must have over the runner-up. A tie means two
-    different barcodes explain the read equally well, so there is no basis to pick either;
-    such reads are dropped rather than assigned arbitrarily.
+    score_diff is the margin the winner must have over the runner-up; a tie means two
+    barcodes explain the read equally well, so neither is picked.
     """
     best_match = [0, 0, 0]
     best_barcode = None
@@ -151,9 +150,7 @@ def find_candidate_with_max_score_ssw(barcode_matches: list, read_sequence, min_
             best_match[1] = alignment.reference_start - alignment.read_start
             best_match[2] = alignment.reference_end + (len(barcode) - alignment.read_end)
         elif alignment.optimal_score == best_match[0]:
-            # A tie leaves a zero margin whatever the alignment offset. Recording it only
-            # when the newcomer aligned further left (as this used to) hid the common case
-            # of two barcodes tying at the same offset.
+            # a tie leaves a zero margin whatever the alignment offset
             if barcode != best_barcode:
                 second_best_score = alignment.optimal_score
             if alignment.reference_start < best_match[1]:
@@ -161,12 +158,12 @@ def find_candidate_with_max_score_ssw(barcode_matches: list, read_sequence, min_
                 best_match[1] = alignment.reference_start - alignment.read_start
                 best_match[2] = alignment.reference_end + (len(barcode) - alignment.read_end)
         elif alignment.optimal_score > second_best_score:
-            # A genuine runner-up. This was never recorded before, so second_best_score
-            # stayed 0 and the margin check below could not fail.
             second_best_score = alignment.optimal_score
 
         if alignment.optimal_score > sufficient_score > 0:
-            # dirty hack to select first "sufficiently good" alignment
+            # dirty hack to select first "sufficiently good" alignment. Note this can
+            # understate second_best_score; safe only because stereo.py, its sole user,
+            # passes score_diff=0.
             break
 
     if best_barcode is None or best_match[0] - second_best_score < score_diff:
@@ -221,10 +218,6 @@ def detect_exact_positions(sequence, start, end, kmer_size, pattern, pattern_occ
         return None, None
 
     start_pos, end_pos, pattern_start, pattern_end, score = None, None, None, None, 0
-    # Every seed is aligned and the best-scoring alignment wins. Seeds from one pattern
-    # occurrence produce windows shifted by a base at a time, and which of them yields the
-    # best alignment is not predictable, so this loop must not be short-circuited: skipping
-    # seeds within len(pattern) of the previous one measurably loses primer detections.
     for match_position in pattern_occurrences[pattern_index][2]:
         potential_start = start + match_position - len(pattern) + kmer_size
         potential_start = max(start, potential_start)
@@ -258,8 +251,6 @@ def detect_first_exact_positions(sequence, start, end, kmer_size, pattern, patte
         return None, None
 
     start_pos, end_pos, pattern_start, pattern_end, score = None, None, None, None, 0
-    # unlike detect_exact_positions this one stops at the first acceptable alignment,
-    # so seeds are consumed in order and none may be skipped
     for match_position in pattern_occurrences[pattern_index][2]:
         potential_start = start + match_position - len(pattern) + kmer_size
         potential_start = max(start, potential_start)

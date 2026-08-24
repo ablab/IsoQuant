@@ -40,8 +40,7 @@ class IsoQuantMode(Enum):
     def supports_molecule_splitting(self):
         """Chemistries with a detector that can find several cDNA molecules in one read.
 
-        Concatenated molecules arise when cDNAs are ligated end to end during library
-        preparation. Asking for splitting on any other mode is an error, not a no-op.
+        Asking for splitting on any other mode is an error, not a no-op.
         """
         return self in [IsoQuantMode.tenX_v3,
                         IsoQuantMode.tenX_v2,
@@ -53,10 +52,8 @@ class IsoQuantMode(Enum):
         return self in [IsoQuantMode.stereoseq]
 
     def supports_cell_barcode_detection(self):
-        """Modes whose detectors can extract raw barcodes so cell barcodes can be detected.
-
-        These are the protocols with a large generic whitelist and a small unknown set of
-        real cells, where per-read whitelist matching degenerates into exact matching.
+        """Modes whose detectors can extract raw barcodes, so cell barcodes can be
+        detected from their counts.
         """
         return self in [IsoQuantMode.tenX_v3,
                         IsoQuantMode.tenX_v2,
@@ -68,9 +65,8 @@ class IsoQuantMode(Enum):
 
 ISOQUANT_MODES = [x.name for x in IsoQuantMode]
 
-# Values accepted by --split_molecules. AUTO splits wherever the chemistry supports it and
-# does nothing where it does not; TRUE additionally fails on a mode that cannot split, so a
-# user asking for the impossible gets an error rather than silently unsplit results.
+# Values accepted by --split_molecules. AUTO splits wherever the chemistry supports it;
+# TRUE additionally fails on a mode that cannot split.
 SPLIT_MOLECULES_TRUE = "true"
 SPLIT_MOLECULES_FALSE = "false"
 SPLIT_MOLECULES_AUTO = "auto"
