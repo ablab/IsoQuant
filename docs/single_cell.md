@@ -99,9 +99,14 @@ File should contain one barcode sequence per line.
 More than 1 tab-separated column is allowed, but only the first will be used.
 Supports plain text and gzipped files.
 
+Accepts the literal value `auto` instead of a file, see
+[detecting cell barcodes](#detecting-cell-barcodes).
+
 _Notes:_
-- Barcode calling is performed much better if the whitelist contains a small number of barcodes. 
-If you have a subset of barcodes from short-read data, provide them instead of the full whitelist;
+- What the whitelist means depends on `--n_cells`, see [detecting cell barcodes](#detecting-cell-barcodes).
+Without it the whitelist is taken to be the list of cell barcodes;
+- If you have a subset of barcodes from short-read data, providing them directly also works and
+skips the extra pass over the reads;
 - IsoQuant will perform per-barcode quantification automatically unless `--barcoded_reads` or  `--barcode2spot` are set.
 Use `--read_group barcode` to group reads by barcode explicitly. In case of a large number of barcodes, it may take a lot of time. 
 
@@ -110,6 +115,22 @@ The number of whitelist files depends on the mode:
 * 1 file: `tenX_v3`, `tenX_v2`, `visium_5prime`, `stereoseq`, `curio` (combined 14bp barcodes)
 * 2 files: `visium_hd` (part 1 and part 2 barcode lists)
 * Not needed: `custom_sc` (barcode lists are specified inside the MDF file)
+
+`--n_cells`
+
+Expected number of cell-associated barcodes, or `auto` to estimate it from the data.
+Turns `--barcode_whitelist` into a pool of candidates rather than the cell list itself,
+see [detecting cell barcodes](#detecting-cell-barcodes).
+
+`--n_cells_interval`
+
+Percentage by which the number of selected barcodes may differ from `--n_cells` [25].
+
+`--barcode_correction`
+
+Overrides how the cell barcode list is obtained, which is otherwise decided by `--n_cells`:
+`auto` (default), `whitelist` (always use the whitelist as given), or `detect` (always detect
+cell barcodes from read counts).
 
 `--barcoded_reads`
 
@@ -270,6 +291,41 @@ Barcode/2   VAR_FILE   barcodes.tsv   16
 UMI         VAR_ANY    12
 TSO       CONST      CCCATGTACTCTGCGTTGATACCACTGCTT
 ```
+
+## Detecting cell barcodes
+
+A stock 10x whitelist has millions of entries, but a run has a few thousand cells. Matching
+every read against millions of candidates only means something if the match is exact, so any
+read carrying a sequencing error in the barcode is lost.
+
+`--n_cells` changes what `--barcode_whitelist` means so that this is not necessary:
+
+| `--n_cells` | meaning of `--barcode_whitelist` | passes over the reads |
+|---|---|---|
+| not set | the list of cell barcodes; reads are matched against all of it | 1 |
+| a number, or `auto` | a pool to select the cell barcodes from | 2 |
+
+With `--n_cells` set, the first pass extracts barcode windows from the reads verbatim and counts
+them, the counts pick the cell barcodes out of the pool, and the second pass is ordinary barcode
+calling against that much shorter list. Correction itself is unchanged — only the list being
+matched against differs.
+
+```bash
+python isoquant.py --mode tenX_v3 \
+  --barcode_whitelist 3M-february-2018.txt.gz --n_cells auto \
+  --fastq reads.fastq.gz --reference genome.fa --genedb genes.gtf \
+  --data_type nanopore -o output_dir
+```
+
+`auto` is as accurate as giving the exact cell count, and selection tolerates being off by
+roughly ±25% (`--n_cells_interval`). Supported for `tenX_v3`, `tenX_v2` and `visium_5prime`.
+
+`--barcode_whitelist auto` detects cell barcodes with no pool at all. This is less accurate: a
+mis-anchored barcode window repeats across reads and looks exactly like an abundant cell,
+whereas a whitelist rejects it because it is not a valid protocol barcode.
+
+The detected list is written to `<prefix>.cell_barcodes.tsv`, with a summary of how many
+barcodes were extracted, skipped and selected in `<prefix>.cell_barcodes.stats`.
 
 ## Read splitting
 

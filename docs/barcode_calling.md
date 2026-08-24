@@ -69,8 +69,12 @@ File should contain one barcode sequence per line.
 More than 1 tab-separated column is allowed, but only the first will be used.
 Supports plain text and gzipped files.
 
-_Note: barcode calling is performed much better if the whitelist contains a small number of barcodes. 
-If you have a subset of barcodes from short-read data, provide them instead of the full whitelist._
+Accepts the literal value `auto` instead of a file, which detects the cell barcodes from the
+reads with no candidate list at all (see `--n_cells`).
+
+_Note: what the whitelist means depends on `--n_cells`. Without it the whitelist is taken to be
+the list of cell barcodes and every read is matched against all of it, which for a stock
+whitelist effectively requires an exact match. Set `--n_cells` to treat it as a pool instead._
 
 `--mode`
 
@@ -81,6 +85,16 @@ Barcode calling mode. Available modes: `tenX_v3`, `tenX_v2`, `curio`, `stereoseq
 Path to a molecule description format (MDF) file for `custom_sc` mode.
 This file defines the structure of the sequencing molecule (barcodes, UMIs, linkers, polyT, cDNA).
 See [MDF format](single_cell.md#molecule-description-format-mdf) for the format specification.
+
+`--n_cells`
+
+Expected number of cell-associated barcodes, or `auto` to estimate it from the barcode count
+distribution. Setting it turns `--barcodes` into a pool of candidates: a first pass over the
+reads extracts and counts barcode windows, the counts pick the cell barcodes, and a second pass
+matches the reads against that much shorter list. See
+[detecting cell barcodes](single_cell.md#detecting-cell-barcodes).
+
+Supported for `tenX_v3`, `tenX_v2` and `visium_5prime`.
 
 `--threads` or `-t`
 
@@ -125,6 +139,11 @@ python isoquant_detect_barcodes.py \
 
 The main output is a TSV file (`*.barcoded_reads.tsv`) with a header line followed by one line per read.
 The columns depend on the platform mode.
+
+With `--n_cells`, two more files are written: `*.cell_barcodes.tsv` holds the detected cell
+barcodes, one per line, and `*.cell_barcodes.stats` summarises how many distinct barcodes were
+extracted, how many were malformed, how many cells were detected, and how many reads matched one
+of them exactly.
 
 ### Common columns (all modes)
 

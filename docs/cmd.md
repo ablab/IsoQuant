@@ -306,10 +306,44 @@ File should contain one barcode sequence per line.
 More than 1 tab-separated column is allowed, but only the first will be used.
 Supports plain text and gzipped files.
 
+Accepts the literal value `auto` instead of a file, which detects the cell barcodes from the
+reads with no candidate list at all (see `--n_cells`). Supplying the protocol whitelist is more
+accurate, because counts alone cannot tell a cell from a recurring extraction artifact.
+
 _Notes:_
-- Barcode calling is performed much better if the whitelist contains a small number of barcodes. 
-If you have a subset of barcodes, for example, from short-read data, provide them instead of the full whitelist;
+- What the whitelist means depends on `--n_cells`. Without it the whitelist is taken to be the
+list of cell barcodes, and every read is matched against all of them. A stock whitelist has
+millions of entries but a run has a few thousand cells, and matching against millions of
+candidates effectively requires an exact match, so reads carrying a sequencing error in the
+barcode are lost. Set `--n_cells` to treat the whitelist as a pool instead;
+- If you have a subset of barcodes, for example from short-read data, providing them directly
+also works and skips the extra pass over the reads;
 - IsoQuant will perform per-barcode quantification automatically unless `--barcoded_reads` or  `--barcode2spot` are set.
+
+`--n_cells`
+
+Expected number of cell-associated barcodes, or `auto` to estimate it from the barcode count
+distribution. Setting it turns `--barcode_whitelist` into a pool of candidates: IsoQuant makes a
+first pass over the reads to extract and count barcode windows, picks the cell barcodes from
+those counts, and then matches the reads against that much shorter list.
+
+This costs one extra pass over the reads and is what makes a stock whitelist usable. `auto` is
+as accurate as giving the exact count, and selection tolerates being off by roughly ±25% (see
+`--n_cells_interval`).
+
+Supported for `tenX_v3`, `tenX_v2` and `visium_5prime`.
+
+`--n_cells_interval`
+
+Percentage by which the number of selected barcodes may differ from `--n_cells` [25].
+
+`--barcode_correction`
+
+Overrides how the cell barcode list is obtained, which is otherwise decided by `--n_cells`:
+
+* `auto` (default) - detect cell barcodes if `--n_cells` is set, otherwise use the whitelist as given
+* `whitelist` - always match reads against the whitelist as given
+* `detect` - always detect cell barcodes from read counts, estimating the count if `--n_cells` is not set
 
 `--barcoded_reads`
 
