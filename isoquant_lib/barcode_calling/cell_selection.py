@@ -130,14 +130,15 @@ class CellBarcodeSelector:
 
         cutoff = max(mean(self.counts[bc] for bc in candidates[:n_cells]) / CENTER_COUNT_FRACTION,
                      MIN_CENTER_COUNT)
-        upper = n_cells + n_cells * interval / 100.0
-        lower = n_cells - n_cells * interval / 100.0
+        # inclusive bounds on how far the selection may stray from n_cells
+        upper = int(n_cells * (1.0 + interval / 100.0))
+        lower = math.ceil(n_cells * (1.0 - interval / 100.0))
         logger.info("Selecting up to %d cell barcodes out of %d candidates, minimal read count %.1f" %
                     (upper, len(candidates), cutoff))
 
         centers: List[str] = []
         i = 0
-        while i < len(candidates) and self.counts[candidates[i]] > cutoff and len(centers) <= upper:
+        while i < len(candidates) and self.counts[candidates[i]] > cutoff and len(centers) < upper:
             centers.append(candidates[i])
             i += 1
         # If the cutoff was too aggressive, keep going until the lower bound is reached -- but
