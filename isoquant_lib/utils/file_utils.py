@@ -5,7 +5,6 @@
 # See file LICENSE for details.
 ############################################################################
 
-import glob
 import gzip
 import logging
 import os
@@ -17,13 +16,18 @@ from collections import defaultdict
 from isoquant_lib.common import rreplace
 from isoquant_lib.utils.error_codes import IsoQuantExitCode
 
+logger = logging.getLogger('IsoQuant')
+
 GZIP_SUFFIX = ".gz"
+# Python defaults to 9, which costs roughly twice the time of 6 for about 1% less output on
+# the tables and FASTA written here; 6 is what the gzip tool itself uses.
+GZIP_LEVEL = 6
 
 
 def open_text_write(file_name):
     """Open for text writing, compressing when the name says so."""
     if file_name.endswith(GZIP_SUFFIX):
-        return gzip.open(file_name, "wt")
+        return gzip.open(file_name, "wt", compresslevel=GZIP_LEVEL)
     return open(file_name, "w")
 
 
@@ -55,7 +59,7 @@ def gzip_file_in_place(file_name, keep_original=False):
     if not os.path.exists(file_name):
         return file_name
     gzipped = file_name + GZIP_SUFFIX
-    with open(file_name, "rb") as inf, gzip.open(gzipped, "wb") as outf:
+    with open(file_name, "rb") as inf, gzip.open(gzipped, "wb", compresslevel=GZIP_LEVEL) as outf:
         shutil.copyfileobj(inf, outf)
     if not keep_original:
         os.remove(file_name)
@@ -68,8 +72,6 @@ def strip_compression_suffix(file_name):
         if file_name.endswith(suffix):
             return file_name[:-len(suffix)]
     return file_name
-
-logger = logging.getLogger('IsoQuant')
 
 
 def check_file_exists(file_path: str, description: str):
