@@ -72,6 +72,31 @@ so both levels apply everywhere: the allinfo writers in `dataset_processor`, the
 corrected_bed / read2transcripts), and the two `scripts/` converters. None of them call
 `gzip.open` any more.
 
+### Barcode calling output order
+
+`run_chunks_in_parallel` waits on `FIRST_COMPLETED` and handed results to `handle_result` in
+**completion order**, and `_process_single_file_in_parallel` appended the chunk temp names to a
+list in that order — so which chunk finished first decided the row order of
+`barcoded_reads.tsv` and the record order of the split FASTA. Two runs of identical code on
+identical input differed (measured: at line 200003, a chunk boundary). Row sets were always the
+same and every consumer keys by read id, so nothing was wrong; the outputs simply were not
+reproducible.
+
+`handle_result` now takes `(result, chunk_index)`. The merging caller keys a dict on the index
+and sorts once at merge time; the counting caller ignores it, being order-insensitive already
+(`CellBarcodeSelector.sorted_barcodes` sorts by `(count, barcode)`, a total order). Scheduling
+is untouched — waiting for chunks *in order* instead would idle the pool behind one slow chunk,
+which is the property `run_chunks_in_parallel` exists to provide.
+
+Verified: two runs now produce a byte-identical barcode table and a byte-identical decompressed
+FASTA, with the same row and read-id sets as before the change. The compressed FASTA still
+differs in exactly 10 bytes, all of them gzip header `mtime` fields — the deflate streams are
+identical. Passing `mtime=0` would close that too, if byte-comparable `.gz` outputs are ever
+wanted.
+
+Only barcode calling had this pattern; every other parallel stage uses `proc.map`, which
+preserves input order.
+
 **Gotcha, caught only by measuring the output size.** The split FASTA is compressed in the
 chunk workers, and those temps were called `subreads.gz` — no `.fa`, so the inference gave them
 the *table* level while the single-threaded path, which passes the real output name, gave them

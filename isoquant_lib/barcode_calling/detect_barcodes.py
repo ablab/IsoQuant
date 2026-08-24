@@ -405,8 +405,10 @@ def count_barcodes_in_reads(args, barcode_length):
         def submit(pool, chunk, num):
             return pool.submit(count_chunk, chunk, split_reads, barcode_length)
 
-        def handle_result(result):
+        def handle_result(result, chunk_index):
             counts, malformed, reads = result
+            # order-insensitive: the counts are summed and CellBarcodeSelector sorts them by
+            # (count, barcode), so the chunk index is of no use here
             selector.merge_counts(counts, malformed)
             return reads
 
@@ -523,9 +525,13 @@ def open_read_chunks(input_file):
 def run_chunks_in_parallel(read_chunk_gen, args, barcode_detector, submit, handle_result):
     """Feed read chunks to a worker pool, keeping args.threads tasks in flight.
 
+    Results are handed to handle_result in completion order, so a consumer whose output depends
+    on the order gets the chunk index and has to reorder by it -- see _process_single_file_in_parallel.
+    Waiting for the chunks in order instead would idle the pool behind a single slow one.
+
     Args:
         submit: (pool, chunk, chunk_index) -> Future
-        handle_result: (result) -> number of reads processed
+        handle_result: (result, chunk_index) -> number of reads processed
     """
     # Clean up parent memory before spawning workers
     gc.collect()
@@ -537,10 +543,10 @@ def run_chunks_in_parallel(read_chunk_gen, args, barcode_detector, submit, handl
             mp_context=mp_context,
             initializer=setup_detector_worker,
             initargs=(log_file, log_level, barcode_detector)) as proc:
-        future_results = []
+        future_results = {}  # future -> the index of the chunk it is processing
         chunk_counter = 0
         for chunk in read_chunk_gen:
-            future_results.append(submit(proc, chunk, chunk_counter))
+            future_results[submit(proc, chunk, chunk_counter)] = chunk_counter
             chunk_counter += 1
             if chunk_counter >= args.threads:
                 break
@@ -553,12 +559,11 @@ def run_chunks_in_parallel(read_chunk_gen, args, barcode_detector, submit, handl
             for c in completed_features:
                 if c.exception() is not None:
                     raise c.exception()
-                read_counter += handle_result(c.result())
+                read_counter += handle_result(c.result(), future_results.pop(c))
                 sys.stdout.write("Processed %d reads\r" % read_counter)
-                future_results.remove(c)
                 if reads_left:
                     try:
-                        future_results.append(submit(proc, next(read_chunk_gen), chunk_counter))
+                        future_results[submit(proc, next(read_chunk_gen), chunk_counter)] = chunk_counter
                         chunk_counter += 1
                     except StopIteration:
                         reads_left = False
@@ -588,17 +593,20 @@ def _process_single_file_in_parallel(input_file, output_tsv, out_fasta, args, ba
         tmp_fasta_file = os.path.join(tmp_dir, "subreads.fa")
         if out_fasta.endswith(GZIP_SUFFIX):
             tmp_fasta_file += GZIP_SUFFIX
-    output_files = []
+    chunk_outputs = {}
 
     def submit(pool, chunk, num):
         return pool.submit(process_chunk, chunk, tmp_barcode_file, num, tmp_fasta_file, split_reads)
 
-    def handle_result(result):
+    def handle_result(result, chunk_index):
         tmp_out_file, tmp_out_fasta, read_count = result
-        output_files.append((tmp_out_file, tmp_out_fasta))
+        chunk_outputs[chunk_index] = (tmp_out_file, tmp_out_fasta)
         return read_count
 
     run_chunks_in_parallel(read_chunk_gen, args, barcode_detector, submit, handle_result)
+    # by chunk index, not by completion: the merge below defines the row order of the barcode
+    # table and the record order of the FASTA, and both have to be the same on every run
+    output_files = [chunk_outputs[i] for i in sorted(chunk_outputs)]
 
     with open(output_tsv, "w") as final_output_tsv:
         # binary: concatenating gzip members byte-wise gives a valid multi-member stream,
