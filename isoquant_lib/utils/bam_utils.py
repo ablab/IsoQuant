@@ -16,7 +16,7 @@ detection in particular reads breakpoints from the SA tag and from terminal soft
 import logging
 import os
 import shutil
-from typing import Dict, Iterable, List, Optional, Set, Tuple
+from typing import Dict, Iterable, Iterator, List, Optional, Set, Tuple
 
 import pysam
 
@@ -37,6 +37,9 @@ ReadTags = Dict[str, Tuple[Optional[str], Optional[str], Optional[str], Optional
 # omitted rather than carrying any of them.
 PLACEHOLDERS = frozenset(("*", ".", "None"))
 
+# How many fragments one samtools merge call may take; see _merge_in_rounds.
+BAM_MERGE_BATCH = 500
+
 
 def index_bam(bam_file: str, threads: int = 1) -> None:
     """Index a BAM, falling back to CSI for references too long for BAI."""
@@ -49,6 +52,34 @@ def index_bam(bam_file: str, threads: int = 1) -> None:
             pysam.index('-@', str(threads), '-c', bam_file)
         except pysam.SamtoolsError as csi_err:
             logger.error("Failed to create CSI index: %s" % csi_err)
+
+
+def _merge_in_rounds(output_bam: str, fragments: List[str], threads: int) -> List[str]:
+    """Merge fragments into output_bam, in rounds when there are too many for one call.
+
+    samtools opens every input at once and gives up a little above a thousand handles, which a
+    reference with many unplaced scaffolds reaches easily. Returns the intermediate files the
+    rounds produced, for the caller to delete.
+    """
+    intermediates = []
+    current = list(fragments)
+    round_index = 0
+    while len(current) > BAM_MERGE_BATCH:
+        merged = []
+        for start in range(0, len(current), BAM_MERGE_BATCH):
+            batch = current[start:start + BAM_MERGE_BATCH]
+            if len(batch) == 1:
+                # a lone leftover: carry it into the next round rather than copying it
+                merged.append(batch[0])
+                continue
+            part = "%s.merge%d_%d.bam" % (output_bam, round_index, start // BAM_MERGE_BATCH)
+            pysam.merge("-f", "-@", str(threads), part, *batch)
+            intermediates.append(part)
+            merged.append(part)
+        current = merged
+        round_index += 1
+    pysam.merge("-f", "-@", str(threads), output_bam, *current)
+    return intermediates
 
 
 def merge_bam_files(output_bam: str, input_bams: Iterable[str], threads: int = 1,
@@ -66,7 +97,8 @@ def merge_bam_files(output_bam: str, input_bams: Iterable[str], threads: int = 1
     if len(fragments) == 1:
         shutil.move(fragments[0], output_bam)
     else:
-        pysam.merge("-f", "-@", str(threads), output_bam, *fragments)
+        for intermediate in _merge_in_rounds(output_bam, fragments, threads):
+            os.remove(intermediate)
         if remove_fragments:
             for fragment in fragments:
                 os.remove(fragment)
@@ -135,14 +167,25 @@ def load_barcode_umi_tags(barcode_table: str, read_ids: Optional[Set[str]] = Non
     return read_tags
 
 
+def unplaced_reads(inf: pysam.AlignmentFile) -> Iterator[pysam.AlignedSegment]:
+    """The unmapped records that carry no coordinates, which fetch() by chromosome never yields.
+
+    They sit at the end of a coordinate-sorted file, so an index turns reaching them into a
+    seek; without one the whole file has to be read.
+    """
+    if inf.has_index():
+        return inf.fetch("*")
+    return (read for read in inf.fetch(until_eof=True)
+            if read.is_unmapped and read.reference_id == -1)
+
+
 def collect_unmapped_read_ids(input_bams: Iterable[str]) -> Set[str]:
     """Ids of the unplaced reads, so their tags can be looked up before they are copied."""
     read_ids = set()
     for bam_file in input_bams:
         with pysam.AlignmentFile(bam_file, "rb") as inf:
-            for read in inf.fetch(until_eof=True):
-                if read.is_unmapped and read.reference_id == -1:
-                    read_ids.add(read.query_name)
+            for read in unplaced_reads(inf):
+                read_ids.add(read.query_name)
     return read_ids
 
 
@@ -197,11 +240,10 @@ def write_unmapped_bam(input_bams: Iterable[str], output_bam: str,
         with pysam.AlignmentFile(output_bam, "wb", template=template) as outf:
             for bam_file in bam_list:
                 with pysam.AlignmentFile(bam_file, "rb") as inf:
-                    for read in inf.fetch(until_eof=True):
-                        if read.is_unmapped and read.reference_id == -1:
-                            tags = read_tags.get(read.query_name) if read_tags else None
-                            if tags is not None:
-                                _apply_tags(read, tags, barcode_tag, umi_tag)
-                            outf.write(read)
-                            written += 1
+                    for read in unplaced_reads(inf):
+                        tags = read_tags.get(read.query_name) if read_tags else None
+                        if tags is not None:
+                            _apply_tags(read, tags, barcode_tag, umi_tag)
+                        outf.write(read)
+                        written += 1
     return written

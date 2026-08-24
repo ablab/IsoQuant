@@ -7,10 +7,12 @@
 """BAM outputs: per-chromosome tagging and merging."""
 
 import os
+import shutil
 
 import pysam
 import pytest
 
+import isoquant_lib.utils.bam_utils as bam_utils
 from isoquant_lib.utils.bam_utils import (
     GENE_TAG,
     TRANSCRIPT_TAG,
@@ -225,6 +227,20 @@ class TestCollectUnmappedReadIds:
         assert collect_unmapped_read_ids([bam]) == set()
 
 
+class TestUnplacedReads:
+    def test_same_reads_with_and_without_an_index(self, input_bam, tmp_path):
+        """An index turns reaching the unplaced reads into a seek; the result must not change."""
+        unindexed = str(tmp_path / "noindex.bam")
+        shutil.copyfile(input_bam, unindexed)
+        with pysam.AlignmentFile(input_bam, "rb") as indexed:
+            assert indexed.has_index()
+            with_index = [read.query_name for read in bam_utils.unplaced_reads(indexed)]
+        with pysam.AlignmentFile(unindexed, "rb") as plain:
+            assert not plain.has_index()
+            without_index = [read.query_name for read in bam_utils.unplaced_reads(plain)]
+        assert with_index == without_index == ["unmapped1"]
+
+
 class TestMergeBamFiles:
     def test_merges_and_indexes(self, tmp_path):
         first = write_bam(str(tmp_path / "a.bam"), [make_read("r1", 0)])
@@ -253,6 +269,24 @@ class TestMergeBamFiles:
         out = str(tmp_path / "merged.bam")
         assert merge_bam_files(out, [None, None]) is None
         assert not os.path.exists(out)
+
+    @pytest.mark.parametrize("count", [11, 12, 13])
+    def test_more_fragments_than_one_merge_call_takes(self, tmp_path, monkeypatch, count):
+        """samtools opens every input at once, so a reference with many contigs needs rounds.
+
+        The counts straddle a multiple of the batch size, which is where a lone leftover
+        fragment has to be carried into the next round.
+        """
+        monkeypatch.setattr(bam_utils, "BAM_MERGE_BATCH", 3)
+        fragments = [write_bam(str(tmp_path / ("f%d.bam" % i)), [make_read("r%d" % i, 0, 100 + i)])
+                     for i in range(count)]
+        out = str(tmp_path / "merged.bam")
+        assert merge_bam_files(out, fragments) == out
+        assert sorted(read_names(out)) == sorted("r%d" % i for i in range(count))
+        assert not any(os.path.exists(f) for f in fragments)
+        # the intermediates of every round are cleaned up as well
+        assert sorted(os.path.basename(f) for f in tmp_path.glob("merged.bam*")) == \
+            [os.path.basename(out), os.path.basename(out) + ".bai"]
 
 
 class TestLoadSurvivorTags:
