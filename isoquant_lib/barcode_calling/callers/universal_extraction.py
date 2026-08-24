@@ -139,11 +139,7 @@ class UniversalSingleMoleculeExtractor:
         if error_probability > 0.01 or density > 1:
             filling_edit_distance -= 1
 
-        # A whitelist dense enough to drive the tolerated distance to zero (reachable for
-        # ~50M barcodes of length 16) would demand an exact match, which makes the index
-        # useless; always allow at least one mismatch. The lower clamp also keeps a negative
-        # distance from producing a min_score above barcode_length, which nothing can reach.
-        self.min_scores[base_name] = barcode_length - max(filling_edit_distance, 1)
+        self.min_scores[base_name] = barcode_length - filling_edit_distance
         if variable_length:
             self.min_scores[base_name] = min(self.min_scores[base_name] + 1, barcode_length)
         logger.info("Minimal score for element %s is set to %d" % (base_name, self.min_scores[base_name]))
