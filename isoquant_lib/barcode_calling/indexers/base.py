@@ -15,6 +15,8 @@ import math
 from typing import List, Tuple, Iterable, Dict, DefaultDict
 from collections import defaultdict
 
+from ..common import NUCL2BIN as SHARED_NUCL2BIN
+
 
 class KmerIndexer:
     """
@@ -168,11 +170,8 @@ class ArrayKmerIndexer:
     Memory usage: O(4^k) array entries. Best for k <= 8.
     """
 
-    # Nucleotide to 2-bit encoding (A=00, C=01, G=10, T=11).
-    # NOTE: this differs from common.NUCL2BIN (A,C,T,G = 0,1,2,3, derived from the ASCII code).
-    # Both are self-consistent, but this index is built and queried from strings only, so
-    # codes must never be exchanged with the common.str_to_2bit family.
-    NUCL2BIN: Dict[str, int] = {'A': 0, 'C': 1, 'G': 2, 'T': 3, 'a': 0, 'c': 1, 'g': 2, 't': 3}
+    # the shared 2-bit encoding, so a code means the same thing here as everywhere else
+    NUCL2BIN: Dict[str, int] = SHARED_NUCL2BIN
 
     def __init__(self, known_strings: Iterable[str], kmer_size: int = 6):
         """

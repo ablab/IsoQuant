@@ -283,10 +283,8 @@ def detect_first_exact_positions(sequence, start, end, kmer_size, pattern, patte
     return start_pos - skipped_bases, end_pos + leftover_bases
 
 
-# NOTE: this alphabet is A,C,T,G = 0,1,2,3, chosen so that the code of a base can be derived
-# straight from its ASCII value as (ord(c) & 6) >> 1 (see str_to_2bit and batch_str_to_2bit).
-# ArrayKmerIndexer uses its own, different alphabet (A,C,G,T = 0,1,2,3, indexers/base.py).
-# Both are self-consistent, but codes produced by one family must never be fed to the other.
+# The 2-bit alphabet used everywhere: A,C,T,G = 0,1,2,3, so that a base can be encoded
+# straight from its ASCII value as (ord(c) & 6) >> 1 (see str_to_2bit, batch_str_to_2bit).
 NUCL2BIN = {'A': 0, 'C': 1, 'G': 3, 'T': 2, 'a': 0, 'c': 1, 'g': 3, 't': 2}
 BIN2NUCL = ["A", "C", "T", "G"]
 

@@ -7,7 +7,7 @@
 import numpy
 import pytest
 from isoquant_lib.barcode_calling.indexers import KmerIndexer, Dict2BitKmerIndexer, ArrayKmerIndexer, Array2BitKmerIndexer
-from isoquant_lib.barcode_calling.common import str_to_2bit, batch_str_to_2bit
+from isoquant_lib.barcode_calling.common import str_to_2bit, batch_str_to_2bit, NUCL2BIN
 
 
 class TestKmerIndexer:
@@ -276,22 +276,29 @@ class TestArrayKmerIndexer:
         assert len(indexer.index) == 64  # 4^3
 
     def test_binary_encoding(self):
-        """Test nucleotide to binary conversion."""
+        """The one 2-bit alphabet, shared with str_to_2bit and friends."""
+        assert ArrayKmerIndexer.NUCL2BIN is NUCL2BIN
         assert ArrayKmerIndexer.NUCL2BIN['A'] == 0
         assert ArrayKmerIndexer.NUCL2BIN['C'] == 1
-        assert ArrayKmerIndexer.NUCL2BIN['G'] == 2
-        assert ArrayKmerIndexer.NUCL2BIN['T'] == 3
+        assert ArrayKmerIndexer.NUCL2BIN['T'] == 2
+        assert ArrayKmerIndexer.NUCL2BIN['G'] == 3
+
+    def test_encoding_agrees_with_str_to_2bit(self):
+        """Two encodings of the same base used to disagree; codes are now interchangeable."""
+        indexer = ArrayKmerIndexer([], kmer_size=4)
+        for seq in ("ACGT", "TTTT", "GATC", "CAGT"):
+            assert list(indexer._get_kmer_indexes(seq)) == [str_to_2bit(seq)]
 
     def test_get_kmer_indexes(self):
         """Test k-mer index generation."""
         indexer = ArrayKmerIndexer([], kmer_size=2)
         # "AC" = 00 01 = 1
-        # "CT" = 01 11 = 7
+        # "CT" = 01 10 = 6
         kmer_idxs = list(indexer._get_kmer_indexes("ACT"))
 
         assert len(kmer_idxs) == 2
         assert kmer_idxs[0] == 1  # AC
-        assert kmer_idxs[1] == 7  # CT
+        assert kmer_idxs[1] == 6  # CT
 
     def test_exact_match(self):
         """Test finding exact match."""
