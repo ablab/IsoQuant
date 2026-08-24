@@ -44,10 +44,28 @@ compression. Readers go through `resolve_optionally_gzipped()`, which returns wh
 Helpers live in `isoquant_lib/utils/file_utils.py`: `open_text_write`, `open_text_read`,
 `resolve_optionally_gzipped`, `gzip_file_in_place`, `strip_compression_suffix`.
 
-Both writers pass `compresslevel=GZIP_LEVEL` (6). Python's `gzip` defaults to 9, which on a
-synthetic barcode table measured 6.6 MB/s against 12.1 MB/s at level 6 for 1% less output —
-and `compress_barcode_tables` runs **serially in the parent** at the end of the run, so on a
-billion-read table that difference is hours. 6 is also what the `gzip` tool itself uses.
+Both writers pass `compresslevel=GZIP_LEVEL` (6). Python's `gzip` defaults to 9. Measured on a
+real 25 MB barcode table from 411K ONT reads (UUID read ids, so realistic entropy — an earlier
+synthetic table was near-incompressible and badly overstated the gap):
+
+| level | barcode table | vs L6 size | split FASTA | vs L6 size |
+|-------|---------------|-----------|-------------|-----------|
+| 1 | 94.6 MB/s | +8.5% | 92.5 MB/s | +13.8% |
+| 4 | 55.8 MB/s | +2.0% | 65.3 MB/s | +5.7% |
+| 5 | 44.2 MB/s | +0.4% | 32.5 MB/s | +3.4% |
+| 6 | 39.2 MB/s | — | 12.5 MB/s | — |
+| 9 | 16.0 MB/s | −3.0% | 2.7 MB/s | −3.9% |
+
+**Going below 6 is not worth it.** `compress_barcode_tables` runs serially in the parent, but
+at 39 MB/s a ~100 GB table (roughly a billion reads) costs ~45 min against ~105 min at level 9
+— the 9→6 change is the win; 6→1 would save another ~25 min for 8.5% more disk, and levels 4-5
+save almost nothing. The FASTA has a steeper curve but is compressed **inside the chunk
+workers**, where it is dwarfed by the SSW barcode matching, so its level is not a wall-clock
+factor at all.
+
+The table has to stay plain during the run for a second reason worth recording:
+`split_read_table_parallel` streams it line by line in *every* worker, so a gzipped table would
+be decompressed once per thread rather than read once.
 
 ## 3. `--large_output tagged_bam`
 
