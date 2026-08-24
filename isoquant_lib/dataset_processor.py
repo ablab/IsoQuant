@@ -57,6 +57,7 @@ from isoquant_lib.utils.file_naming import (
     umi_filtered_lock_file_name,
     umi_output_prefix,
     tagged_bam_fragment_name,
+    tagged_bam_lock_filename,
 )
 from isoquant_lib.model_construction.transcript_printer import GFFPrinter, VoidTranscriptPrinter
 from .barcode_calling.umi_filtering import create_transcript_info_dict
@@ -206,7 +207,16 @@ class DatasetProcessor:
 
             # nothing to tag with otherwise; the user was warned about that at startup
             if tagged_bam_references is not None:
-                self.write_tagged_bam(sample, tagged_bam_references)
+                tagged_bam_done = tagged_bam_lock_filename(sample)
+                if (self.args.resume and os.path.exists(tagged_bam_done)
+                        and os.path.exists(sample.out_tagged_bam)):
+                    logger.info("Tagged BAM was written during the previous run, keeping %s"
+                                % sample.out_tagged_bam)
+                else:
+                    if os.path.exists(tagged_bam_done):
+                        os.remove(tagged_bam_done)
+                    self.write_tagged_bam(sample, tagged_bam_references)
+                    open(tagged_bam_done, "w").close()
 
         if self.args.read_assignments:
             saves_file = self.args.read_assignments[0]
