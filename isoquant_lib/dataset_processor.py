@@ -187,12 +187,14 @@ class DatasetProcessor:
                 sample.barcoded_reads = self.args.barcoded_reads
 
             # a tagged BAM copies every reference, including the unplaced scaffolds IsoQuant
-            # does not analyse, so those reads need a barcode table of their own to be tagged
-            split_chr_ids = self.get_chr_list()
+            # does not analyse, so those reads need a barcode table of their own to be tagged.
+            # The same list drives the split and the copy, so every fragment finds its table.
+            tagged_bam_references = None
             if large_output_enabled(self.args, "tagged_bam"):
-                split_chr_ids = references_with_alignments([f[0] for f in sample.file_list])
+                tagged_bam_references = references_with_alignments([f[0] for f in sample.file_list])
+            split_chr_ids = self.get_chr_list() if tagged_bam_references is None else tagged_bam_references
             for chr_id in split_chr_ids:
-                split_barcodes_dict[chr_id] = sample.barcodes_split_reads + "_" + chr_id
+                split_barcodes_dict[chr_id] = sample.get_barcodes_split_file(chr_id)
             barcode_split_done = split_barcodes_lock_filename(sample)
             if self.args.resume and os.path.exists(barcode_split_done):
                 logger.info("Barcode table was split during the previous run, existing files will be used")
@@ -203,8 +205,8 @@ class DatasetProcessor:
                 open(barcode_split_done, "w").close()
 
             # nothing to tag with otherwise; the user was warned about that at startup
-            if large_output_enabled(self.args, "tagged_bam"):
-                self.write_tagged_bam(sample)
+            if tagged_bam_references is not None:
+                self.write_tagged_bam(sample, tagged_bam_references)
 
         if self.args.read_assignments:
             saves_file = self.args.read_assignments[0]
@@ -766,16 +768,17 @@ class DatasetProcessor:
                 return list(proc.map(*gen, chunksize=1))
         return list(map(*gen))
 
-    def write_tagged_bam(self, sample):
+    def write_tagged_bam(self, sample, references):
         """A copy of the input BAM(s) with barcode and UMI tags, keeping every alignment.
 
         Purely a side output: the barcode table split it reads from happens regardless, and
-        nothing downstream looks at the result.
+        nothing downstream looks at the result. references is the list the barcode table was
+        split over, so each fragment has a table to read its tags from.
         """
         logger.info("Writing tagged BAM")
         bam_files = [f[0] for f in sample.file_list]
         fragments = self.map_over_chromosomes(write_tagged_bam_in_parallel, sample, self.args,
-                                              chr_ids=references_with_alignments(bam_files))
+                                              chr_ids=references)
 
         # fetch() by chromosome never returns unmapped reads, so they need a pass of their own.
         # They belong to no chromosome and so appear in no split table, but a barcode is called
