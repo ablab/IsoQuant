@@ -549,6 +549,8 @@ We recommend _not_ to modify these options unless you are clearly aware of their
 
 `--no_gzip`
     Do not compress large output files.
+    Compressed outputs use gzip level 6 for tables and level 4 for FASTA, which is where the
+    time/size trade-off sits for each kind of data.
     This also covers the single-cell outputs: the split-reads FASTA (compressed as it is
     written, in the barcode-calling workers) and the barcoded read tables (compressed once the
     run finishes, so they stay readable while the pipeline needs them). Neither slows any

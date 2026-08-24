@@ -32,8 +32,12 @@ import argparse
 import gzip
 from typing import TextIO
 
+from isoquant_lib.utils.file_utils import open_text_write
+
 
 def _open(path: str, mode: str = "r") -> TextIO:
+    if mode.startswith("w"):
+        return open_text_write(path)
     if path.endswith(".gz"):
         return gzip.open(path, mode + "t")
     return open(path, mode)

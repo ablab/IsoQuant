@@ -7,7 +7,6 @@
 
 import gc
 import glob
-import gzip
 import itertools
 import logging
 import multiprocessing
@@ -35,7 +34,7 @@ from isoquant_lib.utils.serialization import (
 )
 from isoquant_lib.utils.stats import EnumStats
 from isoquant_lib.utils.file_utils import (merge_files, merge_counts, gzip_file_in_place,
-                                          resolve_optionally_gzipped)
+                                          open_text_write, resolve_optionally_gzipped)
 from isoquant_lib.utils.bam_utils import (PLACEHOLDERS, collect_unmapped_read_ids,
                                          load_barcode_umi_tags, merge_bam_files,
                                          references_with_alignments, write_unmapped_bam)
@@ -636,9 +635,7 @@ class DatasetProcessor:
                 allinfo_fname = output_prefix + ".allinfo"
                 if self.args.gzipped:
                     allinfo_fname += ".gz"
-                    allinfo_outf = gzip.open(allinfo_fname, "wt")
-                else:
-                    allinfo_outf = open(allinfo_fname, "w")
+                allinfo_outf = open_text_write(allinfo_fname)
 
             for all_info_file_name, stats_output_file_name, umi_filter_done in results:
                 if save_allinfo:
@@ -726,9 +723,7 @@ class DatasetProcessor:
                         allinfo_fname = output_prefix + ".allinfo"
                         if self.args.gzipped:
                             allinfo_fname += ".gz"
-                            allinfo_outf = gzip.open(allinfo_fname, "wt")
-                        else:
-                            allinfo_outf = open(allinfo_fname, "w")
+                        allinfo_outf = open_text_write(allinfo_fname)
 
                     for all_info_file_name, stats_output_file_name, umi_filter_done in results:
                         if save_allinfo:

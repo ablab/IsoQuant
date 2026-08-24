@@ -19,17 +19,38 @@ from isoquant_lib.utils.error_codes import IsoQuantExitCode
 logger = logging.getLogger('IsoQuant')
 
 GZIP_SUFFIX = ".gz"
-# Python defaults to 9, which on a real barcode table runs at 16 MB/s against 39 MB/s at 6 for
-# 3% less output. Going below 6 is not worth it: 1 is only 8.5% larger but the table is the
-# one thing compressed serially, and there it buys minutes, not hours. 6 is also what the
-# gzip tool itself uses.
+
+# Levels for the two kinds of output IsoQuant writes, measured on real ONT data (see below).
+# Python's gzip defaults to 9, which is a bad trade for both.
+#
+# Tables (TSV, BED, MTX, allinfo): 6. On a real barcode table level 9 runs at 16 MB/s against
+# 39 MB/s at 6 for 3% less output, and going below 6 saves little -- level 5 is 11% faster for
+# 0.4% more, level 1 is 2.4x faster for 8.5% more.
 GZIP_LEVEL = 6
+# Sequences (FASTA/FASTQ): 4. Nucleotide data sits near gzip's entropy floor, so the high
+# levels grind: 12.5 MB/s at 6 against 65.3 MB/s at 4, for 5.7% more output. These are also
+# the largest files IsoQuant writes.
+GZIP_LEVEL_SEQUENCES = 4
+
+SEQUENCE_SUFFIXES = (".fa", ".fasta", ".fq", ".fastq")
 
 
-def open_text_write(file_name):
-    """Open for text writing, compressing when the name says so."""
+def gzip_level_for(file_name):
+    """Compression level for an output, chosen by the kind of data its name implies."""
+    if strip_compression_suffix(file_name).endswith(SEQUENCE_SUFFIXES):
+        return GZIP_LEVEL_SEQUENCES
+    return GZIP_LEVEL
+
+
+def open_text_write(file_name, compresslevel=None):
+    """Open for text writing, compressing when the name says so.
+
+    The level defaults to what the name implies; pass one to override.
+    """
     if file_name.endswith(GZIP_SUFFIX):
-        return gzip.open(file_name, "wt", compresslevel=GZIP_LEVEL)
+        if compresslevel is None:
+            compresslevel = gzip_level_for(file_name)
+        return gzip.open(file_name, "wt", compresslevel=compresslevel)
     return open(file_name, "w")
 
 
@@ -61,7 +82,8 @@ def gzip_file_in_place(file_name, keep_original=False):
     if not os.path.exists(file_name):
         return file_name
     gzipped = file_name + GZIP_SUFFIX
-    with open(file_name, "rb") as inf, gzip.open(gzipped, "wb", compresslevel=GZIP_LEVEL) as outf:
+    with open(file_name, "rb") as inf, \
+            gzip.open(gzipped, "wb", compresslevel=gzip_level_for(file_name)) as outf:
         shutil.copyfileobj(inf, outf)
     if not keep_original:
         os.remove(file_name)

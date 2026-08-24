@@ -25,6 +25,7 @@ import gzip
 from typing import TextIO
 
 from isoquant_lib.common import junctions_from_blocks
+from isoquant_lib.utils.file_utils import open_text_write
 
 
 # read_info column indices
@@ -49,6 +50,8 @@ RI_ADDITIONAL = 17
 
 
 def _open_file(path: str, mode: str = "r") -> TextIO:
+    if mode.startswith("w"):
+        return open_text_write(path)
     if path.endswith(".gz"):
         return gzip.open(path, mode + "t")
     return open(path, mode)
