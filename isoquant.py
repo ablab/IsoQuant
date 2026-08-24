@@ -782,6 +782,9 @@ def _resolve_barcode_correction(args):
 
     # nothing to detect when barcodes come ready-made
     if args.barcoded_reads or args.barcoded_bam:
+        if args.n_cells is not None:
+            logger.warning("--n_cells is ignored: barcodes are taken from %s, so there is nothing "
+                           "to detect" % ("--barcoded_bam" if args.barcoded_bam else "--barcoded_reads"))
         return
 
     requested = BarcodeCorrectionMethod[args.barcode_correction]
@@ -790,6 +793,9 @@ def _resolve_barcode_correction(args):
             logger.critical('--barcode_correction whitelist cannot be used with --barcode_whitelist %s'
                             % AUTO_BARCODES)
             sys.exit(IsoQuantExitCode.INCOMPATIBLE_OPTIONS)
+        if args.n_cells is not None:
+            logger.warning("--n_cells is ignored: --barcode_correction %s matches reads against the "
+                           "whitelist as given" % BarcodeCorrectionMethod.whitelist.name)
         return
 
     # a detected whitelist needs a cell count; without one, estimate it
