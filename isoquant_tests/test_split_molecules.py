@@ -10,7 +10,7 @@ import argparse
 
 import pytest
 
-import isoquant
+from isoquant_lib.barcode_calling import options
 from isoquant_lib.modes import (
     DEPRECATED_MODE_ALIASES,
     IsoQuantMode,
@@ -26,9 +26,9 @@ NON_SPLITTING_MODES = ["curio", "visium_hd", "custom_sc"]
 def resolve(mode, split_molecules=None):
     """Run the same two steps check_input_params does, and return (mode, split flag)."""
     args = argparse.Namespace(mode=mode, split_molecules=split_molecules)
-    isoquant._resolve_deprecated_mode(args)
+    options.resolve_deprecated_mode(args)
     args.mode = IsoQuantMode[args.mode]
-    isoquant._resolve_split_molecules(args)
+    options.resolve_split_molecules(args)
     return args.mode, args.split_molecules
 
 
@@ -67,13 +67,13 @@ class TestResolutionIsIdempotent:
     def resolve_again(mode, split_molecules):
         """First resolution, then the one --resume triggers on the restored args."""
         args = argparse.Namespace(mode=mode, split_molecules=split_molecules)
-        isoquant._resolve_deprecated_mode(args)
+        options.resolve_deprecated_mode(args)
         args.mode = IsoQuantMode[args.mode]
-        isoquant._resolve_split_molecules(args)
+        options.resolve_split_molecules(args)
         first = args.split_molecules
         # check_input_params skips the mode conversion when args.mode is already an enum,
         # but re-runs the split resolution
-        isoquant._resolve_split_molecules(args)
+        options.resolve_split_molecules(args)
         return first, args.split_molecules
 
     @pytest.mark.parametrize("mode", SPLITTING_MODES + NON_SPLITTING_MODES)

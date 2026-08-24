@@ -62,8 +62,15 @@ from isoquant_lib.quantification.long_read_counter import COUNTING_STRATEGIES, C
 from isoquant_lib.utils.input_data_storage import InputDataStorage, InputDataType
 from isoquant_lib.assignment.multimap_resolver import MultimapResolvingStrategy
 from isoquant_lib.utils.stats import combine_counts
-from isoquant_lib.barcode_calling import (process_single_thread, process_in_parallel, get_umi_length,
-                                          get_barcode_length, detect_cell_barcode_list)
+from isoquant_lib.barcode_calling.options import (
+    check_barcode_input_files,
+    check_barcode_mapping_files,
+    resolve_deprecated_mode,
+    resolve_split_molecules,
+    validate_barcode_calling,
+)
+from isoquant_lib.barcode_calling.pipeline import call_barcodes
+from isoquant_lib.utils.file_utils import check_file_exists
 from isoquant_lib.common import setup_worker_logging, _get_log_params
 
 
@@ -745,168 +752,6 @@ def _dedup_read_group_specs(args):
         args.read_group = updated_specs
 
 
-def _count_whitelist_barcodes(whitelist_files):
-    total = 0
-    for file_name in whitelist_files:
-        handle = gzip.open(file_name, "rt") if file_name.endswith(("gz", "gzip")) else open(file_name)
-        with handle:
-            total += sum(1 for _ in handle)
-    return total
-
-
-def _resolve_n_cells(args):
-    """Normalise --n_cells to an int, the string AUTO_BARCODES, or None."""
-    if args.n_cells is None:
-        return None
-    if args.n_cells == AUTO_BARCODES:
-        return AUTO_BARCODES
-    try:
-        n_cells = int(args.n_cells)
-    except ValueError:
-        logger.critical('--n_cells must be a positive integer or "%s"' % AUTO_BARCODES)
-        sys.exit(IsoQuantExitCode.INVALID_PARAMETER)
-    if n_cells <= 0:
-        logger.critical("--n_cells must be positive")
-        sys.exit(IsoQuantExitCode.INVALID_PARAMETER)
-    return n_cells
-
-
-def _resolve_barcode_correction(args):
-    """Decide whether cell barcodes are supplied or detected from the data.
-
-    --n_cells decides what the whitelist means: unset it is the cell barcodes themselves,
-    set it is a pool to select them from, which costs an extra pass over the reads.
-    Sets args.detect_cell_barcodes and normalises args.n_cells.
-    """
-    args.detect_cell_barcodes = False
-    args.n_cells = _resolve_n_cells(args)
-    whitelist_is_auto = args.barcode_whitelist == [AUTO_BARCODES]
-
-    # nothing to detect when barcodes come ready-made
-    if args.barcoded_reads or args.barcoded_bam:
-        if args.n_cells is not None:
-            logger.warning("--n_cells is ignored: barcodes are taken from %s, so there is nothing "
-                           "to detect" % ("--barcoded_bam" if args.barcoded_bam else "--barcoded_reads"))
-        return
-
-    requested = BarcodeCorrectionMethod[args.barcode_correction]
-    if requested == BarcodeCorrectionMethod.whitelist:
-        if whitelist_is_auto:
-            logger.critical('--barcode_correction whitelist cannot be used with --barcode_whitelist %s'
-                            % AUTO_BARCODES)
-            sys.exit(IsoQuantExitCode.INCOMPATIBLE_OPTIONS)
-        if args.n_cells is not None:
-            logger.warning("--n_cells is ignored: --barcode_correction %s matches reads against the "
-                           "whitelist as given" % BarcodeCorrectionMethod.whitelist.name)
-        return
-
-    # a detected whitelist needs a cell count; without one, estimate it
-    if whitelist_is_auto and args.n_cells is None:
-        args.n_cells = AUTO_BARCODES
-
-    detect = whitelist_is_auto or args.n_cells is not None or requested == BarcodeCorrectionMethod.detect
-    if not detect:
-        if args.barcode_whitelist:
-            _warn_on_large_whitelist(args)
-        return
-
-    if not args.mode.supports_cell_barcode_detection():
-        logger.critical("Detecting cell barcodes from the data is not supported for mode %s" % args.mode.name)
-        sys.exit(IsoQuantExitCode.INCOMPATIBLE_OPTIONS)
-
-    if requested == BarcodeCorrectionMethod.detect and args.n_cells is None:
-        args.n_cells = AUTO_BARCODES
-    args.detect_cell_barcodes = True
-
-
-def _warn_on_large_whitelist(args):
-    """A big whitelist taken as the cell list makes per-read matching demand exact matches."""
-    barcode_count = _count_whitelist_barcodes(args.barcode_whitelist)
-    if barcode_count <= LARGE_WHITELIST_SIZE:
-        return
-    logger.warning("Barcode whitelist contains %d barcodes and is treated as the list of cell barcodes. "
-                   "Matching every read against a list this large effectively requires an exact match, "
-                   "so reads carrying a sequencing error in the barcode will be lost." % barcode_count)
-    logger.warning('Set --n_cells (or --n_cells %s) to select cell barcodes from the whitelist instead.'
-                   % AUTO_BARCODES)
-
-
-def _resolve_deprecated_mode(args):
-    """Translate a superseded mode name into a chemistry plus a --split_molecules default."""
-    alias = DEPRECATED_MODE_ALIASES.get(args.mode)
-    if not alias:
-        return
-    mode_name, splits = alias
-    replacement = "--mode %s --split_molecules %s" % (
-        mode_name, SPLIT_MOLECULES_TRUE if splits else SPLIT_MOLECULES_FALSE)
-    logger.warning("Mode %s is deprecated, use `%s` instead" % (args.mode, replacement))
-    args.mode = mode_name
-    # only a default: an explicit --split_molecules wins
-    if args.split_molecules is None:
-        args.split_molecules = SPLIT_MOLECULES_TRUE if splits else SPLIT_MOLECULES_FALSE
-
-
-def _resolve_split_molecules(args):
-    """Turn --split_molecules into a bool, refusing to silently ignore an impossible request."""
-    if isinstance(args.split_molecules, bool):
-        # already resolved, e.g. args restored from a previous run by --resume
-        return
-    requested = args.split_molecules or SPLIT_MOLECULES_AUTO
-    supported = args.mode.supports_molecule_splitting()
-
-    if requested == SPLIT_MOLECULES_FALSE:
-        args.split_molecules = False
-        return
-    if requested == SPLIT_MOLECULES_TRUE and not supported:
-        logger.critical("Mode %s cannot split reads into separate molecules. Drop "
-                        "--split_molecules %s, or use --split_molecules %s to let IsoQuant "
-                        "decide per protocol." % (args.mode.name, SPLIT_MOLECULES_TRUE, SPLIT_MOLECULES_AUTO))
-        sys.exit(IsoQuantExitCode.INCOMPATIBLE_OPTIONS)
-
-    args.split_molecules = supported
-    if args.split_molecules:
-        logger.info("Reads will be split into separate cDNA molecules")
-
-
-def _validate_barcode_whitelist(args):
-    """The whitelist is either a set of files or the literal AUTO_BARCODES, never both."""
-    if not args.barcode_whitelist or AUTO_BARCODES not in args.barcode_whitelist:
-        return
-    if len(args.barcode_whitelist) > 1:
-        logger.critical('--barcode_whitelist %s cannot be combined with whitelist files' % AUTO_BARCODES)
-        sys.exit(IsoQuantExitCode.INVALID_PARAMETER)
-    if not args.mode.supports_cell_barcode_detection():
-        logger.critical('--barcode_whitelist %s is not supported for mode %s, please provide a whitelist file'
-                        % (AUTO_BARCODES, args.mode.name))
-        sys.exit(IsoQuantExitCode.INCOMPATIBLE_OPTIONS)
-
-
-def _validate_barcode_calling(args):
-    args.umi_length = 0
-    args.detect_cell_barcodes = False
-    if not args.mode.needs_barcode_calling():
-        return
-    _validate_barcode_whitelist(args)
-    barcode_sources = sum([bool(args.barcode_whitelist), bool(args.barcoded_reads), bool(args.barcoded_bam)])
-    if barcode_sources > 1:
-        logger.critical("Options --barcode_whitelist, --barcoded_reads, and --barcoded_bam are mutually exclusive")
-        sys.exit(IsoQuantExitCode.INVALID_PARAMETER)
-    if args.mode == IsoQuantMode.custom_sc:
-        if not any([args.molecule, args.barcoded_reads, args.barcoded_bam]):
-            logger.critical("custom_sc mode requires --molecule, --barcoded_reads, or --barcoded_bam")
-            sys.exit(IsoQuantExitCode.BARCODE_WHITELIST_MISSING)
-    elif not any([args.barcode_whitelist, args.barcoded_reads, args.barcoded_bam]):
-        logger.critical("You have chosen single-cell/spatial mode %s, please specify barcode whitelist, "
-                        "file with barcoded reads, or --barcoded_bam" % args.mode.name)
-        sys.exit(IsoQuantExitCode.BARCODE_WHITELIST_MISSING)
-    if args.barcoded_bam:
-        args.umi_length = _detect_umi_length_from_bam(args.input_data.samples[0].file_list[0][0], args.umi_tag)
-    else:
-        args.umi_length = get_umi_length(args.mode)
-
-    _resolve_barcode_correction(args)
-
-
 def check_input_params(args):
     if not _validate_data_type_and_input(args):
         return False
@@ -914,27 +759,19 @@ def check_input_params(args):
         return False
 
     if not isinstance(args.mode, IsoQuantMode):
-        _resolve_deprecated_mode(args)
+        resolve_deprecated_mode(args)
         args.mode = IsoQuantMode[args.mode]
-    _resolve_split_molecules(args)
+    resolve_split_molecules(args)
 
     # translate --analysis (and the deprecated stage flags) into internal booleans
     resolve_analyses(args)
 
     _apply_stage_warnings(args)
     _dedup_read_group_specs(args)
-    _validate_barcode_calling(args)
+    validate_barcode_calling(args)
 
     check_input_files(args)
     return True
-
-
-def _detect_umi_length_from_bam(bam_path: str, umi_tag: str) -> int:
-    with pysam.AlignmentFile(bam_path, "rb") as bam:
-        for read in bam:
-            if read.has_tag(umi_tag):
-                return len(read.get_tag(umi_tag))
-    return 0
 
 
 def check_bam_file(bam_path: str, check_index: bool = True):
@@ -948,13 +785,6 @@ def check_bam_file(bam_path: str, check_index: bool = True):
             logger.critical("BAM file " + bam_path + " is not indexed, run samtools sort and samtools index")
             sys.exit(IsoQuantExitCode.BAM_NOT_INDEXED)
         bamfile_in.close()
-
-
-def check_file_exists(file_path: str, description: str):
-    """Check that a file exists, exit with error if not."""
-    if not os.path.isfile(file_path):
-        logger.critical(f"{description} {file_path} does not exist")
-        sys.exit(IsoQuantExitCode.INPUT_FILE_NOT_FOUND)
 
 
 def extract_read_group_file_path(spec: str):
@@ -1001,41 +831,6 @@ def _check_reference_and_reads(args):
                 check_bam_file(illumina, check_index=True)
 
 
-def _check_barcode_input_files(args):
-    # Check barcoded reads files (from args, not sample - sample.barcoded_reads is set later)
-    if hasattr(args, 'barcoded_reads') and args.barcoded_reads:
-        if isinstance(args.barcoded_reads, list):
-            for bc_file in args.barcoded_reads:
-                check_file_exists(bc_file, "Barcoded reads file")
-        else:
-            check_file_exists(args.barcoded_reads, "Barcoded reads file")
-
-    # Check molecule definition file
-    if hasattr(args, 'molecule') and args.molecule:
-        check_file_exists(args.molecule, "Molecule definition file")
-
-    # Check barcode whitelist files; AUTO_BARCODES asks for detection, it is not a path
-    if hasattr(args, 'barcode_whitelist') and args.barcode_whitelist:
-        for wl_file in args.barcode_whitelist:
-            if wl_file == AUTO_BARCODES:
-                continue
-            check_file_exists(wl_file, "Barcode whitelist file")
-
-
-def _check_barcode_mapping_files(args):
-    from isoquant_lib.assignment.read_groups import parse_barcode2spot_spec
-
-    # Check barcode2spot file (parse spec to extract filename)
-    if hasattr(args, 'barcode2spot') and args.barcode2spot:
-        bc2spot_file, _, _ = parse_barcode2spot_spec(args.barcode2spot)
-        check_file_exists(bc2spot_file, "Barcode to spot mapping file")
-
-    # Check barcode2barcode file (parse spec to extract filename)
-    if hasattr(args, 'barcode2barcode') and args.barcode2barcode:
-        bc2bc_file, _, _ = parse_barcode2spot_spec(args.barcode2barcode)
-        check_file_exists(bc2bc_file, "Barcode to barcode mapping file")
-
-
 def _check_read_group_files(args):
     # Check read_group file specs
     if hasattr(args, 'read_group') and args.read_group:
@@ -1076,8 +871,8 @@ def _check_annotation_files(args):
 
 def check_input_files(args):
     _check_reference_and_reads(args)
-    _check_barcode_input_files(args)
-    _check_barcode_mapping_files(args)
+    check_barcode_input_files(args)
+    check_barcode_mapping_files(args)
     _check_read_group_files(args)
     _check_annotation_files(args)
 
@@ -1402,142 +1197,6 @@ def prepare_reference_genome(args):
             with open(gunzipped_reference, "w") as outf:
                 shutil.copyfileobj(gzip.open(args.reference, "rt"), outf)
         args.reference = gunzipped_reference
-
-
-class BarcodeCallingArgs:
-    def __init__(self, input, barcode_whitelist, mode, output, out_fasta, tmp_dir, threads,
-                 molecule: str = None, whitelist_matching: bool = True, split_molecules: bool = False):
-        self.input = input  # Can be a single file (str) or list of files
-        self.barcodes = barcode_whitelist
-        self.mode = mode
-        self.output_tsv = output  # Can be a single filename (str) or list of filenames
-        self.out_fasta = out_fasta  # Can be a single filename (str), list of filenames, or None
-        self.tmp_dir = tmp_dir
-        self.threads = threads
-        self.molecule = molecule
-        # when False the detector emits raw barcode windows so cell barcodes can be detected
-        self.whitelist_matching = whitelist_matching
-        # selects the splitting detector, and makes the caller expect one result per molecule
-        self.split_molecules = split_molecules
-
-
-def _run_barcode_calling(bc_args, threads):
-    """Run one barcode calling pass in a child process.
-
-    Read chunks are not reclaimed when barcode calling ends, leaving the main process
-    holding ~2.5 GB that every later worker would inherit. A child process gives it back.
-    """
-    log_file, log_level = _get_log_params()
-    with ProcessPoolExecutor(max_workers=1,
-                             initializer=setup_worker_logging,
-                             initargs=(log_file, log_level)) as proc:
-        if threads == 1:
-            future_res = proc.submit(process_single_thread, bc_args)
-        else:
-            future_res = proc.submit(process_in_parallel, bc_args)
-
-    concurrent.futures.wait([future_res], return_when=concurrent.futures.ALL_COMPLETED)
-    if future_res.exception() is not None:
-        raise future_res.exception()
-
-
-def detect_cell_barcodes(args, sample, input_files, threads):
-    """Pass 1: extract barcode windows verbatim, then derive the cell barcode list.
-
-    Returns the path of that list, which pass 2 uses as its whitelist.
-    """
-    if args.resume and os.path.exists(sample.raw_barcodes_done):
-        logger.info("Cell barcodes were detected during the previous run, skipping")
-        return sample.out_cell_barcodes_tsv
-    if os.path.exists(sample.raw_barcodes_done):
-        os.remove(sample.raw_barcodes_done)
-
-    logger.info("Extracting barcodes from %d file(s) to detect cell barcodes" % len(input_files))
-    # no FASTA and no barcode table: only the counts matter here, and in splitting modes it
-    # is pass 2 whose extraction is kept
-    raw_args = BarcodeCallingArgs(input_files, args.barcode_whitelist, args.mode,
-                                  None, None, sample.aux_dir, threads,
-                                  molecule=getattr(args, 'molecule', None),
-                                  whitelist_matching=False,
-                                  split_molecules=args.split_molecules)
-
-    # one child process, so the large count table never lives in the main one
-    log_file, log_level = _get_log_params()
-    with ProcessPoolExecutor(max_workers=1,
-                             initializer=setup_worker_logging,
-                             initargs=(log_file, log_level)) as proc:
-        future_res = proc.submit(detect_cell_barcode_list,
-                                 raw_args,
-                                 sample.out_cell_barcodes_tsv,
-                                 get_barcode_length(args.mode),
-                                 args.n_cells,
-                                 args.n_cells_interval,
-                                 sample.out_cell_barcodes_stats)
-
-    concurrent.futures.wait([future_res], return_when=concurrent.futures.ALL_COMPLETED)
-    if future_res.exception() is not None:
-        raise future_res.exception()
-
-    open(sample.raw_barcodes_done, "w").close()
-    return sample.out_cell_barcodes_tsv
-
-
-def call_barcodes(args):
-    if args.barcoded_bam:
-        logger.info("Barcodes will be extracted from BAM tags (%s/%s)" % (args.barcode_tag, args.umi_tag))
-        return
-    if args.barcoded_reads:
-        # TODO barcoded files via YAML
-        args.input_data.samples[0].barcoded_reads = args.barcoded_reads
-        return
-    for sample in args.input_data.samples:
-        # Collect all input files for this sample
-        input_files = [files[0] for files in sample.file_list]
-        output_barcodes_list = [sample.barcodes_tsv + "_%d.tsv" % i for i in range(len(input_files))]
-        barcodes_done_list = [sample.barcodes_done + "_%d.tsv" % i for i in range(len(input_files))]
-
-        output_fasta_list = None
-        new_reads = []
-        if args.split_molecules:
-            output_fasta_list = [sample.split_reads_fasta + "_%d.fa" % i for i in range(len(input_files))]
-            new_reads = [[fasta] for fasta in output_fasta_list]
-
-        # Check if all files were already processed during resume
-        all_done = all(os.path.exists(done) for done in barcodes_done_list)
-        if all_done and args.resume:
-            logger.info("Barcodes were called during the previous run, skipping")
-            sample.barcoded_reads.extend(output_barcodes_list)
-            if args.split_molecules:
-                sample.file_list = new_reads
-            continue
-
-        # Remove existing done markers
-        for barcodes_done in barcodes_done_list:
-            if os.path.exists(barcodes_done):
-                os.remove(barcodes_done)
-
-        bc_threads = 1 if args.mode.enforces_single_thread() else args.threads
-        barcode_files = args.barcode_whitelist
-        if args.detect_cell_barcodes:
-            barcode_files = [detect_cell_barcodes(args, sample, input_files, bc_threads)]
-
-        bc_args = BarcodeCallingArgs(input_files, barcode_files, args.mode,
-                                     output_barcodes_list, output_fasta_list, sample.aux_dir, bc_threads,
-                                     molecule=getattr(args, 'molecule', None),
-                                     split_molecules=args.split_molecules)
-        logger.info("Detecting barcodes for %d file(s)" % len(input_files))
-        _run_barcode_calling(bc_args, bc_threads)
-
-        # Mark all files as done and add to barcoded_reads
-        for i, (input_file, output_barcodes, barcodes_done) in enumerate(zip(input_files, output_barcodes_list, barcodes_done_list)):
-            sample.barcoded_reads.append(output_barcodes)
-            open(barcodes_done, "w").close()
-            logger.info("Processed %s, barcodes are stored in %s" % (input_file, output_barcodes))
-
-        if args.split_molecules:
-            logger.info("Reads were split during barcode calling")
-            logger.info("The following files will be used instead of original reads %s " % ", ".join(map(lambda x: x[0], new_reads)))
-            sample.file_list = new_reads
 
 
 def run_pipeline(args):

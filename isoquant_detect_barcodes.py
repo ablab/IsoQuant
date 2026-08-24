@@ -18,17 +18,22 @@ import os
 import sys
 from traceback import print_exc
 
-from isoquant_lib.modes import (IsoQuantMode, BarcodeCorrectionMethod, LARGE_WHITELIST_SIZE,
-                                AUTO_BARCODES, DEPRECATED_MODE_ALIASES, SPLIT_MOLECULES_CHOICES,
-                                SPLIT_MOLECULES_TRUE, SPLIT_MOLECULES_FALSE, SPLIT_MOLECULES_AUTO)
+from isoquant_lib.modes import (IsoQuantMode, BarcodeCorrectionMethod, AUTO_BARCODES,
+                                DEPRECATED_MODE_ALIASES, SPLIT_MOLECULES_CHOICES,
+                                SPLIT_MOLECULES_TRUE, SPLIT_MOLECULES_AUTO)
 from isoquant_lib.utils.error_codes import IsoQuantExitCode
 from isoquant_lib.barcode_calling.detect_barcodes import (
     process_single_thread,
     process_in_parallel,
     get_barcode_length,
+    detect_cell_barcode_list,
     BARCODE_CALLING_MODES,
 )
-from isoquant_lib.barcode_calling.detect_barcodes import detect_cell_barcode_list
+from isoquant_lib.barcode_calling.options import (
+    resolve_barcode_correction,
+    resolve_deprecated_mode,
+    resolve_split_molecules,
+)
 
 logger = logging.getLogger('IsoQuant')
 
@@ -86,87 +91,6 @@ def parse_args(sys_argv):
     return args
 
 
-def resolve_deprecated_mode(args):
-    """Translate a superseded mode name into a chemistry plus a --split_molecules default."""
-    alias = DEPRECATED_MODE_ALIASES.get(args.mode)
-    if not alias:
-        return
-    mode_name, splits = alias
-    logger.warning("Mode %s is deprecated, use `--mode %s --split_molecules %s` instead" %
-                   (args.mode, mode_name, SPLIT_MOLECULES_TRUE if splits else SPLIT_MOLECULES_FALSE))
-    args.mode = mode_name
-    if args.split_molecules is None:
-        args.split_molecules = SPLIT_MOLECULES_TRUE if splits else SPLIT_MOLECULES_FALSE
-
-
-def resolve_split_molecules(args):
-    """Turn --split_molecules into a bool. See isoquant.py for the rules."""
-    if isinstance(args.split_molecules, bool):
-        return
-    requested = args.split_molecules or SPLIT_MOLECULES_AUTO
-    supported = args.mode.supports_molecule_splitting()
-    if requested == SPLIT_MOLECULES_FALSE:
-        args.split_molecules = False
-        return
-    if requested == SPLIT_MOLECULES_TRUE and not supported:
-        logger.critical("Mode %s cannot split reads into separate molecules" % args.mode.name)
-        sys.exit(IsoQuantExitCode.INCOMPATIBLE_OPTIONS)
-    args.split_molecules = supported
-
-
-def count_whitelist_barcodes(whitelist_files):
-    import gzip
-    total = 0
-    for file_name in whitelist_files:
-        handle = gzip.open(file_name, "rt") if file_name.endswith(("gz", "gzip")) else open(file_name)
-        with handle:
-            total += sum(1 for _ in handle)
-    return total
-
-
-def resolve_cell_barcode_detection(args):
-    """Decide whether cell barcodes are supplied or detected. See isoquant.py for the rules."""
-    args.detect_cell_barcodes = False
-    whitelist_is_auto = args.barcodes == [AUTO_BARCODES]
-
-    if args.n_cells is not None and args.n_cells != AUTO_BARCODES:
-        try:
-            args.n_cells = int(args.n_cells)
-        except ValueError:
-            logger.critical('--n_cells must be a positive integer or "%s"' % AUTO_BARCODES)
-            sys.exit(IsoQuantExitCode.INVALID_PARAMETER)
-        if args.n_cells <= 0:
-            logger.critical("--n_cells must be positive")
-            sys.exit(IsoQuantExitCode.INVALID_PARAMETER)
-
-    requested = BarcodeCorrectionMethod[args.barcode_correction]
-    if requested == BarcodeCorrectionMethod.whitelist:
-        if whitelist_is_auto:
-            logger.critical('--barcode_correction whitelist cannot be used with --barcodes %s' % AUTO_BARCODES)
-            sys.exit(IsoQuantExitCode.INCOMPATIBLE_OPTIONS)
-        if args.n_cells is not None:
-            logger.warning("--n_cells is ignored: --barcode_correction %s matches reads against the "
-                           "whitelist as given" % BarcodeCorrectionMethod.whitelist.name)
-        return
-
-    if whitelist_is_auto and args.n_cells is None:
-        args.n_cells = AUTO_BARCODES
-
-    if not (whitelist_is_auto or args.n_cells is not None or requested == BarcodeCorrectionMethod.detect):
-        if args.barcodes and count_whitelist_barcodes(args.barcodes) > LARGE_WHITELIST_SIZE:
-            logger.warning("Barcode whitelist is large and is treated as the list of cell barcodes; "
-                           "matching every read against it effectively requires an exact match. "
-                           'Set --n_cells (or --n_cells %s) to select cell barcodes instead.' % AUTO_BARCODES)
-        return
-
-    if not args.mode.supports_cell_barcode_detection():
-        logger.critical("Detecting cell barcodes from the data is not supported for mode %s" % args.mode.name)
-        sys.exit(IsoQuantExitCode.INCOMPATIBLE_OPTIONS)
-    if requested == BarcodeCorrectionMethod.detect and args.n_cells is None:
-        args.n_cells = AUTO_BARCODES
-    args.detect_cell_barcodes = True
-
-
 def check_args(args):
     """Set up output file lists based on input files."""
     # args.input is always a list (nargs='+')
@@ -200,7 +124,7 @@ def main(sys_argv):
     args.mode = IsoQuantMode[args.mode]
     resolve_split_molecules(args)
     check_args(args)
-    resolve_cell_barcode_detection(args)
+    resolve_barcode_correction(args, whitelist_option='--barcodes')
 
     out_dir = os.path.dirname(args.output)
     if out_dir and not os.path.exists(out_dir):

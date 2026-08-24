@@ -9,11 +9,21 @@ import logging
 import os
 import re
 import shutil
+import sys
 from collections import defaultdict
 
 from isoquant_lib.common import rreplace
+from isoquant_lib.utils.error_codes import IsoQuantExitCode
 
 logger = logging.getLogger('IsoQuant')
+
+
+def check_file_exists(file_path: str, description: str):
+    """Check that a file exists, exit with error if not."""
+    if not os.path.isfile(file_path):
+        logger.critical(f"{description} {file_path} does not exist")
+        sys.exit(IsoQuantExitCode.INPUT_FILE_NOT_FOUND)
+
 
 
 def merge_file_list(fname, label, chr_ids):
