@@ -61,6 +61,17 @@ class TestDetectionIsRequested:
         assert args.detect_cell_barcodes is True
         assert args.n_cells == AUTO_BARCODES
 
+    def test_detect_forces_detection_without_n_cells(self, tmp_path):
+        args = make_args(barcode_whitelist=whitelist_file(tmp_path),
+                         barcode_correction=BarcodeCorrectionMethod.detect.name)
+        isoquant._resolve_barcode_correction(args)
+        assert args.detect_cell_barcodes is True
+        assert args.n_cells == AUTO_BARCODES
+
+    def test_method_names_describe_what_they_do(self):
+        """`graph` was left over from the dropped edit-distance port; it corrects nothing."""
+        assert {e.name for e in BarcodeCorrectionMethod} == {"whitelist", "detect", "auto"}
+
     def test_unsupported_mode_aborts(self, tmp_path):
         args = make_args(mode="curio", n_cells="5000",
                          barcode_whitelist=whitelist_file(tmp_path))

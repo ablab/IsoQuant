@@ -152,7 +152,7 @@ def resolve_cell_barcode_detection(args):
     if whitelist_is_auto and args.n_cells is None:
         args.n_cells = AUTO_BARCODES
 
-    if not (whitelist_is_auto or args.n_cells is not None or requested == BarcodeCorrectionMethod.graph):
+    if not (whitelist_is_auto or args.n_cells is not None or requested == BarcodeCorrectionMethod.detect):
         if args.barcodes and count_whitelist_barcodes(args.barcodes) > LARGE_WHITELIST_SIZE:
             logger.warning("Barcode whitelist is large and is treated as the list of cell barcodes; "
                            "matching every read against it effectively requires an exact match. "
@@ -162,7 +162,7 @@ def resolve_cell_barcode_detection(args):
     if not args.mode.supports_cell_barcode_detection():
         logger.critical("Detecting cell barcodes from the data is not supported for mode %s" % args.mode.name)
         sys.exit(IsoQuantExitCode.INCOMPATIBLE_OPTIONS)
-    if requested == BarcodeCorrectionMethod.graph and args.n_cells is None:
+    if requested == BarcodeCorrectionMethod.detect and args.n_cells is None:
         args.n_cells = AUTO_BARCODES
     args.detect_cell_barcodes = True
 

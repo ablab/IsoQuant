@@ -96,7 +96,7 @@ class BarcodeCorrectionMethod(Enum):
     whitelist = 1
     # extract barcodes verbatim first, select the cell barcodes from their read counts,
     # then match reads against those
-    graph = 2
+    detect = 2
     # decided by --n_cells: set means detect, unset means take the whitelist as given
     auto = 3
 

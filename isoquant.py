@@ -321,9 +321,12 @@ def parse_args(cmd_args=None, namespace=None):
     add_additional_option_to_group(sc_args_group, "--barcode_correction", type=str,
                                    choices=[e.name for e in BarcodeCorrectionMethod],
                                    default=BarcodeCorrectionMethod.auto.name,
-                                   help="override how the barcode list is obtained: match reads against the "
-                                        "given whitelist, or select cell barcodes from read counts first "
-                                        "[%s: decided by --n_cells]" % BarcodeCorrectionMethod.auto.name)
+                                   help="override how the cell barcode list is obtained: %s matches reads "
+                                        "against the whitelist as given, %s selects cell barcodes from read "
+                                        "counts first [%s: decided by --n_cells]"
+                                        % (BarcodeCorrectionMethod.whitelist.name,
+                                           BarcodeCorrectionMethod.detect.name,
+                                           BarcodeCorrectionMethod.auto.name))
     add_additional_option_to_group(sc_args_group, "--barcode_tag", type=str, default="CB",
                                    help='BAM tag for cell barcode [CB]')
     add_additional_option_to_group(sc_args_group, "--umi_tag", type=str, default="UB",
@@ -802,7 +805,7 @@ def _resolve_barcode_correction(args):
     if whitelist_is_auto and args.n_cells is None:
         args.n_cells = AUTO_BARCODES
 
-    detect = whitelist_is_auto or args.n_cells is not None or requested == BarcodeCorrectionMethod.graph
+    detect = whitelist_is_auto or args.n_cells is not None or requested == BarcodeCorrectionMethod.detect
     if not detect:
         if args.barcode_whitelist:
             _warn_on_large_whitelist(args)
@@ -812,7 +815,7 @@ def _resolve_barcode_correction(args):
         logger.critical("Detecting cell barcodes from the data is not supported for mode %s" % args.mode.name)
         sys.exit(IsoQuantExitCode.INCOMPATIBLE_OPTIONS)
 
-    if requested == BarcodeCorrectionMethod.graph and args.n_cells is None:
+    if requested == BarcodeCorrectionMethod.detect and args.n_cells is None:
         args.n_cells = AUTO_BARCODES
     args.detect_cell_barcodes = True
 
