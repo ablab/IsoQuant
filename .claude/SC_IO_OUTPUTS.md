@@ -170,8 +170,18 @@ need re-aligning, but `--bam` input skips the mapping stage — `call_barcodes` 
 (`ValueError: file has no sequences defined`). This broke `-m tenX_v3 --bam ...`, which the
 `SC.Mouse.10x.allinfo` CI config uses.
 
-`_resolve_split_molecules` now also checks `args.input_data.input_type.needs_mapping()`:
-`auto` silently skips splitting for aligned input, `true` is a hard error.
+Fixed by `_reject_splitting_aligned_input` in `isoquant.py`, run right after
+`resolve_split_molecules`: splitting with aligned input aborts, under `auto` as well as `true`.
+The check lives in the pipeline rather than in `options.resolve_split_molecules` because that
+module is barcode-calling helpers, shared with the standalone `isoquant_detect_barcodes.py`,
+which has no `input_data` at all.
+
+Aborting on `auto` rather than quietly not splitting is deliberate: passing a BAM says "do not
+map", asking for splitting says "rewrite the reads", and either way of guessing hands the user
+something they did not ask for. Four CI configs (`SC.Mouse.10x.allinfo`,
+`SC.Mouse.10x.barcoded_bam.allinfo`, `GROUP12/13.SC.SIRVs.R10`) pair `--bam` with a splitting
+mode and now carry an explicit `--split_molecules false`; all four were already broken by the
+crash before this.
 
 ## Verification performed
 

@@ -330,6 +330,11 @@ enabling even on libraries without concatenated molecules: on non-concatenated 1
 recovers about one extra point of recall at unchanged precision, at roughly twice the barcode
 calling runtime.
 
+Splitting requires raw reads. The split molecules have to be aligned, so requesting it
+alongside an already aligned input (`--bam`) is contradictory and IsoQuant stops with an error
+- under `auto` as well as `true`. Supply the reads as FASTQ/FASTA to have them split and
+mapped, or pass `--split_molecules false` to use the alignments as given.
+
 The superseded mode names `tenX_v3_split`, `tenX_v2_split` and `stereoseq_nosplit` still work
 and are translated to the corresponding `--mode` plus `--split_molecules` combination.
 
