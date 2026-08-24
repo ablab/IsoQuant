@@ -121,6 +121,32 @@ class TestSelect:
     def test_no_barcodes(self):
         assert self._selector({}).select(n_cells=10) == []
 
+    @pytest.mark.parametrize("n_cells, interval, expected", [
+        (10, 25, 12),    # 12.5 rounds down: 13 would exceed the interval the user asked for
+        (10, 0, 10),
+        (100, 25, 125),
+        (7, 30, 9),      # 9.1
+    ])
+    def test_selection_never_exceeds_the_upper_bound(self, n_cells, interval, expected):
+        """Every candidate here clears the cutoff, so only the bound stops the loop."""
+        rnd = random.Random(21)
+        counts = {random_barcode(rnd): 100 for _ in range(500)}
+        centers = self._selector(counts).select(n_cells=n_cells, interval=interval)
+        assert len(centers) == expected
+        assert len(centers) <= n_cells * (1 + interval / 100.0)
+
+    def test_lower_bound_still_pads_towards_n_cells(self):
+        """Tightening the upper bound must not change the top-up loop."""
+        rnd = random.Random(22)
+        abundant = [random_barcode(rnd) for _ in range(3)]
+        modest = [random_barcode(rnd) for _ in range(50)]
+        counts = {bc: 100000 for bc in abundant}
+        counts.update({bc: 20 for bc in modest})
+        # cutoff = mean(top 10)/5 is far above 20, so the first loop stops after the 3
+        # abundant ones and the top-up loop must reach ceil(10 * 0.75) = 8
+        centers = self._selector(counts).select(n_cells=10, interval=25)
+        assert len(centers) == 8
+
     def test_cutoff_uses_the_most_abundant_barcodes(self):
         """The cutoff is derived from the top n_cells, not an arbitrary dict slice."""
         rnd = random.Random(3)
