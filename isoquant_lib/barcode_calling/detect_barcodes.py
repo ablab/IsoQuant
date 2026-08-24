@@ -141,13 +141,11 @@ class BarcodeCaller:
     def __init__(self, output_file_name, barcode_detector, header=False, output_sequences=None,
                  split_reads=False, barcode_counter=None):
         """
-        split_reads must match the detector: a splitting detector returns one result per
-        molecule and needs _process_read_split, whatever output_sequences says. The first
-        pass of cell barcode detection splits but writes no FASTA, so the two cannot be
-        inferred from each other.
-
-        With barcode_counter set, detections are tallied into it instead of being written
-        anywhere; output_file_name and output_sequences are then unused.
+        Args:
+            split_reads: use the per-molecule path; must match the detector, and cannot be
+                inferred from output_sequences (pass 1 splits but writes no FASTA)
+            barcode_counter: when set, tally detections into it instead of writing them;
+                output_file_name and output_sequences are then unused
         """
         self.barcode_detector = barcode_detector
         self.barcode_counter = barcode_counter
@@ -328,9 +326,8 @@ def bam_file_chunk_reader(handler):
     yield current_chunk
 
 
-# The detector is stored per worker process rather than passed to every task: it owns the
-# whitelist index, which for a stock 10x whitelist is hundreds of megabytes. Shipping it with
-# each 100k-read chunk would pickle it dozens of times per worker.
+# Per worker process rather than passed to every task: the detector owns the whitelist
+# index, which is hundreds of megabytes for a stock 10x whitelist.
 _WORKER_DETECTOR = {}
 
 
@@ -373,8 +370,7 @@ def count_chunk(read_chunk, split_reads=False, barcode_length=16, barcode_detect
 def count_barcodes_in_reads(args, barcode_length):
     """Extract barcodes from every input file and return their counts.
 
-    Nothing is written: the counts are all the cell barcode selection needs, and
-    materialising a barcode per read would cost gigabytes of intermediate on a large run.
+    Nothing is written: a barcode per read would cost gigabytes of intermediate.
     """
     barcode_detector = create_barcode_caller(args)
     split_reads = bool(getattr(args, "split_molecules", False))
@@ -410,7 +406,7 @@ def detect_cell_barcode_list(args, output_file, barcode_length, n_cells, n_cells
                              stats_file=None):
     """Count barcodes across the reads and write out the detected cell barcodes.
 
-    Runs as one unit so the count table never leaves the process it was built in.
+    One unit, so the count table never leaves the process that built it.
     """
     selector = count_barcodes_in_reads(args, barcode_length)
     return select_cell_barcodes(selector, output_file, args.barcodes,
@@ -424,9 +420,8 @@ def create_barcode_caller(args):
                 (args.mode.name, ", splitting molecules" if split_molecules else ""))
 
     if not getattr(args, "whitelist_matching", True):
-        # First pass of cell barcode detection: emit barcode windows verbatim so they can be
-        # counted. No whitelist is needed here; it is only used afterwards, to filter the
-        # candidate cell barcodes.
+        # pass 1 of cell barcode detection: emit barcode windows verbatim to be counted.
+        # The whitelist is only used afterwards, to filter the candidates.
         if not args.mode.supports_cell_barcode_detection():
             logger.critical("Mode %s cannot extract barcodes without a whitelist" % args.mode.name)
             sys.exit(IsoQuantExitCode.INCOMPATIBLE_OPTIONS)
@@ -514,16 +509,15 @@ def open_read_chunks(input_file):
 def run_chunks_in_parallel(read_chunk_gen, args, barcode_detector, submit, handle_result):
     """Feed read chunks to a worker pool, keeping args.threads tasks in flight.
 
-    submit(pool, chunk, chunk_index) -> Future; handle_result(result) -> reads processed.
-    The detector is shipped once per worker via the initializer rather than with every
-    task: it owns the whitelist index, which is hundreds of megabytes for a stock whitelist.
+    Args:
+        submit: (pool, chunk, chunk_index) -> Future
+        handle_result: (result) -> number of reads processed
     """
     # Clean up parent memory before spawning workers
     gc.collect()
     mp_context = multiprocessing.get_context('spawn')
     log_file, log_level = _get_log_params()
-    # no max_tasks_per_child: recycling a worker would re-pickle the detector to its
-    # replacement, and the detector is the expensive part
+    # no max_tasks_per_child: recycling a worker would re-pickle the detector
     with concurrent.futures.ProcessPoolExecutor(
             max_workers=args.threads,
             mp_context=mp_context,

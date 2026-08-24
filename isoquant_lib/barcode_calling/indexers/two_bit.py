@@ -173,10 +173,8 @@ class Array2BitKmerIndexer:
     def _index(self, known_bin_seq: Iterable[int], total_kmers: int) -> None:
         """Build a flat k-mer index from 2-bit encoded sequences.
 
-        Counts each k-mer first and fills a single flat array, rather than collecting the
-        entries into 4^k per-k-mer lists and concatenating them. Everything stays in numpy
-        arrays: boxing 2-bit codes as Python ints costs ~28 bytes each on top of the 8 the
-        value needs, and the k-mer offset table has 4^k entries.
+        Counts each k-mer first and fills one flat array, rather than collecting entries
+        into 4^k per-k-mer lists. Stays in numpy: a boxed code costs ~28 bytes extra.
         """
         if isinstance(known_bin_seq, numpy.ndarray):
             sequences = known_bin_seq.astype(SEQ_DTYPE, copy=False)

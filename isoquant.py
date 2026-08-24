@@ -774,9 +774,8 @@ def _resolve_n_cells(args):
 def _resolve_barcode_correction(args):
     """Decide whether cell barcodes are supplied or detected from the data.
 
-    --n_cells decides what the whitelist means: unset, it is the set of cell barcodes and
-    reads are matched straight against it; set, it is a pool to select cell barcodes from,
-    which needs an extra pass over the reads to count what was actually sequenced.
+    --n_cells decides what the whitelist means: unset it is the cell barcodes themselves,
+    set it is a pool to select them from, which costs an extra pass over the reads.
     Sets args.detect_cell_barcodes and normalises args.n_cells.
     """
     args.detect_cell_barcodes = False
@@ -1425,9 +1424,8 @@ class BarcodeCallingArgs:
 def _run_barcode_calling(bc_args, threads):
     """Run one barcode calling pass in a child process.
 
-    Read chunks are not cleared by the GC when barcode calling ends, leaving the main
-    IsoQuant process holding ~2.5 GB for nothing; once 16 workers are forked later that
-    becomes threads x 2.5 GB. Running in a child process gives the memory back.
+    Read chunks are not reclaimed when barcode calling ends, leaving the main process
+    holding ~2.5 GB that every later worker would inherit. A child process gives it back.
     """
     log_file, log_level = _get_log_params()
     with ProcessPoolExecutor(max_workers=1,
@@ -1444,10 +1442,9 @@ def _run_barcode_calling(bc_args, threads):
 
 
 def detect_cell_barcodes(args, sample, input_files, threads):
-    """First pass: extract barcode windows verbatim, then derive the cell barcode list.
+    """Pass 1: extract barcode windows verbatim, then derive the cell barcode list.
 
-    Returns the path of the detected cell barcode list, which the second pass then uses as
-    its whitelist.
+    Returns the path of that list, which pass 2 uses as its whitelist.
     """
     if args.resume and os.path.exists(sample.raw_barcodes_done):
         logger.info("Cell barcodes were detected during the previous run, skipping")
@@ -1456,17 +1453,15 @@ def detect_cell_barcodes(args, sample, input_files, threads):
         os.remove(sample.raw_barcodes_done)
 
     logger.info("Extracting barcodes from %d file(s) to detect cell barcodes" % len(input_files))
-    # No FASTA and no barcode table here: only the counts matter, and writing a row per read
-    # would cost gigabytes of intermediate. In splitting modes the reads are split by the
-    # second pass, whose extraction is the one whose results are kept.
+    # no FASTA and no barcode table: only the counts matter here, and in splitting modes it
+    # is pass 2 whose extraction is kept
     raw_args = BarcodeCallingArgs(input_files, args.barcode_whitelist, args.mode,
                                   None, None, sample.aux_dir, threads,
                                   molecule=getattr(args, 'molecule', None),
                                   whitelist_matching=False,
                                   split_molecules=args.split_molecules)
 
-    # counting and selection run as one child process so the count table, which is large and
-    # not reclaimed promptly, never lives in the main process
+    # one child process, so the large count table never lives in the main one
     log_file, log_level = _get_log_params()
     with ProcessPoolExecutor(max_workers=1,
                              initializer=setup_worker_logging,
