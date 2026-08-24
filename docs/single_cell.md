@@ -353,9 +353,11 @@ segment is named with the original read ID plus coordinates and strand:
 `{read_id}_{start}_{end}_{strand}`. The file is gzipped unless `--no_gzip` is set; minimap2
 reads it compressed, so alignment is not slowed down.
 
-Splitting rewrites the reads, so the pieces have to be aligned afresh. With aligned input
-(`--bam`) there is no alignment stage to do that in, and splitting is therefore skipped;
-`--split_molecules true` with aligned input is an error rather than a silent no-op.
+Splitting rewrites the reads, so the pieces have to be aligned afresh. Supplying an aligned
+BAM (`--bam`) says the opposite - that no mapping should happen - so the two requests
+contradict each other and IsoQuant aborts rather than guessing. This applies to `auto` as well
+as `true`: pass the raw reads if you want the molecules split and re-aligned, or
+`--split_molecules false` to analyse the alignments as they are.
 
 Splitting is worth leaving on even for libraries you do not expect to be concatenated: measured
 on non-concatenated 10x data it recovers about one extra point of recall at unchanged precision
