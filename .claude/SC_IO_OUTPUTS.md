@@ -44,6 +44,11 @@ compression. Readers go through `resolve_optionally_gzipped()`, which returns wh
 Helpers live in `isoquant_lib/utils/file_utils.py`: `open_text_write`, `open_text_read`,
 `resolve_optionally_gzipped`, `gzip_file_in_place`, `strip_compression_suffix`.
 
+Both writers pass `compresslevel=GZIP_LEVEL` (6). Python's `gzip` defaults to 9, which on a
+synthetic barcode table measured 6.6 MB/s against 12.1 MB/s at level 6 for 1% less output —
+and `compress_barcode_tables` runs **serially in the parent** at the end of the run, so on a
+billion-read table that difference is hours. 6 is also what the `gzip` tool itself uses.
+
 ## 3. `--large_output tagged_bam`
 
 `<prefix>.tagged.bam` — a copy of the input alignments with `--barcode_tag` / `--umi_tag`
@@ -59,6 +64,17 @@ never a split to save by reusing its tags.
 Built in `DatasetProcessor.write_tagged_bam`, right after the split-table block in
 `process_sample` while the tables still exist. One fragment per chromosome via
 `map_over_chromosomes(write_tagged_bam_in_parallel, ...)`, then merged and indexed.
+
+Guarded by its own resume marker, `tagged_bam_lock_filename(sample)` (in `aux/`, so it outlives
+`clean_up`) plus an existence check on the BAM itself. This output is a full copy of the input,
+the most expensive thing on the branch, and it is written *before* read collection — without
+the marker every `--resume` after a crash in the long stages re-copied the whole BAM. The
+marker follows the `barcodes_done` precedent and is deliberately not deleted at the end of
+`process_sample`.
+
+The reference list is computed **once** in `process_sample` and passed into `write_tagged_bam`.
+It has to be the same list that drove the barcode-table split, or a fragment finds no table and
+its reads come out untagged; computing it twice left that invariant implicit.
 
 Every alignment is kept — primary, secondary, supplementary — plus a separate
 `write_unmapped_bam` pass, because `fetch(chr)` never returns unmapped reads.
@@ -146,7 +162,17 @@ BAMs, exactly as it did before this branch — `get_bam_files_from_samples` is u
 
 - `index_bam` — BAI with a CSI fallback for references too long for BAI
 - `merge_bam_files` — merge per-chromosome fragments and index; single fragment is moved, not
-  merged; `None` and missing fragments are skipped (chromosomes with nothing to write)
+  merged; `None` and missing fragments are skipped (chromosomes with nothing to write).
+  Merging goes through `_merge_in_rounds` in batches of `BAM_MERGE_BATCH` (500): samtools opens
+  every input at once and gives up just above a thousand handles regardless of `ulimit -n`
+  (measured: 1200 fragments fail at fragment 1019 with `RLIMIT_NOFILE` at 1048576). One
+  fragment per non-empty reference means GRCh38's full analysis set, at 3366 contigs, would
+  have crashed the merge. A lone leftover batch is carried into the next round rather than
+  copied; the intermediates are deleted once the final merge succeeds.
+- `unplaced_reads` — the unmapped records with no coordinates. `fetch("*")` seeks straight to
+  them on an indexed BAM, with a `fetch(until_eof=True)` filter as the fallback. The two
+  callers (`collect_unmapped_read_ids` and `write_unmapped_bam`) previously each scanned the
+  entire BAM linearly just to reach the tail, both serially in the parent
 - `write_tagged_chromosome_bam` — the one copy loop, parameterised by `primary_only` and
   `keep_untagged`; feature 3 uses `(False, True)`, feature 4 uses `(True, False)`
 - `references_with_alignments` — every reference carrying reads, empty ones dropped via the
@@ -185,8 +211,10 @@ crash before this.
 
 ## Verification performed
 
-Unit: `isoquant_tests/test_bam_utils.py` (31 tests), `isoquant_tests/test_file_compression.py`
-(18 tests).
+Unit: `isoquant_tests/test_bam_utils.py` (35 tests), `isoquant_tests/test_file_compression.py`
+(18 tests). The merge test monkeypatches `BAM_MERGE_BATCH` to 3 and runs 11/12/13 fragments,
+straddling the batch boundary where a lone leftover has to be carried forward; a separate test
+pins that `unplaced_reads` returns the same records with and without an index.
 
 End-to-end on chr19 of `Mouse.10x.5k.ONT_cDNA.R10.4.no_trunc.bam` (115841 records, 55392
 primary), `-m tenX_v3` with the 5K whitelist — and then on the **full** CI dataset via
@@ -225,14 +253,34 @@ path, where the tags never pass through a barcode table at all.
 Note that CI *produces* these BAMs but does not assert anything about them — the baselines only
 cover `allinfo`. A crash or a knock-on regression would be caught; a wrong tag value would not.
 
+### File-name read groups
+
+`strip_compression_suffix` was added for the `.fa.gz` split reads, but it changes
+`--read_group file_name` for **any** gzipped input: `reads.fq.gz` used to group as `reads.fq`
+(one `splitext` off a two-part extension) and now groups as `reads`. That is the intended
+name, and `FileNameGrouper` and `StringPoolManager` were changed together so they still agree,
+but it is a visible change to group labels for existing bulk runs. No CI baseline moves:
+`STEREO.TOY` is the only config pairing `file_name` with a gzipped input and it is
+`run_type: void` (checks that the grouped count files exist, not their contents).
+
 ### Resume
 
 `--resume` restores `large_output` from the pickled `.params` (the resume parser rejects it on
 the command line), so the survivors-file format is always consistent within a run and
 `load_survivor_tags` can never meet a format the run did not write.
 
-Resuming an **interrupted** run works. Resuming a **completed** run does not, and did not
+Resuming an **interrupted** run works, and the tagged BAM is now skipped rather than rebuilt
+(verified: the skip is logged and the file's mtime does not move).
+
+Resuming a **completed** run does not, and did not
 before this branch either: `clean_up()` deletes `out_raw_file + "_*"`, which includes the
 survivors files, and `prepare_read_filter` opens them without an existence guard. Verified on
 the branch base (b59bfbcc), where the same scenario fails even earlier. `clean_up` and that
 guard are untouched here.
+
+The mechanism, for whoever fixes it: `clean_up` removes the *global* UMI lock but not the
+per-edit-distance one (`umi_filtered_lock_file_name`, in `aux/`), so a resumed `filter_umis`
+returns early without rewriting the survivors files it just deleted. `write_deduplicated_bam`
+then finds nothing and warns "No reads survived UMI filtering", which is a misdiagnosis — but
+the run dies seconds later in `prepare_read_filter` for the same underlying reason, so nothing
+was added here to paper over it.
