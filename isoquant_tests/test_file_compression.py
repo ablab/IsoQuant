@@ -8,6 +8,7 @@
 
 import gzip
 import os
+import random
 
 import pytest
 
@@ -15,6 +16,9 @@ from isoquant_lib.barcode_calling.detect_barcodes import numbered_chunk_name
 from isoquant_lib.utils.file_utils import (
     gzip_file_in_place,
     open_text_read,
+    GZIP_LEVEL,
+    GZIP_LEVEL_SEQUENCES,
+    gzip_level_for,
     open_text_write,
     resolve_optionally_gzipped,
     strip_compression_suffix,
@@ -77,6 +81,38 @@ class TestResolveOptionallyGzipped:
         assert resolve_optionally_gzipped(missing) == missing
 
 
+class TestGzipLevelFor:
+    """Sequence data sits near gzip's entropy floor, so it gets a lower level than tables do."""
+
+    @pytest.mark.parametrize("name", ["reads.fa.gz", "reads.fasta.gz", "reads.fq.gz",
+                                      "reads.fastq.gz", "S.split_reads_0.fa.gz",
+                                      "plain.fasta"])
+    def test_sequences(self, name):
+        assert gzip_level_for(name) == GZIP_LEVEL_SEQUENCES
+
+    @pytest.mark.parametrize("name", ["counts.tsv.gz", "reads.bed.gz", "S.allinfo.gz",
+                                      "m.mtx.gz", "S.barcoded_reads_0.tsv"])
+    def test_tables(self, name):
+        assert gzip_level_for(name) == GZIP_LEVEL
+
+    def test_the_level_reaches_gzip(self, tmp_path):
+        """Sizes, because a GzipFile does not expose the level it was built with."""
+        rnd = random.Random(0)
+        payload = ">r\n" + "".join(rnd.choice("ACGT") for _ in range(200000)) + "\n"
+
+        def written(name, **kwargs):
+            path = tmp_path / name
+            with open_text_write(str(path), **kwargs) as handle:
+                handle.write(payload)
+            return os.path.getsize(str(path))
+
+        by_name = written("a.fa.gz")
+        assert by_name == written("b.fa.gz", compresslevel=GZIP_LEVEL_SEQUENCES)
+        assert by_name > written("c.fa.gz", compresslevel=9)
+        # a table of the same bytes takes the table level instead
+        assert written("d.tsv.gz") == written("e.tsv.gz", compresslevel=GZIP_LEVEL)
+
+
 class TestGzipFileInPlace:
     def test_compresses_and_removes_the_original(self, tmp_path):
         path = tmp_path / "t.tsv"
@@ -108,6 +144,11 @@ class TestGzipFileInPlace:
 class TestNumberedChunkName:
     def test_plain(self):
         assert numbered_chunk_name("/tmp/subreads", 3) == "/tmp/subreads_3"
+
+    def test_a_fasta_chunk_is_still_a_fasta(self):
+        """The chunk inherits the level from its name, so the extension has to survive."""
+        assert numbered_chunk_name("subreads.fa.gz", 3) == "subreads_3.fa.gz"
+        assert gzip_level_for(numbered_chunk_name("subreads.fa.gz", 3)) == GZIP_LEVEL_SEQUENCES
 
     def test_keeps_the_compression_suffix_last(self):
         """Otherwise the per-chunk temp would not be recognised as compressed."""

@@ -13,8 +13,9 @@ from collections import defaultdict, OrderedDict
 from traceback import print_exc
 import pandas
 import logging
-import gzip
 import gffutils
+
+from isoquant_lib.utils.file_utils import open_text_write
 
 try:
     from isoquant_lib.utils.error_codes import IsoQuantExitCode
@@ -87,7 +88,7 @@ def convert_to_matrix(input_linear_counts, output_file_path, feature_id_to_name_
 
     output_file_path += ".tsv"
     output_file_path += ".gz" if gzipped else ""
-    with gzip.open(output_file_path, 'wt') if gzipped else open(output_file_path, 'w') as outfile:
+    with open_text_write(output_file_path) as outfile:
         # Write the header with group_ids
         columns = list(sorted(count_matrix.columns))
         if num_groups > GROUP_COUNT_CUTOFF:
@@ -137,7 +138,7 @@ def convert_to_mtx(input_linear_counts, output_file_prefix, feature_id_to_name=N
             gene_name = feature_id_to_name.get(gene_id, gene_id) if feature_id_to_name is not None else gene_id
             ft_out.write(f"{gene_id}\t{gene_name}\n")
 
-    with gzip.open(mtx_file + ".gz", 'wt') if gzipped else open(mtx_file, 'w') as mtx_out:
+    with open_text_write(mtx_file + ".gz" if gzipped else mtx_file) as mtx_out:
         # Write the header
         mtx_out.write("%%MatrixMarket matrix coordinate real general\n")
         mtx_out.write(f"{len(unique_genes)} {len(unique_groups)} {df.shape[0]}\n")
@@ -231,7 +232,7 @@ def convert_profile_to_matrix(input_linear_counts: str, output_file_path: str,
         logger.warning("You have %d groups in your matrix, conversion might take a lot of time "
                        "and the output file can be very large" % num_groups)
 
-    with gzip.open(output_file, 'wt') if gzipped else open(output_file, 'w') as outfile:
+    with open_text_write(output_file) as outfile:
         outfile.write(feature_type + '_id\t' + '\t'.join(columns) + '\n')
         for feature_id in feature_order:
             incl_row = incl.loc[feature_id]
@@ -276,7 +277,7 @@ def convert_profile_to_mtx(input_linear_counts: str, output_file_prefix: str,
     excl_nonzero = df[df['exclude_counts'] != 0]
 
     def _write_mtx(path, frame, value_col):
-        with gzip.open(path + ".gz", 'wt') if gzipped else open(path, 'w') as out:
+        with open_text_write(path + ".gz" if gzipped else path) as out:
             out.write("%%MatrixMarket matrix coordinate real general\n")
             out.write(f"{len(feature_order)} {len(unique_groups)} {frame.shape[0]}\n")
             for _, row in frame.iterrows():

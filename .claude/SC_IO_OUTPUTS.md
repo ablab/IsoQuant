@@ -56,12 +56,29 @@ synthetic table was near-incompressible and badly overstated the gap):
 | 6 | 39.2 MB/s | — | 12.5 MB/s | — |
 | 9 | 16.0 MB/s | −3.0% | 2.7 MB/s | −3.9% |
 
-**Going below 6 is not worth it.** `compress_barcode_tables` runs serially in the parent, but
-at 39 MB/s a ~100 GB table (roughly a billion reads) costs ~45 min against ~105 min at level 9
-— the 9→6 change is the win; 6→1 would save another ~25 min for 8.5% more disk, and levels 4-5
-save almost nothing. The FASTA has a steeper curve but is compressed **inside the chunk
-workers**, where it is dwarfed by the SSW barcode matching, so its level is not a wall-clock
-factor at all.
+So the two kinds of output take different levels, picked by `gzip_level_for(name)` from the
+file's own extension:
+
+- **tables** (TSV, BED, MTX, allinfo) — `GZIP_LEVEL = 6`. Going below is not worth it:
+  `compress_barcode_tables` is the one serial compressor, but at 39 MB/s a ~100 GB table
+  (roughly a billion reads) costs ~45 min against ~105 min at level 9, and 6→1 would save
+  another ~25 min for 8.5% more disk while 4-5 save almost nothing.
+- **sequences** (FASTA/FASTQ) — `GZIP_LEVEL_SEQUENCES = 4`. Nucleotide data sits near gzip's
+  entropy floor so the high levels grind for nothing: 5.2x the throughput for 5.7% more output.
+
+Every gzip *writer* in the project now goes through `open_text_write` / `gzip_file_in_place`,
+so both levels apply everywhere: the allinfo writers in `dataset_processor`, the four in
+`convert_grouped_counts`, `TextFileAssignmentPrinter` (read_info / read_assignments /
+corrected_bed / read2transcripts), and the two `scripts/` converters. None of them call
+`gzip.open` any more.
+
+**Gotcha, caught only by measuring the output size.** The split FASTA is compressed in the
+chunk workers, and those temps were called `subreads.gz` — no `.fa`, so the inference gave them
+the *table* level while the single-threaded path, which passes the real output name, gave them
+the sequence level. The level differed by thread count. `numbered_chunk_name` now keeps the
+whole extension chain last (`subreads.fa.gz` → `subreads_3.fa.gz`) and the temp is named for
+what it holds. Verified end to end: the FASTA went 5.28 MB → 5.58 MB, exactly the level-4
+number, with identical read-id sets.
 
 The table has to stay plain during the run for a second reason worth recording:
 `split_read_table_parallel` streams it line by line in *every* worker, so a gzipped table would

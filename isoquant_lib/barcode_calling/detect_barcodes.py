@@ -28,7 +28,8 @@ from Bio import SeqIO, Seq, SeqRecord
 from ..modes import IsoQuantMode
 from isoquant_lib.utils.error_codes import IsoQuantExitCode
 from ..common import setup_worker_logging, _get_log_params
-from isoquant_lib.utils.file_utils import GZIP_SUFFIX, open_text_write
+from isoquant_lib.utils.file_utils import (GZIP_SUFFIX, open_text_write,
+                                           strip_compression_suffix)
 from .common import reverese_complement, load_barcodes
 from .cell_selection import NOSEQ, CellBarcodeSelector, select_cell_barcodes
 from . import (
@@ -338,10 +339,15 @@ def setup_detector_worker(log_file, log_level, barcode_detector):
 
 
 def numbered_chunk_name(file_name, num):
-    """Append a chunk index, keeping any compression suffix last."""
-    if file_name.endswith(GZIP_SUFFIX):
-        return "%s_%d%s" % (file_name[:-len(GZIP_SUFFIX)], num, GZIP_SUFFIX)
-    return "%s_%d" % (file_name, num)
+    """Append a chunk index, keeping the extensions last.
+
+    The suffixes have to survive: a chunk of a FASTA is still a FASTA, and that is what decides
+    its compression level.
+    """
+    base = strip_compression_suffix(file_name)
+    compression = file_name[len(base):]
+    root, extension = os.path.splitext(base)
+    return "%s_%d%s%s" % (root, num, extension, compression)
 
 
 def process_chunk(read_chunk, output_file, num, out_fasta=None, split_reads=False, barcode_detector=None):
@@ -578,7 +584,8 @@ def _process_single_file_in_parallel(input_file, output_tsv, out_fasta, args, ba
     if out_fasta:
         # compress the per-chunk temps exactly when the final file is compressed: the work
         # then happens in the workers, and merging stays a byte concat
-        tmp_fasta_file = os.path.join(tmp_dir, "subreads")
+        # named for what it holds, so the chunk inherits the FASTA compression level
+        tmp_fasta_file = os.path.join(tmp_dir, "subreads.fa")
         if out_fasta.endswith(GZIP_SUFFIX):
             tmp_fasta_file += GZIP_SUFFIX
     output_files = []
