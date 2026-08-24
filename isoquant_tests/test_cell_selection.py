@@ -44,6 +44,15 @@ class TestEstimateCellNumber:
         """
         assert estimate_cell_number([60] * 30 + [1] * 400) == 30
 
+    def test_flat_distribution_warns(self, caplog):
+        """Taking every barcode is a guess, not an answer -- it must not pass silently."""
+        estimate_cell_number([60] * 30 + [1] * 400)
+        assert any("no knee" in r.message for r in caplog.records if r.levelname == "WARNING")
+
+    def test_knee_does_not_warn(self, caplog):
+        estimate_cell_number([1000] * 500 + [3] * 20000)
+        assert not [r for r in caplog.records if r.levelname == "WARNING"]
+
     def test_knee_survives_a_noise_tail(self):
         counts = [1000 - i for i in range(200)] + [2] * 5000
         assert 150 <= estimate_cell_number(counts) <= 260
