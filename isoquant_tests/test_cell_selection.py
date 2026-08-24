@@ -246,7 +246,21 @@ class TestSelectCellBarcodes:
         assert int(stats["Cell barcodes detected"]) == len(cells)
         assert int(stats["Distinct barcodes extracted"]) > len(cells)
 
-    def test_empty_input(self, tmp_path):
+    def test_empty_input_aborts(self, tmp_path):
+        """Pass 2 would be handed an empty list and fail deep inside the detector."""
         out = tmp_path / "cells.tsv"
-        select_cell_barcodes(CellBarcodeSelector(barcode_length=16), str(out), None, n_cells="auto")
+        with pytest.raises(SystemExit) as excinfo:
+            select_cell_barcodes(CellBarcodeSelector(barcode_length=16), str(out), None, n_cells="auto")
+        assert excinfo.value.code != 0
         assert read_barcodes(out) == []
+
+    def test_nothing_in_the_whitelist_aborts(self, tmp_path):
+        """Barcodes were extracted, but none of them is a valid protocol barcode."""
+        rnd = random.Random(31)
+        selector = CellBarcodeSelector(barcode_length=16)
+        selector.counts = {random_barcode(rnd): 500 for _ in range(20)}
+        whitelist = tmp_path / "wl.txt"
+        whitelist.write_text("".join("%s\n" % random_barcode(rnd) for _ in range(20)))
+        with pytest.raises(SystemExit) as excinfo:
+            select_cell_barcodes(selector, str(tmp_path / "cells.tsv"), [str(whitelist)], n_cells="auto")
+        assert excinfo.value.code != 0
