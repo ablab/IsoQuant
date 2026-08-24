@@ -4,6 +4,7 @@
 # See file LICENSE for details.
 ############################################################################
 
+import numpy
 import pytest
 from isoquant_lib.barcode_calling.indexers import KmerIndexer, Dict2BitKmerIndexer, ArrayKmerIndexer, Array2BitKmerIndexer
 from isoquant_lib.barcode_calling.common import str_to_2bit, batch_str_to_2bit
@@ -393,11 +394,44 @@ class TestArray2BitKmerIndexer:
         bin_seqs = [str_to_2bit(b) for b in barcodes]
         indexer = Array2BitKmerIndexer(bin_seqs, kmer_size=6, seq_len=25)
 
-        # Index should be flat list
-        assert isinstance(indexer.index, list)
-        # Index ranges should map to flat index
-        assert isinstance(indexer.index_ranges, list)
+        # Both are flat numpy arrays: boxing 2-bit codes as Python ints costs ~28 bytes
+        # each on top of the 8 the value needs, and index_ranges has 4^k + 1 entries
+        assert isinstance(indexer.index, numpy.ndarray)
+        assert indexer.index.ndim == 1
+        assert isinstance(indexer.index_ranges, numpy.ndarray)
+        assert indexer.index_ranges.ndim == 1
         assert len(indexer.index_ranges) == 4**6 + 1  # 4^k + 1
+        # ranges partition the flat index
+        assert indexer.index_ranges[0] == 0
+        assert indexer.index_ranges[-1] == len(indexer.index)
+        assert (numpy.diff(indexer.index_ranges) >= 0).all()
+
+    def test_accepts_any_iterable_of_codes(self):
+        """Callers hand over Python lists, numpy arrays and generators alike."""
+        barcodes = ["ACTGACTGACTGACTGACTGACTGA", "TTTTACTGACTGACTGACTGACTGA"]
+        codes = [str_to_2bit(b) for b in barcodes]
+        from_list = Array2BitKmerIndexer(codes, kmer_size=6, seq_len=25)
+        from_array = Array2BitKmerIndexer(numpy.array(codes, dtype=numpy.uint64),
+                                          kmer_size=6, seq_len=25)
+        from_generator = Array2BitKmerIndexer(iter(codes), kmer_size=6, seq_len=25)
+
+        for other in (from_array, from_generator):
+            assert other.total_sequences == from_list.total_sequences
+            assert (other.index == from_list.index).all()
+            assert (other.index_ranges == from_list.index_ranges).all()
+            assert other.get_occurrences(barcodes[0]) == from_list.get_occurrences(barcodes[0])
+
+    def test_occurrences_are_plain_ints(self):
+        """Numpy scalars leaking out would break bit_to_str's mixed-type shifts."""
+        barcodes = ["ACTGACTGACTGACTGACTGACTGA"]
+        indexer = Array2BitKmerIndexer([str_to_2bit(b) for b in barcodes],
+                                       kmer_size=6, seq_len=25)
+        results = indexer.get_occurrences(barcodes[0])
+        assert results
+        for seq, count, positions in results:
+            assert isinstance(seq, str)
+            assert type(count) is int
+            assert all(type(p) is int for p in positions)
 
 
 if __name__ == '__main__':

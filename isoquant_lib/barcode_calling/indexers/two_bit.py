@@ -18,6 +18,11 @@ from collections import defaultdict
 import numpy
 from ..common import bit_to_str, str_to_2bit
 
+# 2-bit encoded sequences, and offsets into the flat index. Matching what
+# SharedMemoryArray2BitKmerIndexer uses, so the two stay interchangeable.
+SEQ_DTYPE = numpy.uint64
+INDEX_DTYPE = numpy.int64
+
 
 class Dict2BitKmerIndexer:
     """
@@ -155,32 +160,47 @@ class Array2BitKmerIndexer:
         for i in range(self.seq_len - self.k + 1):
             yield (bin_seq >> ((self.seq_len - self.k - i) * 2)) & self.mask
 
+    def _kmer_dtype(self):
+        """Narrowest type holding a 2k-bit k-mer code; halves the sort's temporaries."""
+        return numpy.uint32 if 2 * self.k <= 32 else numpy.uint64
+
+    def _kmers_at(self, sequences: numpy.ndarray, offset: int) -> numpy.ndarray:
+        """The k-mer every sequence carries at one offset, as a 2-bit array."""
+        shift = numpy.uint64((self.seq_len - self.k - offset) * 2)
+        kmers = numpy.bitwise_and(numpy.right_shift(sequences, shift), numpy.uint64(self.mask))
+        return kmers.astype(self._kmer_dtype(), copy=False)
+
     def _index(self, known_bin_seq: Iterable[int], total_kmers: int) -> None:
         """Build a flat k-mer index from 2-bit encoded sequences.
 
-        Counts each k-mer first and fills a single flat array, instead of collecting the
-        entries into 4^k per-k-mer lists and concatenating them. Materialising those lists
-        costs ~235 MB of empty list objects for a 3M barcode whitelist (k=11) and grows
-        16-fold per extra base, all of it transient and on top of the final index.
+        Counts each k-mer first and fills a single flat array, rather than collecting the
+        entries into 4^k per-k-mer lists and concatenating them. Everything stays in numpy
+        arrays: boxing 2-bit codes as Python ints costs ~28 bytes each on top of the 8 the
+        value needs, and the k-mer offset table has 4^k entries.
         """
-        sequences = list(known_bin_seq)
+        if isinstance(known_bin_seq, numpy.ndarray):
+            sequences = known_bin_seq.astype(SEQ_DTYPE, copy=False)
+        else:
+            sequences = numpy.fromiter(known_bin_seq, dtype=SEQ_DTYPE)
         self.total_sequences = len(sequences)
+        n_offsets = max(0, self.seq_len - self.k + 1)
 
-        # counting pass -> number of entries per k-mer, as a cumulative offset table
-        ranges = numpy.zeros(total_kmers + 1, dtype=numpy.int64)
-        for bin_seq in sequences:
-            for kmer_idx in self._get_kmer_bin_indexes(bin_seq):
-                ranges[kmer_idx + 1] += 1
-        numpy.cumsum(ranges, out=ranges)
-        self.index_ranges: List[int] = ranges.tolist()
+        # every (sequence, offset) pair, laid out sequence-major so that pair p belongs to
+        # sequence p // n_offsets. Sorting these by k-mer groups the index and, being
+        # stable, leaves each k-mer's entries in sequence-then-offset order.
+        kmers = numpy.empty(self.total_sequences * n_offsets, dtype=self._kmer_dtype())
+        for offset in range(n_offsets):
+            kmers[offset::n_offsets] = self._kmers_at(sequences, offset)
 
-        # fill pass -> place each entry at its k-mer's next free slot
-        self.index: List[int] = [0] * self.index_ranges[-1]
-        cursors = self.index_ranges[:-1]
-        for bin_seq in sequences:
-            for kmer_idx in self._get_kmer_bin_indexes(bin_seq):
-                self.index[cursors[kmer_idx]] = bin_seq
-                cursors[kmer_idx] += 1
+        self.index_ranges = numpy.zeros(total_kmers + 1, dtype=INDEX_DTYPE)
+        self.index_ranges[1:] = numpy.bincount(kmers, minlength=total_kmers)
+        numpy.cumsum(self.index_ranges, out=self.index_ranges)
+
+        order = numpy.argsort(kmers, kind="stable")
+        del kmers
+        # pair index -> sequence index, in place so the pair array is never held twice
+        numpy.floor_divide(order, n_offsets, out=order)
+        self.index = sequences[order]
 
     def empty(self) -> bool:
         """Check if index is empty."""
@@ -208,8 +228,9 @@ class Array2BitKmerIndexer:
         for pos, kmer_idx in enumerate(self._get_kmer_bin_indexes(seq)):
             start_index = self.index_ranges[kmer_idx]
             end_index = self.index_ranges[kmer_idx + 1]
-            for barcode_index in range(start_index, end_index):
-                barcode = self.index[barcode_index]
+            # tolist() unboxes the whole slice in C; leaving them as numpy scalars would
+            # make every downstream shift a uint64/int64 mixed-type operation
+            for barcode in self.index[start_index:end_index].tolist():
                 barcode_counts[barcode] += 1
                 barcode_positions[barcode].append(pos)
 
