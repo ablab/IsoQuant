@@ -144,6 +144,9 @@ def resolve_cell_barcode_detection(args):
         if whitelist_is_auto:
             logger.critical('--barcode_correction whitelist cannot be used with --barcodes %s' % AUTO_BARCODES)
             sys.exit(IsoQuantExitCode.INCOMPATIBLE_OPTIONS)
+        if args.n_cells is not None:
+            logger.warning("--n_cells is ignored: --barcode_correction %s matches reads against the "
+                           "whitelist as given" % BarcodeCorrectionMethod.whitelist.name)
         return
 
     if whitelist_is_auto and args.n_cells is None:
