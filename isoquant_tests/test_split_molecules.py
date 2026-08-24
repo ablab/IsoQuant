@@ -60,6 +60,39 @@ class TestSplitMoleculesResolution:
         assert resolve(mode, SPLIT_MOLECULES_FALSE)[1] is False
 
 
+class TestResolutionIsIdempotent:
+    """--resume re-runs check_input_params over args that were already resolved once."""
+
+    @staticmethod
+    def resolve_again(mode, split_molecules):
+        """First resolution, then the one --resume triggers on the restored args."""
+        args = argparse.Namespace(mode=mode, split_molecules=split_molecules)
+        isoquant._resolve_deprecated_mode(args)
+        args.mode = IsoQuantMode[args.mode]
+        isoquant._resolve_split_molecules(args)
+        first = args.split_molecules
+        # check_input_params skips the mode conversion when args.mode is already an enum,
+        # but re-runs the split resolution
+        isoquant._resolve_split_molecules(args)
+        return first, args.split_molecules
+
+    @pytest.mark.parametrize("mode", SPLITTING_MODES + NON_SPLITTING_MODES)
+    @pytest.mark.parametrize("requested", [None, SPLIT_MOLECULES_AUTO, SPLIT_MOLECULES_FALSE])
+    def test_second_resolution_keeps_the_value(self, mode, requested):
+        first, second = self.resolve_again(mode, requested)
+        assert first is second
+
+    @pytest.mark.parametrize("mode", SPLITTING_MODES)
+    def test_false_survives_resume(self, mode):
+        """Re-resolving False must not fall through to auto and turn splitting back on."""
+        assert self.resolve_again(mode, SPLIT_MOLECULES_FALSE) == (False, False)
+
+    @pytest.mark.parametrize("alias", list(DEPRECATED_MODE_ALIASES))
+    def test_alias_defaults_survive_resume(self, alias):
+        first, second = self.resolve_again(alias, None)
+        assert first is second
+
+
 class TestDeprecatedModeAliases:
     @pytest.mark.parametrize("alias, expected_mode, expected_split", [
         ("tenX_v3_split", IsoQuantMode.tenX_v3, True),

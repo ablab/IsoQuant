@@ -101,6 +101,8 @@ def resolve_deprecated_mode(args):
 
 def resolve_split_molecules(args):
     """Turn --split_molecules into a bool. See isoquant.py for the rules."""
+    if isinstance(args.split_molecules, bool):
+        return
     requested = args.split_molecules or SPLIT_MOLECULES_AUTO
     supported = args.mode.supports_molecule_splitting()
     if requested == SPLIT_MOLECULES_FALSE:

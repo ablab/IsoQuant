@@ -840,6 +840,9 @@ def _resolve_deprecated_mode(args):
 
 def _resolve_split_molecules(args):
     """Turn --split_molecules into a bool, refusing to silently ignore an impossible request."""
+    if isinstance(args.split_molecules, bool):
+        # already resolved, e.g. args restored from a previous run by --resume
+        return
     requested = args.split_molecules or SPLIT_MOLECULES_AUTO
     supported = args.mode.supports_molecule_splitting()
 
