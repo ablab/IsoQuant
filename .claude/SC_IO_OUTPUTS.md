@@ -91,8 +91,9 @@ which is the property `run_chunks_in_parallel` exists to provide.
 Verified: two runs now produce a byte-identical barcode table and a byte-identical decompressed
 FASTA, with the same row and read-id sets as before the change. The compressed FASTA still
 differs in exactly 10 bytes, all of them gzip header `mtime` fields — the deflate streams are
-identical. Passing `mtime=0` would close that too, if byte-comparable `.gz` outputs are ever
-wanted.
+identical. Zeroing that field was tried and **dropped**: `gzip.open()` cannot set it, so the
+writers would have to build `gzip.GzipFile` objects by hand, which is more machinery than
+byte-comparable `.gz` outputs are worth. Compare them decompressed.
 
 Only barcode calling had this pattern; every other parallel stage uses `proc.map`, which
 preserves input order.
