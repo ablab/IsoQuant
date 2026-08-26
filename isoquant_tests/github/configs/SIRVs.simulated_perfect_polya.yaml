@@ -23,9 +23,9 @@ baselines:
     novel_recall: 26.9
     novel_precision: 100.0
   transcripts_td10:
-    full_recall: 68.1
-    full_precision: 97.9
+    full_recall: 69.6
+    full_precision: 100.0
     known_recall: 95.3
     known_precision: 100.0
-    novel_recall: 23.1
-    novel_precision: 85.7
+    novel_recall: 26.9
+    novel_precision: 100.0

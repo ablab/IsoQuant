@@ -429,7 +429,7 @@ def run_transcript_quality(args, config_dict, baselines=None):
     output_folder = os.path.join(args.output if args.output else config_dict["output"], name)
     out_gtf = os.path.join(output_folder, "%s/%s.transcript_models.gtf" % (label, label))
     if not os.path.exists(out_gtf):
-        log.error("Output GTF file was not found" % out_gtf)
+        log.error("Output GTF file was not found: %s" % out_gtf)
         return -20
 
     quality_output = os.path.join(output_folder, "gffcompare")
