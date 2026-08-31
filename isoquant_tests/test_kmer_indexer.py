@@ -121,6 +121,35 @@ class TestKmerIndexer:
         assert isinstance(count, int)
         assert isinstance(positions, list)
 
+    def test_query_does_not_grow_index(self):
+        """Querying must never add k-mers to the index.
+
+        The index is shared by every read a worker process ever sees, so a lookup that
+        inserts foreign k-mers grows without bound. Searching a constant element across
+        an entire cDNA once cost 10.8 GB per worker this way.
+        """
+        tso = "CCCATGTACTCTGCGTTGATACCACTGCTT"
+        indexer = KmerIndexer([tso], kmer_size=13)
+        size_after_build = len(indexer.index)
+
+        # a long stretch of sequence sharing no 13-mer with the pattern
+        foreign = "ACGT" * 500
+        indexer.get_occurrences(foreign)
+        indexer.get_occurrences_substr(foreign, 0, len(foreign) - 1)
+
+        assert len(indexer.index) == size_after_build
+
+    def test_substr_matches_full_query(self):
+        """get_occurrences_substr over the whole sequence agrees with get_occurrences."""
+        barcodes = ["ACTGACTGAA", "TGCATGCATT"]
+        indexer = KmerIndexer(barcodes, kmer_size=4)
+        sequence = "GGACTGACTGAAGG"
+
+        full = indexer.get_occurrences(sequence)
+        substr = indexer.get_occurrences_substr(sequence, 0, len(sequence) - 1)
+
+        assert full == substr
+
 
 class TestDict2BitKmerIndexer:
     """Test memory-efficient Dict2BitKmerIndexer with 2-bit encoded sequences."""

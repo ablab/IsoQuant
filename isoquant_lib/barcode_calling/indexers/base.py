@@ -17,6 +17,10 @@ from collections import defaultdict
 
 from ..common import NUCL2BIN as SHARED_NUCL2BIN
 
+# Returned for k-mers absent from an index. A shared empty tuple, so a miss costs no
+# allocation -- lookups run once per base of every scanned region.
+_NO_HITS: Tuple[int, ...] = ()
+
 
 class KmerIndexer:
     """
@@ -36,7 +40,10 @@ class KmerIndexer:
         """
         self.seq_list: List[str] = list(known_strings)
         self.k: int = kmer_size
-        self.index: DefaultDict[str, List[int]] = defaultdict(list)
+        # A plain dict, never a defaultdict: lookups scan whole cDNA regions, and a
+        # subscript read on a defaultdict would insert an entry per foreign k-mer,
+        # growing the index without bound for the life of the process.
+        self.index: Dict[str, List[int]] = {}
         self._index()
 
     def _get_kmers(self, seq: str) -> Iterable[str]:
@@ -53,14 +60,14 @@ class KmerIndexer:
         """Build k-mer index from all sequences."""
         for i, barcode in enumerate(self.seq_list):
             for kmer in self._get_kmers(barcode):
-                self.index[kmer].append(i)
+                self.index.setdefault(kmer, []).append(i)
 
     def append(self, barcode: str) -> None:
         """Add a new barcode to the index."""
         self.seq_list.append(barcode)
         index = len(self.seq_list) - 1
         for kmer in self._get_kmers(barcode):
-            self.index[kmer].append(index)
+            self.index.setdefault(kmer, []).append(index)
 
     def empty(self) -> bool:
         """Check if index is empty."""
@@ -86,7 +93,7 @@ class KmerIndexer:
         barcode_positions: DefaultDict[int, List[int]] = defaultdict(list)
 
         for pos, kmer in enumerate(self._get_kmers(sequence)):
-            for i in self.index[kmer]:
+            for i in self.index.get(kmer, _NO_HITS):
                 barcode_counts[i] += 1
                 barcode_positions[i].append(pos)
 
@@ -139,7 +146,7 @@ class KmerIndexer:
         barcode_positions: DefaultDict[int, List[int]] = defaultdict(list)
 
         for pos, kmer in enumerate(self._get_kmers_substr(sequence, start, end)):
-            for i in self.index[kmer]:
+            for i in self.index.get(kmer, _NO_HITS):
                 barcode_counts[i] += 1
                 barcode_positions[i].append(pos)
 
