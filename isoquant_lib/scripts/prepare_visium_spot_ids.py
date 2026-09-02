@@ -103,7 +103,7 @@ def generate_spot_ids(
         for (bc1, coords1), (bc2, coords2) in product(entries1, entries2):
             composite_barcode = f"{bc1}{barcode_delimiter}{bc2}"
             spot_ids = [
-                f"{prefixes[i]}{coords1[i]}{delimiter}{coords2[i]}{suffixes[i]}"
+                f"{prefixes[i]}{coords2[i]}{delimiter}{coords1[i]}{suffixes[i]}"
                 for i in range(n_cols)
             ]
             writer.writerow([composite_barcode] + spot_ids)
