@@ -1,6 +1,8 @@
 import pytest
 import logging
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
+import isoquant
 from isoquant_lib.fusion_detector import FusionDetector, _CIGAR_CACHE, _ALIGNER_MAP_CACHE
 
 logger = logging.getLogger('IsoQuant')
@@ -58,6 +60,42 @@ class TestFusionDetectorInitialization:
         assert len(detector.fusion_metadata) == 0
         assert len(detector.fusion_assigned_pairs) == 0
         assert len(detector.fusion_read_scores) == 0
+
+
+def test_run_pipeline_fusion_flag_skips_isoform_assignment(monkeypatch):
+    args = SimpleNamespace(
+        mode=MagicMock(),
+        needs_reference=True,
+        genedb="/tmp/genes.db",
+        reference="/tmp/ref.fa",
+        output="/tmp/out",
+        input_data=MagicMock(),
+        fusion=True,
+        run_aligner_only=False,
+    )
+    args.mode.needs_barcode_calling.return_value = False
+    args.input_data.input_type.needs_mapping.return_value = False
+    args.input_data.samples = []
+
+    dataset_called = {"value": False}
+
+    class DummyDatasetProcessor:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def process_all_samples(self, *args, **kwargs):
+            dataset_called["value"] = True
+
+    monkeypatch.setattr(isoquant, "prepare_reference_genome", lambda *args, **kwargs: None)
+    monkeypatch.setattr(isoquant, "convert_gtf_to_db", lambda *args, **kwargs: "/tmp/genes.db")
+    monkeypatch.setattr(isoquant, "get_bam_files_from_samples", lambda *args, **kwargs: ["/tmp/test.bam"])
+    monkeypatch.setattr(isoquant, "run_fusion_detection_on_bams", lambda *args, **kwargs: {"total": 1, "successful": 1, "failed": 0})
+    monkeypatch.setattr(isoquant, "DatasetProcessor", DummyDatasetProcessor)
+    monkeypatch.setattr("isoquant_lib.fusion_detector.FusionDetector", MagicMock())
+
+    isoquant.run_pipeline(args)
+
+    assert dataset_called["value"] is False
 
 
 class TestCIGARParsing:

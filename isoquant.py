@@ -1178,17 +1178,8 @@ def run_pipeline(args):
         logger.info("Isoform assignment step is skipped because --run-aligner-only option was used")
         return
 
-    # run isoform assignment
-    dataset_processor = DatasetProcessor(args)
-    dataset_processor.process_all_samples(args.input_data)
-
-    # aggregate counts for all samples
-    if len(args.input_data.samples) > 1 and args.genedb:
-        combine_counts(args.input_data, args.output)
-
-    # Run fusion detection after isoform detection when --fusion is enabled
     if getattr(args, "fusion", False):
-        logger.info(" === Isoform detection completed, starting fusion detection === ")
+        logger.info(" === Fusion detection requested, skipping isoform assignment === ")
         bam_files = get_bam_files_from_samples(args.input_data)
         if not args.genedb:
             logger.warning("Fusion detection requires --genedb; skipping")
@@ -1205,6 +1196,16 @@ def run_pipeline(args):
             except Exception as e:
                 logger.warning("Fusion detection encountered an error and was skipped: %s" % str(e))
                 logger.debug("Traceback:", exc_info=True)
+        logger.info(" === IsoQuant pipeline finished === ")
+        return
+
+    # run isoform assignment
+    dataset_processor = DatasetProcessor(args)
+    dataset_processor.process_all_samples(args.input_data)
+
+    # aggregate counts for all samples
+    if len(args.input_data.samples) > 1 and args.genedb:
+        combine_counts(args.input_data, args.output)
 
     logger.info(" === IsoQuant pipeline finished === ")
 
