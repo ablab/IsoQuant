@@ -77,7 +77,8 @@ from isoquant_lib.common import setup_worker_logging, _get_log_params
 logger = logging.getLogger('IsoQuant')
 
 # Large output file types for --large_output option
-LARGE_OUTPUT_TYPES = ["read_info", "read_assignments", "corrected_bed", "read2transcripts", "allinfo", "none"]
+LARGE_OUTPUT_TYPES = ["read_info", "read_assignments", "corrected_bed", "read2transcripts", "allinfo",
+                      "tagged_bam", "deduplicated_bam", "none"]
 
 
 def bool_str(s):
@@ -579,9 +580,22 @@ def check_and_load_args(args, parser):
             if val not in LARGE_OUTPUT_TYPES:
                 logger.error("Invalid --large_output value: %s. Valid values: %s" % (val, ", ".join(LARGE_OUTPUT_TYPES)))
                 sys.exit(IsoQuantExitCode.INVALID_PARAMETER)
+        _warn_about_unusable_bam_outputs(args)
 
     save_params(args)
     return args
+
+
+def _warn_about_unusable_bam_outputs(args):
+    """Say up front when a requested BAM output cannot be produced, rather than mid-run."""
+    if not args.mode.needs_pcr_deduplication():
+        for output_type in ("tagged_bam", "deduplicated_bam"):
+            if output_type in args.large_output:
+                logger.warning("--large_output %s has no effect in %s mode, which has no barcodes "
+                               "or UMIs; it will be skipped" % (output_type, args.mode.name))
+    elif "tagged_bam" in args.large_output and getattr(args, 'barcoded_bam', False):
+        logger.warning("--large_output tagged_bam is redundant with --barcoded_bam: those "
+                       "alignments already carry the tags; it will be skipped")
 
 
 def load_previous_run(args):
@@ -752,6 +766,24 @@ def _dedup_read_group_specs(args):
         args.read_group = updated_specs
 
 
+def _reject_splitting_aligned_input(args):
+    """Refuse to split molecules when the reads are already aligned.
+
+    Splitting rewrites each read into its constituent cDNAs, so the pieces have to be aligned
+    afresh -- but supplying a BAM says "do not map". The two requests contradict each other,
+    and either way of guessing silently gives the user something they did not ask for, so make
+    them choose.
+    """
+    if not args.split_molecules or args.input_data.input_type.needs_mapping():
+        return
+    logger.critical("Reads cannot be split into separate molecules when they are already "
+                    "aligned (%s input): the split molecules would have to be mapped again. "
+                    "Provide the raw reads instead, or use --split_molecules %s to analyse "
+                    "the alignments as they are."
+                    % (args.input_data.input_type.name, SPLIT_MOLECULES_FALSE))
+    sys.exit(IsoQuantExitCode.INCOMPATIBLE_OPTIONS)
+
+
 def check_input_params(args):
     if not _validate_data_type_and_input(args):
         return False
@@ -762,6 +794,7 @@ def check_input_params(args):
         resolve_deprecated_mode(args)
         args.mode = IsoQuantMode[args.mode]
     resolve_split_molecules(args)
+    _reject_splitting_aligned_input(args)
 
     # translate --analysis (and the deprecated stage flags) into internal booleans
     resolve_analyses(args)

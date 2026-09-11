@@ -179,6 +179,10 @@ original file name, and barcode property (e.g. cell type).
   * `corrected_bed` - BED file with corrected read exon coordinates (`*.corrected_reads.bed.gz`);
   * `read2transcripts` - reads assigned to discovered transcript models, in the unified read_info format (`*.transcript_model_reads.tsv.gz`);
   * `allinfo` - old format for UMI filtered reads for single-cell/spatial modes (`*.allinfo`);
+  * `tagged_bam` - single-cell/spatial modes only: a copy of the input alignments with the
+    detected barcode and UMI added as tags (`*.tagged.bam`), see below;
+  * `deduplicated_bam` - single-cell/spatial modes only: the UMI-deduplicated alignments with
+    barcode, UMI, gene and transcript tags (`*.deduplicated.bam`), see below;
   * `none` - do not generate any large output files (not compatible with other values).
 
 Example usage:
@@ -190,6 +194,38 @@ isoquant.py --large_output read_info read_assignments corrected_bed read2transcr
 # Disable all large output files
 isoquant.py --large_output none ...
 ```
+
+### Tagged and deduplicated BAM files
+
+Both are indexed BAM files written for single-cell and spatial modes only, and both are off by
+default. Alignment records are copied unchanged apart from the tags, so anything that reads the
+original BAM works on these too.
+
+`tagged_bam` keeps **every** alignment in the input - primary, secondary, supplementary and
+unmapped, across all references including unplaced scaffolds that IsoQuant does not analyse -
+and adds:
+
+  * `--barcode_tag` (`CB` by default) - the detected cell barcode;
+  * `--umi_tag` (`UB` by default) - the detected UMI.
+
+Unmapped reads are tagged like any other: the barcode is called from the read sequence and does
+not depend on the read having aligned. Reads with no barcode are kept without tags. The file is
+redundant when `--barcoded_bam` was used as input, since those alignments already carry the
+tags, and IsoQuant warns and skips.
+
+`deduplicated_bam` keeps only the **primary** alignments of the reads that survived UMI
+filtering - one read per detected molecule - and additionally tags:
+
+  * `GX` - the gene the read was assigned to;
+  * `TX` - the transcript the read was assigned to.
+
+A tag is omitted rather than given a placeholder value when the corresponding value is unknown,
+so novel and ambiguous reads have no `TX` tag.
+
+Note that this file is a **deduplicated** view, not a general-purpose replacement for the input
+alignments: it holds one read per detected molecule, keeps only reads assigned to a gene, and
+drops secondary and supplementary records. Analyses that depend on chimeric or otherwise
+inconsistent reads - fusion detection in particular - must keep reading the original BAM.
 
 The `read_info.tsv` format can be also converted to old formats using the conversion script:
 ```bash
@@ -293,6 +329,11 @@ Splitting is supported for `tenX_v3`, `tenX_v2`, `stereoseq` and `visium_5prime`
 enabling even on libraries without concatenated molecules: on non-concatenated 10x data it
 recovers about one extra point of recall at unchanged precision, at roughly twice the barcode
 calling runtime.
+
+Splitting requires raw reads. The split molecules have to be aligned, so requesting it
+alongside an already aligned input (`--bam`) is contradictory and IsoQuant stops with an error
+- under `auto` as well as `true`. Supply the reads as FASTQ/FASTA to have them split and
+mapped, or pass `--split_molecules false` to use the alignments as given.
 
 The superseded mode names `tenX_v3_split`, `tenX_v2_split` and `stereoseq_nosplit` still work
 and are translated to the corresponding `--mode` plus `--split_molecules` combination.
@@ -508,6 +549,12 @@ We recommend _not_ to modify these options unless you are clearly aware of their
 
 `--no_gzip`
     Do not compress large output files.
+    Compressed outputs use gzip level 6 for tables and level 4 for FASTA, which is where the
+    time/size trade-off sits for each kind of data.
+    This also covers the single-cell outputs: the split-reads FASTA (compressed as it is
+    written, in the barcode-calling workers) and the barcoded read tables (compressed once the
+    run finishes, so they stay readable while the pipeline needs them). Neither slows any
+    subsequent step down.
 
 `--no_gtf_check`
     Do not perform input GTF checks.

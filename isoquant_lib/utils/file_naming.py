@@ -29,6 +29,12 @@ def split_barcodes_lock_filename(sample):
     return sample.barcodes_split_reads + "_lock"
 
 
+def tagged_bam_lock_filename(sample):
+    # in the aux dir, so it outlives clean_up and a resumed run does not copy the whole
+    # input BAM again for an output that is already complete
+    return sample.barcodes_split_reads + "_tagged_bam_done"
+
+
 def clean_locks(chr_ids, base_name, fname_function):
     for chr_id in chr_ids:
         fname = fname_function(base_name, chr_id)
@@ -46,6 +52,15 @@ def multimappers_file_name(out_raw_file: str, chr_id: str):
 
 def filtered_reads_file_name(out_raw_file: str, chr_id: str):
     return out_raw_file + "_filtered_" + chr_id
+
+
+def dedup_bam_fragment_name(out_raw_file: str, chr_id: str):
+    # under out_raw_file so clean_up removes it even if the merge never happens
+    return out_raw_file + "_dedup_" + convert_chr_id_to_file_name_str(chr_id) + ".bam"
+
+
+def tagged_bam_fragment_name(out_raw_file: str, chr_id: str):
+    return out_raw_file + "_tagged_" + convert_chr_id_to_file_name_str(chr_id) + ".bam"
 
 
 def umi_filtered_reads_file_name(out_umi_filtered_tmp: str, chr_id: str, edit_distance: int):

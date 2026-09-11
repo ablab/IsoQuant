@@ -28,6 +28,8 @@ from Bio import SeqIO, Seq, SeqRecord
 from ..modes import IsoQuantMode
 from isoquant_lib.utils.error_codes import IsoQuantExitCode
 from ..common import setup_worker_logging, _get_log_params
+from isoquant_lib.utils.file_utils import (GZIP_SUFFIX, open_text_write,
+                                           strip_compression_suffix)
 from .common import reverese_complement, load_barcodes
 from .cell_selection import NOSEQ, CellBarcodeSelector, select_cell_barcodes
 from . import (
@@ -156,7 +158,7 @@ class BarcodeCaller:
         self.output_sequences_file = None
         self.process_function = self._process_read_split if split_reads else self._process_read_normal
         if self.output_sequences:
-            self.output_sequences_file = open(self.output_sequences, "w")
+            self.output_sequences_file = open_text_write(self.output_sequences)
         if header:
             self.output_file.write(barcode_detector.header() + "\n")
         self.read_stat = ReadStats()
@@ -336,10 +338,22 @@ def setup_detector_worker(log_file, log_level, barcode_detector):
     _WORKER_DETECTOR["detector"] = barcode_detector
 
 
+def numbered_chunk_name(file_name, num):
+    """Append a chunk index, keeping the extensions last.
+
+    The suffixes have to survive: a chunk of a FASTA is still a FASTA, and that is what decides
+    its compression level.
+    """
+    base = strip_compression_suffix(file_name)
+    compression = file_name[len(base):]
+    root, extension = os.path.splitext(base)
+    return "%s_%d%s%s" % (root, num, extension, compression)
+
+
 def process_chunk(read_chunk, output_file, num, out_fasta=None, split_reads=False, barcode_detector=None):
     output_file += "_" + str(num)
     if out_fasta:
-        out_fasta += "_" + str(num)
+        out_fasta = numbered_chunk_name(out_fasta, num)
     counter = 0
 
     if barcode_detector is None:
@@ -391,8 +405,10 @@ def count_barcodes_in_reads(args, barcode_length):
         def submit(pool, chunk, num):
             return pool.submit(count_chunk, chunk, split_reads, barcode_length)
 
-        def handle_result(result):
+        def handle_result(result, chunk_index):
             counts, malformed, reads = result
+            # order-insensitive: the counts are summed and CellBarcodeSelector sorts them by
+            # (count, barcode), so the chunk index is of no use here
             selector.merge_counts(counts, malformed)
             return reads
 
@@ -509,9 +525,13 @@ def open_read_chunks(input_file):
 def run_chunks_in_parallel(read_chunk_gen, args, barcode_detector, submit, handle_result):
     """Feed read chunks to a worker pool, keeping args.threads tasks in flight.
 
+    Results are handed to handle_result in completion order, so a consumer whose output depends
+    on the order gets the chunk index and has to reorder by it -- see _process_single_file_in_parallel.
+    Waiting for the chunks in order instead would idle the pool behind a single slow one.
+
     Args:
         submit: (pool, chunk, chunk_index) -> Future
-        handle_result: (result) -> number of reads processed
+        handle_result: (result, chunk_index) -> number of reads processed
     """
     # Clean up parent memory before spawning workers
     gc.collect()
@@ -523,10 +543,10 @@ def run_chunks_in_parallel(read_chunk_gen, args, barcode_detector, submit, handl
             mp_context=mp_context,
             initializer=setup_detector_worker,
             initargs=(log_file, log_level, barcode_detector)) as proc:
-        future_results = []
+        future_results = {}  # future -> the index of the chunk it is processing
         chunk_counter = 0
         for chunk in read_chunk_gen:
-            future_results.append(submit(proc, chunk, chunk_counter))
+            future_results[submit(proc, chunk, chunk_counter)] = chunk_counter
             chunk_counter += 1
             if chunk_counter >= args.threads:
                 break
@@ -539,12 +559,11 @@ def run_chunks_in_parallel(read_chunk_gen, args, barcode_detector, submit, handl
             for c in completed_features:
                 if c.exception() is not None:
                     raise c.exception()
-                read_counter += handle_result(c.result())
+                read_counter += handle_result(c.result(), future_results.pop(c))
                 sys.stdout.write("Processed %d reads\r" % read_counter)
-                future_results.remove(c)
                 if reads_left:
                     try:
-                        future_results.append(submit(proc, next(read_chunk_gen), chunk_counter))
+                        future_results[submit(proc, next(read_chunk_gen), chunk_counter)] = chunk_counter
                         chunk_counter += 1
                     except StopIteration:
                         reads_left = False
@@ -566,28 +585,41 @@ def _process_single_file_in_parallel(input_file, output_tsv, out_fasta, args, ba
     os.makedirs(tmp_dir)
 
     tmp_barcode_file = os.path.join(tmp_dir, "bc")
-    tmp_fasta_file = os.path.join(tmp_dir, "subreads") if out_fasta else None
-    output_files = []
+    tmp_fasta_file = None
+    if out_fasta:
+        # compress the per-chunk temps exactly when the final file is compressed: the work
+        # then happens in the workers, and merging stays a byte concat
+        # named for what it holds, so the chunk inherits the FASTA compression level
+        tmp_fasta_file = os.path.join(tmp_dir, "subreads.fa")
+        if out_fasta.endswith(GZIP_SUFFIX):
+            tmp_fasta_file += GZIP_SUFFIX
+    chunk_outputs = {}
 
     def submit(pool, chunk, num):
         return pool.submit(process_chunk, chunk, tmp_barcode_file, num, tmp_fasta_file, split_reads)
 
-    def handle_result(result):
+    def handle_result(result, chunk_index):
         tmp_out_file, tmp_out_fasta, read_count = result
-        output_files.append((tmp_out_file, tmp_out_fasta))
+        chunk_outputs[chunk_index] = (tmp_out_file, tmp_out_fasta)
         return read_count
 
     run_chunks_in_parallel(read_chunk_gen, args, barcode_detector, submit, handle_result)
+    # by chunk index, not by completion: the merge below defines the row order of the barcode
+    # table and the record order of the FASTA, and both have to be the same on every run
+    output_files = [chunk_outputs[i] for i in sorted(chunk_outputs)]
 
     with open(output_tsv, "w") as final_output_tsv:
-        final_output_fasta = open(out_fasta, "w") if out_fasta else None
+        # binary: concatenating gzip members byte-wise gives a valid multi-member stream,
+        # so per-chunk compression in the workers merges without re-compressing here
+        final_output_fasta = open(out_fasta, "wb") if out_fasta else None
         header = barcode_detector.header()
         final_output_tsv.write(header + "\n")
         stat_dict = defaultdict(int)
         for tmp_file, tmp_fasta in output_files:
             shutil.copyfileobj(open(tmp_file, "r"), final_output_tsv)
             if tmp_fasta and final_output_fasta:
-                shutil.copyfileobj(open(tmp_fasta, "r"), final_output_fasta)
+                with open(tmp_fasta, "rb") as tmp_fasta_handle:
+                    shutil.copyfileobj(tmp_fasta_handle, final_output_fasta)
             for line in open(stats_file_name(tmp_file), "r"):
                 v = line.strip().split("\t")
                 if len(v) != 2:

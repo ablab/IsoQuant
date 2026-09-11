@@ -6,7 +6,6 @@
 ############################################################################
 
 import logging
-import gzip
 
 from isoquant_lib.common import (
     CANONICAL_FWD_SITES,
@@ -17,6 +16,7 @@ from isoquant_lib.common import (
     sum_intervals_from_point,
     sum_intervals_to_point
 )
+from isoquant_lib.utils.file_utils import open_text_write
 from isoquant_lib.utils.serialization import (
     write_short_int,
     read_short_int,
@@ -72,9 +72,7 @@ class TextFileAssignmentPrinter(AbstractAssignmentPrinter):
         self.gzipped = gzipped
         if gzipped:
             self.output_file_name += ".gz"
-            self.output_file = gzip.open(self.output_file_name, "wt")
-        else:
-            self.output_file = open(self.output_file_name, "w")
+        self.output_file = open_text_write(self.output_file_name)
 
     def __del__(self):
         self.output_file.close()

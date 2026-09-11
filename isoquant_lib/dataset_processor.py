@@ -7,7 +7,6 @@
 
 import gc
 import glob
-import gzip
 import itertools
 import logging
 import multiprocessing
@@ -34,7 +33,11 @@ from isoquant_lib.utils.serialization import (
     write_string,
 )
 from isoquant_lib.utils.stats import EnumStats
-from isoquant_lib.utils.file_utils import merge_files, merge_counts
+from isoquant_lib.utils.file_utils import (merge_files, merge_counts, gzip_file_in_place,
+                                          open_text_write, resolve_optionally_gzipped)
+from isoquant_lib.utils.bam_utils import (PLACEHOLDERS, collect_unmapped_read_ids,
+                                         load_barcode_umi_tags, merge_bam_files,
+                                         references_with_alignments, write_unmapped_bam)
 from .alignment.alignment_processor import AlignmentType
 from .assignment.read_groups import prepare_read_groups, get_grouping_strategy_names
 from .assignment.assignment_io import IOSupport, ReadInfoPrinter, VoidPrinter
@@ -52,6 +55,8 @@ from isoquant_lib.utils.file_naming import (
     umi_filtered_global_lock_file_name,
     umi_filtered_lock_file_name,
     umi_output_prefix,
+    tagged_bam_fragment_name,
+    tagged_bam_lock_filename,
 )
 from isoquant_lib.model_construction.transcript_printer import GFFPrinter, VoidTranscriptPrinter
 from .barcode_calling.umi_filtering import create_transcript_info_dict
@@ -62,6 +67,8 @@ from .parallel_workers import (
     collect_reads_in_parallel,
     construct_models_in_parallel,
     filter_umis_in_parallel,
+    write_deduplicated_bam_in_parallel,
+    write_tagged_bam_in_parallel,
 )
 
 logger = logging.getLogger('IsoQuant')
@@ -134,6 +141,8 @@ class DatasetProcessor:
         logger.info("Secondary alignments will%s be used" % ("" if self.args.use_secondary else " not"))
         for sample in input_data.samples:
             self.process_sample(sample)
+        for sample in input_data.samples:
+            self.compress_barcode_tables(sample)
         self.clean_up()
         logger.info("Processed " + proper_plural_form("experiment", len(self.input_data.samples)))
 
@@ -177,8 +186,15 @@ class DatasetProcessor:
             if self.args.barcoded_reads:
                 sample.barcoded_reads = self.args.barcoded_reads
 
-            for chr_id in self.get_chr_list():
-                split_barcodes_dict[chr_id] = sample.barcodes_split_reads + "_" + chr_id
+            # a tagged BAM copies every reference, including the unplaced scaffolds IsoQuant
+            # does not analyse, so those reads need a barcode table of their own to be tagged.
+            # The same list drives the split and the copy, so every fragment finds its table.
+            tagged_bam_references = None
+            if large_output_enabled(self.args, "tagged_bam"):
+                tagged_bam_references = references_with_alignments([f[0] for f in sample.file_list])
+            split_chr_ids = self.get_chr_list() if tagged_bam_references is None else tagged_bam_references
+            for chr_id in split_chr_ids:
+                split_barcodes_dict[chr_id] = sample.get_barcodes_split_file(chr_id)
             barcode_split_done = split_barcodes_lock_filename(sample)
             if self.args.resume and os.path.exists(barcode_split_done):
                 logger.info("Barcode table was split during the previous run, existing files will be used")
@@ -187,6 +203,19 @@ class DatasetProcessor:
                     os.remove(barcode_split_done)
                 self.split_read_barcode_table(sample, split_barcodes_dict)
                 open(barcode_split_done, "w").close()
+
+            # nothing to tag with otherwise; the user was warned about that at startup
+            if tagged_bam_references is not None:
+                tagged_bam_done = tagged_bam_lock_filename(sample)
+                if (self.args.resume and os.path.exists(tagged_bam_done)
+                        and os.path.exists(sample.out_tagged_bam)):
+                    logger.info("Tagged BAM was written during the previous run, keeping %s"
+                                % sample.out_tagged_bam)
+                else:
+                    if os.path.exists(tagged_bam_done):
+                        os.remove(tagged_bam_done)
+                    self.write_tagged_bam(sample, tagged_bam_references)
+                    open(tagged_bam_done, "w").close()
 
         if self.args.read_assignments:
             saves_file = self.args.read_assignments[0]
@@ -201,6 +230,9 @@ class DatasetProcessor:
 
             if self.args.mode.needs_pcr_deduplication():
                 self.filter_umis(sample)
+                # the survivors files live under out_raw_file and are deleted by clean_up
+                if large_output_enabled(self.args, "deduplicated_bam"):
+                    self.write_deduplicated_bam(sample)
 
         total_assignments, polya_found, self.all_read_groups = self.load_read_info(saves_file)
 
@@ -603,9 +635,7 @@ class DatasetProcessor:
                 allinfo_fname = output_prefix + ".allinfo"
                 if self.args.gzipped:
                     allinfo_fname += ".gz"
-                    allinfo_outf = gzip.open(allinfo_fname, "wt")
-                else:
-                    allinfo_outf = open(allinfo_fname, "w")
+                allinfo_outf = open_text_write(allinfo_fname)
 
             for all_info_file_name, stats_output_file_name, umi_filter_done in results:
                 if save_allinfo:
@@ -693,9 +723,7 @@ class DatasetProcessor:
                         allinfo_fname = output_prefix + ".allinfo"
                         if self.args.gzipped:
                             allinfo_fname += ".gz"
-                            allinfo_outf = gzip.open(allinfo_fname, "wt")
-                        else:
-                            allinfo_outf = open(allinfo_fname, "w")
+                        allinfo_outf = open_text_write(allinfo_fname)
 
                     for all_info_file_name, stats_output_file_name, umi_filter_done in results:
                         if save_allinfo:
@@ -727,11 +755,94 @@ class DatasetProcessor:
 
         open(umi_filtering_done, "w").close()
 
+    def map_over_chromosomes(self, worker, sample, *extra_args, chr_ids=None):
+        """Run worker(sample, chr_id, *extra_args) for every chromosome, in parallel.
+
+        Defaults to the chromosomes this run analysed; pass chr_ids to cover others.
+        """
+        gen = (worker, itertools.repeat(sample),
+               self.get_chr_list() if chr_ids is None else chr_ids,
+               *(itertools.repeat(a) for a in extra_args))
+        if self.args.threads > 1:
+            gc.collect()
+            mp_context = multiprocessing.get_context('fork')
+            log_file, log_level = _get_log_params()
+            with ProcessPoolExecutor(max_workers=self.args.threads, mp_context=mp_context,
+                                     initializer=setup_worker_logging,
+                                     initargs=(log_file, log_level)) as proc:
+                return list(proc.map(*gen, chunksize=1))
+        return list(map(*gen))
+
+    def write_tagged_bam(self, sample, references):
+        """A copy of the input BAM(s) with barcode and UMI tags, keeping every alignment.
+
+        Purely a side output: the barcode table split it reads from happens regardless, and
+        nothing downstream looks at the result. references is the list the barcode table was
+        split over, so each fragment has a table to read its tags from.
+        """
+        logger.info("Writing tagged BAM")
+        bam_files = [f[0] for f in sample.file_list]
+        fragments = self.map_over_chromosomes(write_tagged_bam_in_parallel, sample, self.args,
+                                              chr_ids=references)
+
+        # fetch() by chromosome never returns unmapped reads, so they need a pass of their own.
+        # They belong to no chromosome and so appear in no split table, but a barcode is called
+        # from the read sequence and does not need an alignment -- look theirs up directly.
+        unmapped_fragment = tagged_bam_fragment_name(sample.out_raw_file, "unmapped")
+        unmapped_ids = collect_unmapped_read_ids(bam_files)
+        unmapped_tags = {}
+        for table in sample.barcoded_reads:
+            unmapped_tags.update(load_barcode_umi_tags(resolve_optionally_gzipped(table),
+                                                       read_ids=unmapped_ids))
+        if write_unmapped_bam(bam_files, unmapped_fragment, unmapped_tags,
+                              self.args.barcode_tag, self.args.umi_tag):
+            # a table row exists for every read, but its barcode may be the uncalled placeholder
+            barcoded = sum(1 for tags in unmapped_tags.values() if tags[0] not in PLACEHOLDERS)
+            logger.info("Copied %d unmapped reads, %d of them barcoded"
+                        % (len(unmapped_ids), barcoded))
+            fragments.append(unmapped_fragment)
+        else:
+            os.remove(unmapped_fragment)
+
+        merged = merge_bam_files(sample.out_tagged_bam, fragments, self.args.threads)
+        if merged is None:
+            logger.warning("No alignments to tag, %s was not written" % sample.out_tagged_bam)
+        else:
+            logger.info("Tagged BAM saved to %s" % merged)
+        return merged
+
+    def write_deduplicated_bam(self, sample):
+        """A primary-only BAM of the reads that survived UMI filtering, carrying their tags."""
+        logger.info("Writing deduplicated BAM")
+        fragments = self.map_over_chromosomes(write_deduplicated_bam_in_parallel, sample, self.args)
+        merged = merge_bam_files(sample.out_deduplicated_bam, fragments, self.args.threads)
+        if merged is None:
+            logger.warning("No reads survived UMI filtering, %s was not written"
+                           % sample.out_deduplicated_bam)
+        else:
+            logger.info("Deduplicated BAM saved to %s" % merged)
+        return merged
+
+    def compress_barcode_tables(self, sample):
+        """Gzip the barcoded read tables once nothing needs them any more.
+
+        They stay plain for the whole run because split_read_barcode_table reads them, and
+        only tables this run produced are touched -- files passed via --barcoded_reads belong
+        to the user and are left alone.
+        """
+        if not self.args.gzipped:
+            return
+        produced = sorted(glob.glob(sample.barcodes_tsv + "_*.tsv"))
+        for table in produced:
+            gzipped = gzip_file_in_place(table)
+            logger.info("Compressed barcode table to %s" % gzipped)
+
     def split_read_barcode_table(self, sample, split_barcodes_file_names):
         logger.info("Splitting read barcode table")
         # Supports both IsoQuant's 6-column format and third-party 3-column format
         # Only columns 0, 1, 2 (read_id, barcode, umi) are required and preserved
-        split_read_table_parallel(sample, sample.barcoded_reads, split_barcodes_file_names, self.args.threads,
+        barcode_tables = [resolve_optionally_gzipped(f) for f in sample.barcoded_reads]
+        split_read_table_parallel(sample, barcode_tables, split_barcodes_file_names, self.args.threads,
                                   read_column=0, group_columns=(1, 2), delim='\t')
         logger.info("Read barcode table was split")
 
