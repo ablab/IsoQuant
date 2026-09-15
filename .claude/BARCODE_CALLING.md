@@ -41,6 +41,26 @@ isoquant_lib/barcode_calling/
 | Array2BitKmerIndexer | Large fixed-length sets | Flat array | Fast |
 | SharedMemoryArray2BitKmerIndexer | Very large sets (>1M) with multiprocessing | Shared memory | Numba JIT optimized |
 
+### Invariant: a lookup must never grow the index
+
+`KmerIndexer.index` is a **plain `dict`, deliberately not a `defaultdict`** — do not "simplify"
+it back. An indexer is built once per worker process and then queried for every read that
+worker ever sees, so a subscript read (`self.index[kmer]`) on a defaultdict inserts a
+permanent `kmer -> []` entry for every *foreign* k-mer scanned, and the index grows for the
+life of the process, bounded only by 4^k. Build paths use `setdefault`; lookups use
+`.get(kmer, _NO_HITS)`. `Dict2BitKmerIndexer` already did this correctly;
+`ArrayKmerIndexer`/`Array2BitKmerIndexer` are immune (preallocated 4^k list, subscript is a
+list index, not a dict insert).
+
+This cost 173.7 GB in `custom_sc` — see [Cost of constant elements](#cost-of-constant-elements-and-where-they-sit)
+below for how it was reached and why only that mode paid it. Fixed in `d64a7726`; guarded by
+`test_query_does_not_grow_index` in `isoquant_tests/test_kmer_indexer.py`, which asserts
+`len(indexer.index)` is unchanged after querying foreign sequence.
+
+Ceiling arithmetic, useful whenever a leak like this is suspected: a leaked entry costs
+~161 bytes (13-mer key + empty list + dict slot), so saturation is `4^k × 161 B × n_workers`.
+For k=13 that is 10.8 GB per worker; at 16 workers, 172.8 GB.
+
 ### 2-Bit DNA Encoding
 
 All 2-bit indexers use this encoding:
@@ -407,6 +427,44 @@ Two types of linked elements for multi-part barcodes/UMIs. Both require:
    e. `process_concatenated_elements` — combine parts, correct against full whitelist
    f. `process_duplicated_elements` — majority vote across copies
 3. Choose strand by polyT presence, or by more detected elements
+
+### Cost of constant elements, and where they sit
+
+`detect_const_elements` searches **unbounded regions** in two cases, both easy to miss when
+reading an MDF:
+
+* **An element after cDNA** (e.g. 10x `R1:Barcode:UMI:PolyT:cDNA:TSO`) — the 3' loop searches
+  `[polyt_end+1, len(sequence)]`, i.e. the whole cDNA, thousands of bases. MDFs that stop at
+  cDNA (Curio, Visium HD) break out of that loop immediately and never pay it.
+* **The strand without polyT** — the 5' loop falls back to `search_end = len(sequence)`, so
+  5' constants scan the entire read. `find_barcode_umi` always tries both strands, so on a
+  stranded protocol one of the two passes takes this path on every read.
+
+Element k-mer size is derived, not tuned: `max(6, element_length // 2 - 2)`. A 30 bp TSO gets
+**k=13**. The hand-written `TenXSplittingBarcodeDetector` does the same cDNA-wide TSO scan
+with a hardcoded **k=9** (`tenx.py`), and that one constant is the whole difference in leak
+ceiling: 4^9 = 262 K entries (~40 MB) against 4^13 = 67 M (~10.8 GB).
+
+**Measured** (10x 3' v3, 4 M real reads, 16 threads, `custom_sc`): 137.0 GB with the TSO line
+in the MDF, 5.5 GB with it removed — 25x memory and 2.7x wall clock for one line. Detection
+changed by 0.24 %, slightly *in favour* of dropping it. At 108 M reads the figure was
+173.7 GB, which is the saturated ceiling (4^13 × 161 B × 16), not a per-read cost. Full
+report: `IsoQuant4_reproducibility/.claude/CUSTOM_SC_TSO_MEMORY.md`.
+
+**Two measurement traps** that made this look like something else:
+
+* Peak RAM is **not** monotonic in input-file count. `process_in_parallel` builds a new
+  `ProcessPoolExecutor` per input file, so worker teardown frees the leak; the same 4 M reads
+  split across two files measured 105.1 GB against 137.0 GB as one file. Splitting the input
+  is not a fix and the comparison says nothing about input layout.
+* Growth saturates, so a small pilot run under-reports badly while a large one looks like a
+  constant startup cost. Neither reading is right — check `len(indexer.index)` directly.
+
+Still open after `d64a7726` (which fixed only the unbounded *growth*, not the unbounded
+*scan*): whether to cap the derived k for constant elements, and whether a trailing constant
+should be searched in a window near the read end rather than across the whole cDNA. Both
+change detection results, so both need measuring against the `Barcode.Custom.*` CI baselines
+rather than being applied on reasoning alone.
 
 ### Test Data
 
