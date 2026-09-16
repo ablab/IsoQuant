@@ -122,6 +122,13 @@ class ModelReadCounter:
         transcript2gene = {t.transcript_id: t.gene_id for t in self.store.transcript_model_storage}
 
         model_gene_info = GeneInfo.from_models(self.store.transcript_model_storage, self.args.delta)
+        # --check_canonical: a model GeneInfo has no reference sequence of its own, so
+        # share the block's one (same coordinates, no extra copy) - otherwise the
+        # canonical column of the model read_info is always "."
+        if self.args.check_canonical and self.gene_info.reference_region:
+            model_gene_info.all_read_region_start = self.gene_info.all_read_region_start
+            model_gene_info.all_read_region_end = self.gene_info.all_read_region_end
+            model_gene_info.reference_region = self.gene_info.reference_region
         model_by_id = {t.transcript_id: t for t in self.store.transcript_model_storage}
         model_ids = set(model_by_id.keys())
         surviving_genes = set(transcript2gene.values())

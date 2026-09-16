@@ -282,13 +282,18 @@ class GeneInfo:
         gene_info = cls.__new__(cls)
         gene_info.db = None
         gene_info.gene_db_list = []
-        if not transcript_model_storage:
-            return cls([], None, delta)
 
-        # gene region
-        gene_info.chr_id = transcript_model_storage[0].chr_id
-        gene_info.start = transcript_model_storage[0].get_start()
-        gene_info.end = transcript_model_storage[0].get_end()
+        # gene region; an empty model storage (a gene block where no model survived
+        # filtering) still yields a fully initialized, empty GeneInfo - it is set as
+        # gene_info of the resulting read assignments and must not miss attributes
+        if transcript_model_storage:
+            gene_info.chr_id = transcript_model_storage[0].chr_id
+            gene_info.start = transcript_model_storage[0].get_start()
+            gene_info.end = transcript_model_storage[0].get_end()
+        else:
+            gene_info.chr_id = None
+            gene_info.start = 0
+            gene_info.end = 0
         gene_info.delta = delta
         gene_info.all_isoforms_exons = {}
         gene_info.all_isoforms_introns = {}

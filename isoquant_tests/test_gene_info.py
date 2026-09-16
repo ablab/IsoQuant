@@ -78,6 +78,20 @@ class TestGeneInfo:
         assert gene_info.isoform_strands["test_transcript"] == "+"
         assert gene_info.all_isoforms_exons["test_transcript"] == [(100, 200), (300, 400)]
 
+    def test_from_models_empty(self):
+        # a gene block where no model survived filtering still yields a fully
+        # initialized GeneInfo (it is set as gene_info of the resulting read
+        # assignments, which the printers then query)
+        gene_info = GeneInfo.from_models([])
+
+        assert gene_info.empty()
+        assert gene_info.reference_region is None
+        assert gene_info.all_isoforms_exons == {}
+        assert gene_info.all_isoforms_introns == {}
+        assert gene_info.gene_id_map == {}
+        assert gene_info.db is None
+        assert gene_info.gene_db_list == []
+
     def test_serialization(self):
         import io
 
