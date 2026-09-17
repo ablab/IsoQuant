@@ -63,6 +63,20 @@ To reconstruct the per-molecule group-list format (one entry per read, e.g. barc
 use `isoquant_lib/scripts/exon_splice_site_to_group_lists.py`.
 
 
+#### RNA velocity counts
+
+In single-cell and spatial modes, when reads are grouped by cell barcode
+(`--read_group barcode`, `barcode_spot` or `barcode_barcode`) and an annotation is given,
+IsoQuant also writes spliced/unspliced counts per cell and gene for downstream RNA velocity analysis:
+
+* `SAMPLE_ID.RNA_velocity_grouped_<strategy>` - tab-separated `cell_id`, `gene_id`, `spliced`, `unspliced`;
+* `SAMPLE_ID.RNA_velocity_grouped_<strategy>.loom` - the same counts as a velocyto-style loom file
+  with `spliced` and `unspliced` layers (genes as rows, cells as columns), readable by scVelo.
+
+Reads consistent with an annotated isoform are counted as spliced, inconsistent ones as unspliced.
+Reads with no detected barcode and reads that could not be attributed to a gene are not counted.
+
+
 #### Grouped counts in matrix formats
 
 By default, IsoQuant converts grouped counts with small number of groups/samples (<=100) to standard matrix format; 
