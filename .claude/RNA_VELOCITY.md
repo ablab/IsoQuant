@@ -124,6 +124,18 @@ what RNA velocity actually needs.** Three consequences, in rough order of impact
    marks non-intronic disagreement — but it is excluded by omission rather than
    by intent, so it is easy to "fix" wrongly.
 
+**Measured.** An end-to-end SIRV run (`GROUP12.SC.SIRVs.R10` inputs, two BAMs,
+`--mode tenX_v3 --read_group barcode --barcode2spot ...`, reduced annotation)
+reports **3013 unspliced vs 1402 spliced — 68% unspliced — on data simulated
+from mature transcripts, where the true unspliced fraction is zero.** The
+accounting is exact: the run's assignment statistics are `unique: 1359`,
+`unique_minor_difference: 43`, `inconsistent: 3013`, so every `inconsistent`
+read became an "unspliced" count. The annotation is `*.reduced.gtf`, so reads
+from the withheld transcripts cannot match an isoform and fall into
+`inconsistent`. The counter faithfully implements its rule; the rule is what
+makes the number meaningless. Any annotation that is incomplete relative to the
+sample — i.e. every real one — inflates unspliced this way.
+
 The principled signal is the intron-retention match events already computed by
 the assigner (`MatchEventSubtype.intron_retention`,
 `unspliced_intron_retention`, `incomplete_intron_retention_{left,right}`; note
@@ -177,7 +189,10 @@ wins outright — no 1/N split across candidate genes, unlike the gene counter.
   if the loom step is skipped.
 - **`loompy` import failure is caught** and degraded to a warning — it happens at
   the very end of a long run and the TSV already holds the same numbers.
-- **No end-to-end CI test.** Unit coverage is
+- **No end-to-end CI test.** Verified manually once (see the SIRV run above:
+  both `barcode` and `barcode_spot` looms open, layer sums equal the TSV sums,
+  `''` layer equals `spliced`, and no velocity file is produced for the
+  `file_name` strategy). Unit coverage is
   `isoquant_tests/test_rna_velocity_counter.py` (21 tests: acceptance rules per
   assignment type, fragment layout, dump-clears-state, the three drop cases, loom
   layers, duplicate-row summing). A CI workflow on a 10x sample would need to
