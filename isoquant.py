@@ -241,6 +241,11 @@ def parse_args(cmd_args=None, namespace=None):
                                          default=["read_info", "read2transcripts"],
                                          help="large output files to generate [read_info read2transcripts]")
 
+    add_additional_option_to_group(output_setup_args_group, "--no_report",
+                                   help="do not write the run summary (SAMPLE.summary.html and "
+                                        "SAMPLE.summary_stats.json)",
+                                   action='store_true', default=False)
+
     add_additional_option_to_group(output_setup_args_group, "--genedb_output", help="output folder for converted gene "
                                                                                     "database, will be created automatically "
                                                                                     " (same as output by default)", type=str)

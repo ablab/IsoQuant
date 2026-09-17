@@ -96,6 +96,8 @@ class SampleData:
         self.out_cell_barcodes_tsv = self._make_path(self.prefix + ".cell_barcodes.tsv")
         self.out_cell_barcodes_stats = self._make_path(self.prefix + ".cell_barcodes.stats")
         self.out_umi_filtered = self._make_path(self.prefix + ".UMI_filtered")
+        self.out_summary_json = self._make_path(self.prefix + ".summary_stats.json")
+        self.out_summary_html = self._make_path(self.prefix + ".summary.html")
         self.out_tagged_bam = self._make_path(self.prefix + ".tagged.bam")
         self.out_deduplicated_bam = self._make_path(self.prefix + ".deduplicated.bam")
         self.out_umi_filtered_tmp = self._make_aux_path(self.prefix + ".UMI_filtered")
