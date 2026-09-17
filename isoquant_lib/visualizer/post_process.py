@@ -9,21 +9,50 @@ import csv
 import os
 import pickle
 import gzip
+import re
 import shutil
 import copy
 import json
 from argparse import Namespace
+from collections import defaultdict
 import tempfile
 import gffutils
 import yaml
 
-from isoquant_lib.quantification.convert_grouped_counts import convert_to_matrix
+from isoquant_lib.quantification.convert_grouped_counts import convert_to_matrix, GROUP_COUNT_CUTOFF
+from isoquant_lib.scripts.convert_read_info import RI_CLASSIFICATION, RI_ISOFORM_ASSIGNMENT_TYPE
+from isoquant_lib.utils.file_utils import open_text_read
 
 
 class OutputConfig:
     """Class to build dictionaries from the output files of the pipeline."""
 
-    def __init__(self, output_directory, use_counts=False, ref_only=None, gtf=None):
+    # Per-read output, best first: the 4.0.0 unified format, then the deprecated one.
+    # Matched as exact suffixes, so neither the same-format .transcript_model_reads.tsv
+    # nor .read_assignments.SQANTI-like.tsv is picked up by mistake.
+    READ_FILE_SUFFIXES = (".read_info.tsv", ".read_assignments.tsv")
+
+    # Since 4.0.0 grouped counts carry the grouping strategy in the file name, e.g.
+    # SAMPLE.gene_grouped_barcode_counts.linear.tsv. The leading dot and the
+    # longest-first alternation keep ".discovered_transcript_grouped_..." from being
+    # read as the plain "transcript_grouped" variant.
+    GROUPED_COUNTS_RE = re.compile(
+        r"\.(?P<feature>discovered_transcript|discovered_gene|transcript|gene)_grouped_"
+        r"(?P<strategy>.+?)_(?P<value>counts|tpm)(?P<linear>\.linear)?\.tsv$"
+    )
+
+    # (feature, value) -> attribute holding that grouped file
+    GROUPED_ATTRIBUTES = {
+        ("gene", "counts"): "gene_grouped_counts",
+        ("gene", "tpm"): "gene_grouped_tpm",
+        ("transcript", "counts"): "transcript_grouped_counts",
+        ("transcript", "tpm"): "transcript_grouped_tpm",
+        ("discovered_transcript", "counts"): "transcript_model_grouped_counts",
+        ("discovered_transcript", "tpm"): "transcript_model_grouped_tpm",
+    }
+
+    def __init__(self, output_directory, use_counts=False, ref_only=None, gtf=None,
+                 read_group_strategy=None):
         self.output_directory = output_directory
         self.log_details = {}
         self.extended_annotation = None
@@ -48,6 +77,10 @@ class OutputConfig:
         self.transcript_model_grouped_counts = None
         self.use_counts = use_counts
         self.ref_only = ref_only
+        # Grouping strategy (--read_group) whose counts are visualized, and every
+        # strategy found in the output directory.
+        self.read_group_strategy = read_group_strategy
+        self.group_strategies = []
         # Lazily-created scratch dir for wide matrices converted from *.linear.tsv
         self._linear_conversion_dir = None
 
@@ -196,34 +229,25 @@ class OutputConfig:
         # only produced for --counts_format matrix/default (and skipped when
         # there are too many groups). Collect any linear variants so we can
         # convert them to the wide matrix the visualizer expects (#241).
-        linear_grouped = {}
+        # Both are keyed by grouping strategy, one strategy per --read_group value.
+        grouped = defaultdict(dict)
+        linear_grouped_per_strategy = defaultdict(dict)
+        # Strategies whose counts exist in MTX format only (the default above 100
+        # groups, i.e. every single-cell / spatial run).
+        mtx_only_strategies = set()
+        # Per-read file candidates, keyed by the suffix that matched.
+        read_files = {}
 
         for file_name in os.listdir(self.output_directory):
+            if self._collect_read_file(file_name, read_files):
+                continue
+            if self._collect_grouped_file(file_name, grouped, linear_grouped_per_strategy,
+                                          mtx_only_strategies):
+                continue
             if file_name.endswith(".extended_annotation.gtf"):
                 self.extended_annotation = os.path.join(
                     self.output_directory, file_name
                 )
-            elif file_name.endswith(".read_assignments.tsv"):
-                self.read_assignments = os.path.join(self.output_directory, file_name)
-            elif file_name.endswith(".read_assignments.tsv.gz"):
-                self.read_assignments = self._unzip_file(
-                    os.path.join(self.output_directory, file_name)
-                )
-            elif file_name.endswith(".gene_grouped_counts.tsv"):
-                self.conditions = True
-                self.gene_grouped_counts = os.path.join(
-                    self.output_directory, file_name
-                )
-            elif file_name.endswith(".transcript_grouped_counts.tsv"):
-                self.transcript_grouped_counts = os.path.join(
-                    self.output_directory, file_name
-                )
-            elif file_name.endswith(".transcript_grouped_tpm.tsv"):
-                self.transcript_grouped_tpm = os.path.join(
-                    self.output_directory, file_name
-                )
-            elif file_name.endswith(".gene_grouped_tpm.tsv"):
-                self.gene_grouped_tpm = os.path.join(self.output_directory, file_name)
             elif file_name.endswith(".gene_counts.tsv"):
                 self.gene_counts = os.path.join(self.output_directory, file_name)
             elif file_name.endswith(".transcript_counts.tsv"):
@@ -232,14 +256,6 @@ class OutputConfig:
                 self.gene_tpm = os.path.join(self.output_directory, file_name)
             elif file_name.endswith(".transcript_tpm.tsv"):
                 self.transcript_tpm = os.path.join(self.output_directory, file_name)
-            elif file_name.endswith(".discovered_transcript_grouped_counts.tsv"):
-                self.transcript_model_grouped_counts = os.path.join(
-                    self.output_directory, file_name
-                )
-            elif file_name.endswith(".discovered_transcript_grouped_tpm.tsv"):
-                self.transcript_model_grouped_tpm = os.path.join(
-                    self.output_directory, file_name
-                )
             elif file_name.endswith(".discovered_transcript_counts.tsv"):
                 self.transcript_model_counts = os.path.join(
                     self.output_directory, file_name
@@ -248,36 +264,9 @@ class OutputConfig:
                 self.transcript_model_tpm = os.path.join(
                     self.output_directory, file_name
                 )
-            # Linear-format grouped counts (--counts_format linear). The leading
-            # dot in each suffix keeps the plain "transcript_" patterns from also
-            # matching the "discovered_transcript_" files.
-            elif file_name.endswith(".gene_grouped_counts.linear.tsv"):
-                linear_grouped["gene_grouped_counts"] = os.path.join(
-                    self.output_directory, file_name
-                )
-            elif file_name.endswith(".gene_grouped_tpm.linear.tsv"):
-                linear_grouped["gene_grouped_tpm"] = os.path.join(
-                    self.output_directory, file_name
-                )
-            elif file_name.endswith(".discovered_transcript_grouped_counts.linear.tsv"):
-                linear_grouped["transcript_model_grouped_counts"] = os.path.join(
-                    self.output_directory, file_name
-                )
-            elif file_name.endswith(".discovered_transcript_grouped_tpm.linear.tsv"):
-                linear_grouped["transcript_model_grouped_tpm"] = os.path.join(
-                    self.output_directory, file_name
-                )
-            elif file_name.endswith(".transcript_grouped_counts.linear.tsv"):
-                linear_grouped["transcript_grouped_counts"] = os.path.join(
-                    self.output_directory, file_name
-                )
-            elif file_name.endswith(".transcript_grouped_tpm.linear.tsv"):
-                linear_grouped["transcript_grouped_tpm"] = os.path.join(
-                    self.output_directory, file_name
-                )
 
-        # Fall back to linear grouped files when the wide matrix is absent.
-        self._resolve_linear_grouped_files(linear_grouped)
+        self._select_read_file(read_files)
+        self._select_grouped_files(grouped, linear_grouped_per_strategy, mtx_only_strategies)
 
         # Determine if GTF flag is needed
         if (
@@ -292,13 +281,102 @@ class OutputConfig:
         if self.ref_only is None:
             self.ref_only = not self.extended_annotation
 
+    def _collect_read_file(self, file_name, read_files):
+        """Record file_name if it is a per-read output (read_info or the deprecated
+        read_assignments), gzipped or not. Returns True when it was consumed."""
+        for suffix in self._read_file_suffixes():
+            if file_name.endswith(suffix):
+                read_files.setdefault(suffix, os.path.join(self.output_directory, file_name))
+                return True
+        return False
+
+    def _select_read_file(self, read_files):
+        """Keep the best per-read file found, preferring the current read_info format.
+        Gzipped files are read as they are - the parser only counts two columns, and
+        decompressing a single-cell read_info would write hundreds of GB next to it."""
+        for suffix in self._read_file_suffixes():
+            if suffix in read_files:
+                self.read_assignments = read_files[suffix]
+                return
+
+    @classmethod
+    def _read_file_suffixes(cls):
+        """Per-read file suffixes in preference order: current format before the
+        deprecated one, uncompressed before gzipped."""
+        for suffix in cls.READ_FILE_SUFFIXES:
+            yield suffix
+            yield suffix + ".gz"
+
+    def _collect_grouped_file(self, file_name, grouped, linear_grouped, mtx_only_strategies):
+        """Record file_name if it is a grouped counts/TPM file, keyed by grouping
+        strategy. Returns True when it was consumed."""
+        if file_name.endswith(".matrix.mtx"):
+            match = self.GROUPED_COUNTS_RE.search(file_name[: -len(".matrix.mtx")] + ".tsv")
+            if match:
+                mtx_only_strategies.add(match.group("strategy") or "")
+            return True
+
+        match = self.GROUPED_COUNTS_RE.search(file_name)
+        if not match:
+            return False
+        attribute = self.GROUPED_ATTRIBUTES.get((match.group("feature"), match.group("value")))
+        if attribute is None:
+            return True  # e.g. discovered_gene counts, which the visualizer does not plot
+        # Pre-4.0.0 files carry no strategy in the name; keep them under "".
+        strategy = match.group("strategy") or ""
+        target = linear_grouped if match.group("linear") else grouped
+        target[strategy][attribute] = os.path.join(self.output_directory, file_name)
+        return True
+
+    def _select_grouped_files(self, grouped, linear_grouped, mtx_only_strategies):
+        """Pick the grouping strategy to visualize and set the grouped attributes
+        from it, converting linear files when no wide matrix was produced."""
+        self.group_strategies = sorted(
+            set(grouped) | set(linear_grouped) | mtx_only_strategies
+        )
+        if not self.group_strategies:
+            return
+
+        if self.read_group_strategy is not None:
+            if self.read_group_strategy not in self.group_strategies:
+                raise ValueError(
+                    f"No grouped counts for read group strategy "
+                    f"'{self.read_group_strategy}' in {self.output_directory}. "
+                    f"Available: {', '.join(s or '(unnamed)' for s in self.group_strategies)}"
+                )
+            strategy = self.read_group_strategy
+        else:
+            strategy = self.group_strategies[0]
+            if len(self.group_strategies) > 1:
+                print(
+                    f"Several read group strategies found "
+                    f"({', '.join(s or '(unnamed)' for s in self.group_strategies)}); "
+                    f"using '{strategy}'. Use --read_group_strategy to pick another one."
+                )
+        self.read_group_strategy = strategy
+
+        for attribute, path in grouped.get(strategy, {}).items():
+            setattr(self, attribute, path)
+            self.conditions = True
+
+        # Fall back to linear grouped files when the wide matrix is absent.
+        self._resolve_linear_grouped_files(linear_grouped.get(strategy, {}))
+
+        if not self.conditions:
+            print(
+                f"Grouped counts for strategy '{strategy}' are only available in MTX "
+                f"format; per-group plots are skipped and ungrouped counts are used "
+                f"instead. Re-run IsoQuant with '--counts_format matrix' to plot them."
+                if strategy in mtx_only_strategies else
+                f"No usable grouped counts found for strategy '{strategy}'; "
+                f"using ungrouped counts."
+            )
+
     def _resolve_linear_grouped_files(self, linear_grouped):
         """For each grouped attribute lacking a wide matrix, convert the matching
         *.linear.tsv file to the wide format the visualizer parses (#241)."""
         if not linear_grouped:
             return
-        # Read groups are present, so grouped (per-condition) files must be used.
-        self.conditions = True
         feature_types = {
             "gene_grouped_counts": "gene",
             "gene_grouped_tpm": "gene",
@@ -315,6 +393,8 @@ class OutputConfig:
             )
             if converted:
                 setattr(self, attr, converted)
+                # Read groups are present and usable, so grouped files are plotted.
+                self.conditions = True
 
     def _convert_linear_to_matrix(self, linear_path, feature_type):
         """Convert a 3-column linear counts/TPM file into a wide matrix TSV in a
@@ -330,8 +410,12 @@ class OutputConfig:
             base = base[: -len(".linear.tsv")]
         output_prefix = os.path.join(self._linear_conversion_dir, base)
         try:
-            # convert_to_matrix appends ".tsv" to the given prefix.
-            convert_to_matrix(linear_path, output_prefix, feature_type=feature_type)
+            # convert_to_matrix appends ".tsv" to the given prefix. max_groups makes it
+            # count the groups first and skip the pivot when there are too many: a
+            # single-cell/spatial run has one group per barcode, and the dense matrix
+            # would be unusable (and would not fit in memory) anyway.
+            num_groups = convert_to_matrix(linear_path, output_prefix, feature_type=feature_type,
+                                           max_groups=GROUP_COUNT_CUTOFF)
         except Exception as e:
             print(
                 f"Warning: failed to convert linear counts {linear_path} "
@@ -339,7 +423,15 @@ class OutputConfig:
             )
             return None
         output_path = output_prefix + ".tsv"
-        return output_path if os.path.exists(output_path) else None
+        if os.path.exists(output_path):
+            return output_path
+        if num_groups > GROUP_COUNT_CUTOFF:
+            print(
+                f"{os.path.basename(linear_path)} holds {num_groups} groups "
+                f"(barcodes/spots); per-group plots are not meaningful at that size, "
+                f"so ungrouped counts are used instead."
+            )
+        return None
 
     def _find_files_from_yaml(self):
         """Locate the necessary files in the directory, set specific grouped count and TPM files, and process read assignments."""
@@ -394,26 +486,21 @@ class OutputConfig:
             if name:
                 sample_dir = os.path.join(self.output_directory, name)
 
-                # Check for .read_assignments.tsv.gz
-                gz_file = os.path.join(sample_dir, f"{name}.read_assignments.tsv.gz")
-                if os.path.exists(gz_file):
-                    unzipped_file = self._unzip_file(gz_file)
-                    if unzipped_file:
-                        self.read_assignments.append((name, unzipped_file))
-                    else:
-                        print(f"Warning: Failed to unzip {gz_file}")
+                # read_info first, then the deprecated read_assignments; gzipped or not.
+                read_file = None
+                for suffix in self._read_file_suffixes():
+                    path = os.path.join(sample_dir, name + suffix)
+                    if os.path.exists(path):
+                        read_file = path
+                        break
+
+                if read_file:
+                    self.read_assignments.append((name, read_file))
                 else:
-                    # Check for .read_assignments.tsv
-                    non_gz_file = os.path.join(
-                        sample_dir, f"{name}.read_assignments.tsv"
-                    )
-                    if os.path.exists(non_gz_file):
-                        self.read_assignments.append((name, non_gz_file))
-                    else:
-                        print(f"Warning: No read assignments file found for {name}")
+                    print(f"Warning: No per-read file found for {name}")
 
         if not self.read_assignments:
-            print("Warning: No read assignment files found for any samples")
+            print("Warning: No per-read files found for any samples")
 
 
 class DictionaryBuilder:
@@ -430,9 +517,15 @@ class DictionaryBuilder:
             return self.parse_input_gtf()
 
     def build_read_assignment_and_classification_dictionaries(self):
-        """Indexes classifications and assignment types from read_assignments.tsv file(s)."""
+        """Indexes classifications and assignment types from the per-read file(s):
+        SAMPLE.read_info.tsv[.gz] or the deprecated SAMPLE.read_assignments.tsv[.gz]."""
         if not self.config.read_assignments:
-            raise FileNotFoundError("No read assignments file(s) found.")
+            raise FileNotFoundError(
+                "No per-read file found: neither SAMPLE.read_info.tsv[.gz] nor "
+                "SAMPLE.read_assignments.tsv[.gz] is present in "
+                f"{self.config.output_directory}. Re-run IsoQuant with "
+                "'--large_output read_info' to produce one."
+            )
 
         if isinstance(self.config.read_assignments, list):
             # YAML input case (multiple files)
@@ -449,25 +542,40 @@ class DictionaryBuilder:
             # Non-YAML input case (single file)
             return self._process_read_assignment_file(self.config.read_assignments)
 
+    # Legacy read_assignments layout: assignment type is the 6th column and the
+    # classification is buried in the additional_info blob (the 9th).
+    LEGACY_ASSIGNMENT_TYPE_COLUMN = 5
+    LEGACY_ADDITIONAL_INFO_COLUMN = 8
+
     def _process_read_assignment_file(self, file_path):
         classification_counts = {}
         assignment_type_counts = {}
 
-        with open(file_path, "r") as file:
-            # Skip header lines
-            for _ in range(3):
-                next(file, None)
-
+        # open_text_read decompresses .gz on the fly, so a huge single-cell read_info
+        # is streamed rather than unpacked to disk first.
+        with open_text_read(file_path) as file:
+            type_column, classification_column = None, None
             for line in file:
-                parts = line.strip().split("\t")
-                if len(parts) < 6:
+                if line.startswith("#"):
+                    continue  # command line / version banner
+                parts = line.rstrip("\n").split("\t")
+
+                if type_column is None:
+                    # First non-comment line is the column header; both formats name
+                    # their columns, so the layout is read from it.
+                    type_column, classification_column, classification_in_blob = \
+                        self._read_file_columns(parts)
                     continue
 
-                additional_info = parts[-1]
-                classification = (
-                    additional_info.split("Classification=")[-1].split(";")[0].strip()
-                )
-                assignment_type = parts[5]
+                if len(parts) <= max(type_column, classification_column):
+                    continue
+                assignment_type = parts[type_column]
+                classification = parts[classification_column]
+                if classification_in_blob:
+                    # Legacy additional_info: "... Classification=full_splice_match; ..."
+                    classification = (
+                        classification.split("Classification=")[-1].split(";")[0].strip()
+                    )
 
                 classification_counts[classification] = (
                     classification_counts.get(classification, 0) + 1
@@ -477,6 +585,26 @@ class DictionaryBuilder:
                 )
 
         return classification_counts, assignment_type_counts
+
+    @staticmethod
+    def _read_file_columns(header_parts):
+        """Locate the assignment type and classification columns from the header of a
+        per-read file. Returns (type_column, classification_column, classification_in_blob);
+        in the legacy format the classification lives inside the additional_info field."""
+        if "isoform_assignment_type" in header_parts and "classification" in header_parts:
+            return (header_parts.index("isoform_assignment_type"),
+                    header_parts.index("classification"), False)
+        if "assignment_type" in header_parts and "additional_info" in header_parts:
+            # The last column of a legacy file is groups, not additional_info, so the
+            # blob has to be addressed by name.
+            return (header_parts.index("assignment_type"),
+                    header_parts.index("additional_info"), True)
+        # Unnamed header (e.g. a manually trimmed file): fall back to the fixed
+        # read_info layout, which is what IsoQuant produces by default.
+        if len(header_parts) > RI_CLASSIFICATION:
+            return RI_ISOFORM_ASSIGNMENT_TYPE, RI_CLASSIFICATION, False
+        return (DictionaryBuilder.LEGACY_ASSIGNMENT_TYPE_COLUMN,
+                DictionaryBuilder.LEGACY_ADDITIONAL_INFO_COLUMN, True)
 
     def parse_input_gtf(self):
         """Parses the GTF file using gffutils to build a detailed dictionary of genes, transcripts, and exons."""
