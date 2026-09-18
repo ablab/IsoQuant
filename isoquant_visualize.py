@@ -43,7 +43,8 @@ def parse_arguments():
         "--read_group_strategy",
         type=str,
         help="Grouping strategy (--read_group value, e.g. file_name or barcode) whose grouped "
-        "counts are visualized. Defaults to the first strategy found in the output directory.",
+        "counts are visualized. Defaults to the first --read_group value of the original run "
+        "that has grouped counts in the output directory.",
         default=None,
     )
     parser.add_argument(

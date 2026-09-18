@@ -49,7 +49,7 @@ def _write_read_info(path, gzipped=False):
     return path
 
 
-def _make_output(tmp_path, file_names=(), prefix=PREFIX):
+def _make_output(tmp_path, file_names=(), prefix=PREFIX, read_group=None):
     """Build a minimal IsoQuant output directory: <out>/.params + <out>/<prefix>/."""
     out_dir = tmp_path / "out"
     sample_dir = out_dir / prefix
@@ -57,7 +57,7 @@ def _make_output(tmp_path, file_names=(), prefix=PREFIX):
     gtf = tmp_path / "ref.gtf"
     gtf.write_text("")
     params = Namespace(genedb=str(gtf), genedb_filename=None, fastq=None,
-                       prefix=prefix, yaml=None)
+                       prefix=prefix, yaml=None, read_group=read_group)
     with open(str(out_dir / ".params"), "wb") as f:
         pickle.dump(params, f)
     for name in file_names:
@@ -95,6 +95,19 @@ class TestReadFileDiscovery:
         # read_assignments stem.
         out_dir, _ = _make_output(tmp_path, [PREFIX + ".transcript_model_reads.tsv.gz",
                                              PREFIX + ".read_assignments.SQANTI-like.tsv"])
+        config = OutputConfig(str(out_dir))
+        assert config.read_assignments is None
+
+    def test_per_chromosome_files_are_not_used(self, tmp_path):
+        # --keep_tmp (or a crashed run) leaves SAMPLE_chr1.read_info.tsv next to the
+        # merged file; counting one chromosome only would go unnoticed.
+        out_dir, sample_dir = _make_output(tmp_path, [PREFIX + "_chr1.read_info.tsv",
+                                                      PREFIX + ".read_info.tsv"])
+        config = OutputConfig(str(out_dir))
+        assert config.read_assignments == str(sample_dir / (PREFIX + ".read_info.tsv"))
+
+    def test_per_chromosome_file_alone_is_not_used(self, tmp_path):
+        out_dir, _ = _make_output(tmp_path, [PREFIX + "_chr1.read_info.tsv"])
         config = OutputConfig(str(out_dir))
         assert config.read_assignments is None
 
@@ -147,6 +160,46 @@ class TestGroupedCountsDiscovery:
         with pytest.raises(ValueError) as error:
             OutputConfig(str(out_dir), read_group_strategy="cell_type")
         assert "barcode" in str(error.value)
+
+    def test_finds_files_written_before_4_0_0(self, tmp_path):
+        # No strategy in the name; these were matched by name before 4.0.0 and must
+        # keep working, otherwise an old output directory silently loses its groups.
+        out_dir, sample_dir = _make_output(tmp_path, [
+            PREFIX + ".gene_grouped_counts.tsv",
+            PREFIX + ".gene_grouped_tpm.tsv",
+            PREFIX + ".transcript_grouped_counts.tsv",
+        ])
+        config = OutputConfig(str(out_dir))
+        assert config.group_strategies == [""]
+        assert config.conditions
+        assert config.gene_grouped_counts == str(sample_dir / (PREFIX + ".gene_grouped_counts.tsv"))
+        assert config.transcript_grouped_counts is not None
+
+    def test_per_chromosome_counts_are_not_used(self, tmp_path):
+        out_dir, sample_dir = _make_output(tmp_path, [
+            PREFIX + "_chr1.gene_grouped_barcode_counts.tsv",
+            PREFIX + ".gene_grouped_barcode_counts.tsv",
+        ])
+        config = OutputConfig(str(out_dir))
+        assert config.gene_grouped_counts == str(
+            sample_dir / (PREFIX + ".gene_grouped_barcode_counts.tsv"))
+
+    def test_unknown_strategy_is_rejected_without_any_grouped_counts(self, tmp_path):
+        # Pointing the visualizer at a bulk run used to ignore the option silently.
+        out_dir, _ = _make_output(tmp_path, [PREFIX + ".gene_counts.tsv"])
+        with pytest.raises(ValueError) as error:
+            OutputConfig(str(out_dir), read_group_strategy="barcode")
+        assert "barcode" in str(error.value)
+
+    def test_default_strategy_follows_read_group_order(self, tmp_path):
+        out_dir, sample_dir = _make_output(tmp_path, [
+            PREFIX + ".gene_grouped_barcode_counts.tsv",
+            PREFIX + ".gene_grouped_file_name_counts.tsv",
+        ], read_group=["file_name", "barcode"])
+        config = OutputConfig(str(out_dir))
+        assert config.read_group_strategy == "file_name"
+        assert config.gene_grouped_counts == str(
+            sample_dir / (PREFIX + ".gene_grouped_file_name_counts.tsv"))
 
     def test_mtx_only_falls_back_to_ungrouped(self, tmp_path):
         out_dir, _ = _make_output(tmp_path, [

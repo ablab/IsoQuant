@@ -19,6 +19,7 @@ import tempfile
 import gffutils
 import yaml
 
+from isoquant_lib.assignment.read_groups import get_grouping_strategy_names
 from isoquant_lib.quantification.convert_grouped_counts import convert_to_matrix, GROUP_COUNT_CUTOFF
 from isoquant_lib.scripts.convert_read_info import RI_CLASSIFICATION, RI_ISOFORM_ASSIGNMENT_TYPE
 from isoquant_lib.utils.file_utils import open_text_read
@@ -35,10 +36,11 @@ class OutputConfig:
     # Since 4.0.0 grouped counts carry the grouping strategy in the file name, e.g.
     # SAMPLE.gene_grouped_barcode_counts.linear.tsv. The leading dot and the
     # longest-first alternation keep ".discovered_transcript_grouped_..." from being
-    # read as the plain "transcript_grouped" variant.
+    # read as the plain "transcript_grouped" variant. The strategy is optional:
+    # files written before 4.0.0 are named SAMPLE.gene_grouped_counts.tsv.
     GROUPED_COUNTS_RE = re.compile(
         r"\.(?P<feature>discovered_transcript|discovered_gene|transcript|gene)_grouped_"
-        r"(?P<strategy>.+?)_(?P<value>counts|tpm)(?P<linear>\.linear)?\.tsv$"
+        r"(?:(?P<strategy>.+?)_)?(?P<value>counts|tpm)(?P<linear>\.linear)?\.tsv$"
     )
 
     # (feature, value) -> attribute holding that grouped file
@@ -81,6 +83,9 @@ class OutputConfig:
         # strategy found in the output directory.
         self.read_group_strategy = read_group_strategy
         self.group_strategies = []
+        # Sample prefix and --read_group strategies of the run, both from .params.
+        self.sample_prefix = None
+        self.param_group_strategies = []
         # Lazily-created scratch dir for wide matrices converted from *.linear.tsv
         self._linear_conversion_dir = None
 
@@ -112,6 +117,10 @@ class OutputConfig:
         """Process parameters loaded from the .params file."""
         self.log_details["gene_db"] = params.get("genedb")
         self.log_details["fastq_used"] = bool(params.get("fastq"))
+        # Grouping strategies in the order the run received them, so the strategy
+        # visualized by default is the first --read_group value, not the first
+        # file name alphabetically.
+        self.param_group_strategies = get_grouping_strategy_names(Namespace(**params))
         self.input_gtf = self.input_gtf or params.get("genedb")
         self.genedb_filename = params.get("genedb_filename")
 
@@ -128,6 +137,7 @@ class OutputConfig:
             yaml_path = self._reanchor_relative_path(yaml_path)
             single_sample = self._yaml_single_sample_name(yaml_path)
             if single_sample is not None:
+                self.sample_prefix = single_sample
                 # IsoQuant only writes combined_*.tsv when len(samples) > 1, so a
                 # single-sample YAML run has the same on-disk layout as a non-YAML
                 # run. Treat it that way to avoid the "combined file missing" path.
@@ -144,6 +154,7 @@ class OutputConfig:
             self.yaml_input = False
             processing_sample = params.get("prefix")
             if processing_sample:
+                self.sample_prefix = processing_sample
                 self.output_directory = os.path.join(
                     self.output_directory, processing_sample
                 )
@@ -238,7 +249,7 @@ class OutputConfig:
         # Per-read file candidates, keyed by the suffix that matched.
         read_files = {}
 
-        for file_name in os.listdir(self.output_directory):
+        for file_name in sorted(os.listdir(self.output_directory)):
             if self._collect_read_file(file_name, read_files):
                 continue
             if self._collect_grouped_file(file_name, grouped, linear_grouped_per_strategy,
@@ -286,9 +297,19 @@ class OutputConfig:
         read_assignments), gzipped or not. Returns True when it was consumed."""
         for suffix in self._read_file_suffixes():
             if file_name.endswith(suffix):
-                read_files.setdefault(suffix, os.path.join(self.output_directory, file_name))
+                if self._is_merged_output(file_name[: -len(suffix)]):
+                    read_files.setdefault(suffix,
+                                          os.path.join(self.output_directory, file_name))
                 return True
         return False
+
+    def _is_merged_output(self, stem):
+        """True when a file with this stem is the merged output of the experiment rather
+        than one of the per-chromosome intermediates (SAMPLE_chr1.read_info.tsv,
+        SAMPLE_chr1.gene_grouped_barcode_counts.linear.tsv), which live in the same
+        directory and are kept by --keep_tmp or left behind by a crashed run.
+        With an unknown sample prefix every file is accepted, as before."""
+        return not self.sample_prefix or stem == self.sample_prefix
 
     def _select_read_file(self, read_files):
         """Keep the best per-read file found, preferring the current read_info format.
@@ -312,13 +333,15 @@ class OutputConfig:
         strategy. Returns True when it was consumed."""
         if file_name.endswith(".matrix.mtx"):
             match = self.GROUPED_COUNTS_RE.search(file_name[: -len(".matrix.mtx")] + ".tsv")
-            if match:
+            if match and self._is_merged_output(file_name[: match.start()]):
                 mtx_only_strategies.add(match.group("strategy") or "")
             return True
 
         match = self.GROUPED_COUNTS_RE.search(file_name)
         if not match:
             return False
+        if not self._is_merged_output(file_name[: match.start()]):
+            return True  # per-chromosome intermediate, not the merged counts
         attribute = self.GROUPED_ATTRIBUTES.get((match.group("feature"), match.group("value")))
         if attribute is None:
             return True  # e.g. discovered_gene counts, which the visualizer does not plot
@@ -334,19 +357,24 @@ class OutputConfig:
         self.group_strategies = sorted(
             set(grouped) | set(linear_grouped) | mtx_only_strategies
         )
+        # Checked before the empty case as well: a strategy that is not there is a typo
+        # or the wrong output directory either way, and silently plotting ungrouped
+        # counts instead is how these files went missing unnoticed in the first place.
+        if self.read_group_strategy is not None and self.read_group_strategy not in self.group_strategies:
+            available = (", ".join(s or "(unnamed)" for s in self.group_strategies)
+                         if self.group_strategies else "none")
+            raise ValueError(
+                f"No grouped counts for read group strategy "
+                f"'{self.read_group_strategy}' in {self.output_directory}. "
+                f"Available: {available}"
+            )
         if not self.group_strategies:
             return
 
         if self.read_group_strategy is not None:
-            if self.read_group_strategy not in self.group_strategies:
-                raise ValueError(
-                    f"No grouped counts for read group strategy "
-                    f"'{self.read_group_strategy}' in {self.output_directory}. "
-                    f"Available: {', '.join(s or '(unnamed)' for s in self.group_strategies)}"
-                )
             strategy = self.read_group_strategy
         else:
-            strategy = self.group_strategies[0]
+            strategy = self._default_group_strategy()
             if len(self.group_strategies) > 1:
                 print(
                     f"Several read group strategies found "
@@ -371,6 +399,15 @@ class OutputConfig:
                 f"No usable grouped counts found for strategy '{strategy}'; "
                 f"using ungrouped counts."
             )
+
+    def _default_group_strategy(self):
+        """Strategy to visualize when the user did not name one: the first --read_group
+        value of the original run that has grouped counts here, falling back to the
+        first one found in the directory."""
+        for strategy in self.param_group_strategies:
+            if strategy in self.group_strategies:
+                return strategy
+        return self.group_strategies[0]
 
     def _resolve_linear_grouped_files(self, linear_grouped):
         """For each grouped attribute lacking a wide matrix, convert the matching
