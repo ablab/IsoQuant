@@ -92,6 +92,18 @@ def set_polya_requirement_strategy(flag, polya_requirement_strategy):
         return True
 
 
+# Edit distances for UMI filtering, per mode. The first one is the round whose
+# survivors are counted, and the one the run summary reports.
+UMI_EDIT_DISTANCES = {IsoQuantMode.bulk: [],
+                      IsoQuantMode.tenX_v3: [3],
+                      IsoQuantMode.tenX_v2: [3],
+                      IsoQuantMode.visium_5prime: [3],
+                      IsoQuantMode.curio: [3],
+                      IsoQuantMode.visium_hd: [4],
+                      IsoQuantMode.stereoseq: [4],
+                      IsoQuantMode.custom_sc: [4]}
+
+
 # Class for processing all samples against gene database
 class DatasetProcessor:
     def __init__(self, args):
@@ -294,7 +306,12 @@ class DatasetProcessor:
         if getattr(self.args, "no_report", False) or self.run_summary is None:
             return
         try:
-            self.run_summary.collect_output_files(sample, self.grouping_strategy_names)
+            # The counts come from the first filtering round, so that is the one the
+            # summary describes: several .ED<N>.stats.tsv can be left in the directory.
+            edit_distances = UMI_EDIT_DISTANCES.get(self.args.mode) or []
+            self.run_summary.collect_output_files(
+                sample, self.grouping_strategy_names,
+                umi_edit_distance=edit_distances[0] if edit_distances else None)
             json_file = sample.out_summary_json
             html_file = sample.out_summary_html
             self.run_summary.write_json(json_file)
@@ -625,17 +642,7 @@ class DatasetProcessor:
                 return
             os.remove(umi_filtering_done)
 
-        # edit distances for UMI filtering, first one will be used for counts
-        umi_ed_dict = {IsoQuantMode.bulk: [],
-                       IsoQuantMode.tenX_v3: [3],
-                       IsoQuantMode.tenX_v2: [3],
-                       IsoQuantMode.visium_5prime: [3],
-                       IsoQuantMode.curio: [3],
-                       IsoQuantMode.visium_hd: [4],
-                       IsoQuantMode.stereoseq: [4],
-                       IsoQuantMode.custom_sc: [4]}
-
-        for i, edit_distance in enumerate(umi_ed_dict[self.args.mode]):
+        for i, edit_distance in enumerate(UMI_EDIT_DISTANCES[self.args.mode]):
             logger.info("Filtering PCR duplicates with edit distance %d" % edit_distance)
             umi_ed_filtering_done = umi_filtered_lock_file_name(sample.out_umi_filtered_done, "", edit_distance)
             if os.path.exists(umi_ed_filtering_done):
@@ -723,7 +730,7 @@ class DatasetProcessor:
                         continue
                     os.remove(bc2bc_lock)
 
-                for edit_distance in umi_ed_dict[self.args.mode]:
+                for edit_distance in UMI_EDIT_DISTANCES[self.args.mode]:
                     logger.info("Filtering UMIs for barcode2barcode column %d with edit distance %d"
                                 % (col_idx, edit_distance))
 
