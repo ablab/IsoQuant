@@ -433,11 +433,22 @@ class DatasetProcessor:
         total_assignments, polya_assignments = sample_procesed_read_manager.resolve()
         logger.info("Multimappers resolved")
 
-        for bam_file in list(map(lambda x: x[0], sample.file_list)):
+        bam_files = list(map(lambda x: x[0], sample.file_list))
+        for bam_file in bam_files:
             bam = pysam.AlignmentFile(bam_file, "rb", require_index=True)
             self.alignment_stat_counter.add(AlignmentType.unaligned, bam.unmapped)
+        skipped_references = set(references_with_alignments(bam_files)) - set(chr_ids)
+        if skipped_references:
+            logger.info("%d reference(s) carrying alignments were not processed, "
+                        "input read count and mapping rate are left out of the run summary"
+                        % len(skipped_references))
         self.alignment_stat_counter.print_start("Alignments collected, overall alignment statistics:")
-        self.run_summary.set_alignment_stats(self.alignment_stat_counter.stats_dict)
+        # Primary alignments are only counted for the chromosomes that were processed,
+        # while bam.unmapped covers the whole file: their sum is the number of input
+        # reads only when nothing was left out (--process_only_chr / --discard_chr, or
+        # an annotation and a genome that do not cover the same references).
+        self.run_summary.set_alignment_stats(self.alignment_stat_counter.stats_dict,
+                                             covers_all_reads=not skipped_references)
 
         info_dumper = open(info_file, "wb")
         write_int(total_assignments, info_dumper)
