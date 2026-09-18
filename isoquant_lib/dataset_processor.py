@@ -16,6 +16,7 @@ import sys
 from enum import Enum, unique
 from collections import defaultdict
 from concurrent.futures import ProcessPoolExecutor
+from typing import Optional
 
 import gffutils
 import pysam
@@ -65,6 +66,7 @@ from isoquant_lib.model_construction.transcript_printer import GFFPrinter, VoidT
 from .barcode_calling.umi_filtering import create_transcript_info_dict
 from isoquant_lib.utils.table_splitter import split_read_table_parallel
 from .assignment.assignment_aggregator import ReadAssignmentAggregator
+from isoquant_lib.utils.input_data_storage import SampleData
 from isoquant_lib.utils.string_pools import setup_string_pools
 from .parallel_workers import (
     collect_reads_in_parallel,
@@ -118,7 +120,7 @@ class DatasetProcessor:
         self.alignment_stat_counter = EnumStats()
         self.transcript_type_dict = {}
         # Per-sample QC summary, written as SAMPLE.summary_stats.json / SAMPLE.summary.html
-        self.run_summary = None
+        self.run_summary: Optional[RunSummary] = None
 
         if args.genedb:
             logger.info("Loading gene database from " + self.args.genedb)
@@ -301,7 +303,7 @@ class DatasetProcessor:
         self.write_run_summary(sample)
         logger.info("Processed experiment " + sample.prefix)
 
-    def write_run_summary(self, sample):
+    def write_run_summary(self, sample: SampleData) -> None:
         """Write the QC summary of this experiment. Never fails the run: the numbers
         are a report, the analysis outputs are already on disk at this point."""
         if getattr(self.args, "no_report", False) or self.run_summary is None:

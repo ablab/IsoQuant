@@ -17,14 +17,15 @@ import html
 import io
 import logging
 import math
-from typing import List, Optional, Tuple
+from types import ModuleType
+from typing import Any, List, Optional, Tuple
 
-from isoquant_lib.report.run_summary import ASSIGNMENT_BUCKETS
+from isoquant_lib.report.run_summary import ASSIGNMENT_BUCKETS, RunSummary
 
 logger = logging.getLogger('IsoQuant')
 
 
-def _pyplot():
+def _pyplot() -> Optional[ModuleType]:
     """Import pyplot for the report figures, or return None when it is unusable.
 
     Figures are optional: an environment with a broken or missing matplotlib still
@@ -72,7 +73,7 @@ footer { margin-top: 3rem; color: #6b7280; font-size: .8rem; }
 """
 
 
-def _format_number(value) -> str:
+def _format_number(value: Any) -> str:
     if value is None:
         return "&mdash;"
     if isinstance(value, float):
@@ -84,7 +85,7 @@ def _format_number(value) -> str:
     return html.escape(str(value))
 
 
-def _format_percent(rate) -> str:
+def _format_percent(rate: Optional[float]) -> str:
     if rate is None:
         return "&mdash;"
     return "{:.1f}%".format(rate * 100.0)
@@ -138,8 +139,8 @@ def _bar_chart_svg(title: str, labels: List[str], values: List[float]) -> str:
     return "<figure>%s</figure>" % svg[start:] if start >= 0 else ""
 
 
-def _kpi_tiles(summary) -> str:
-    tiles = []
+def _kpi_tiles(summary: RunSummary) -> str:
+    tiles: List[str] = []
     if summary.total_reads is not None:
         tiles.append(_tile("Input reads", _format_number(summary.total_reads)))
         tiles.append(_tile("Mapping rate", _format_percent(summary.mapping_rate)))
@@ -166,13 +167,13 @@ def _kpi_tiles(summary) -> str:
     return '<div class="tiles">%s</div>' % "".join(tiles)
 
 
-def _safe_rate(numerator, denominator) -> Optional[float]:
+def _safe_rate(numerator: Optional[float], denominator: Optional[float]) -> Optional[float]:
     if not denominator or numerator is None:
         return None
     return numerator / denominator
 
 
-def _alignment_section(summary) -> str:
+def _alignment_section(summary: RunSummary) -> str:
     if not summary.alignment:
         return ""
     rows = [(name.replace("_", " ").capitalize(), _format_number(count))
@@ -187,7 +188,7 @@ def _alignment_section(summary) -> str:
     return "<h2>Alignment</h2>" + note + _table(rows, ("Alignment records", "Count"))
 
 
-def _assignment_section(summary) -> str:
+def _assignment_section(summary: RunSummary) -> str:
     if not summary.assignment:
         return ""
     rollup = summary.assignment_rollup()
@@ -212,10 +213,10 @@ def _assignment_section(summary) -> str:
     return "<h2>Read assignment</h2>" + figure + _table(rows, ("Assignment type", "Reads"))
 
 
-def _quantification_section(summary) -> str:
+def _quantification_section(summary: RunSummary) -> str:
     if not summary.quantification:
         return ""
-    rows = []
+    rows: List[Tuple[str, str]] = []
     for feature, stats in summary.quantification.items():
         name = feature.capitalize()
         counted = stats.get("counted")
@@ -227,7 +228,7 @@ def _quantification_section(summary) -> str:
     return "<h2>Quantification</h2>" + _table(rows, ("Feature", "Reads"))
 
 
-def _models_section(summary) -> str:
+def _models_section(summary: RunSummary) -> str:
     if not summary.transcript_models:
         return ""
     rows = [(name.replace("_", " "), _format_number(count))
@@ -236,7 +237,7 @@ def _models_section(summary) -> str:
     return "<h2>Discovered transcript models</h2>" + _table(rows, ("Model type", "Transcripts"))
 
 
-def _barcode_section(summary) -> str:
+def _barcode_section(summary: RunSummary) -> str:
     # UMI filtering has a section of its own: a --barcoded_bam run skips barcode calling
     # and would get nothing but a heading here.
     if not summary.barcodes and not summary.cell_barcodes:
@@ -249,7 +250,7 @@ def _barcode_section(summary) -> str:
     return "<h2>Barcode calling</h2>" + _table(rows, ("Stage", "Reads"))
 
 
-def _umi_section(summary) -> str:
+def _umi_section(summary: RunSummary) -> str:
     if not summary.umi_filtering:
         return ""
     rows = [(name, _format_number(count)) for name, count in summary.umi_filtering.items()]
@@ -280,7 +281,7 @@ def _rank_plot_points(ranked_reads: List[float]) -> Tuple[List[int], List[float]
     return [index + 1 for index in indices], [ranked_reads[index] for index in indices]
 
 
-def _rank_plot_svg(title: str, ranked_reads) -> str:
+def _rank_plot_svg(title: str, ranked_reads: Optional[List[float]]) -> str:
     """Barcode rank curve (depth vs rank, log-log), as an inline SVG."""
     if not ranked_reads:
         return ""
@@ -311,16 +312,16 @@ def _rank_plot_svg(title: str, ranked_reads) -> str:
     return "<figure>%s</figure>" % svg[start:] if start >= 0 else ""
 
 
-def _groups_section(summary) -> str:
+def _groups_section(summary: RunSummary) -> str:
     if not summary.groups:
         return ""
-    blocks = []
+    blocks: List[str] = []
     for strategy in summary.groups:
         rollup = summary.group_rollup(strategy)
         gene_stats = (summary.groups.get(strategy) or {}).get("gene") or {}
         figure = _rank_plot_svg("Reads per group, ranked (%s)" % strategy,
                                 gene_stats.get("ranked_reads"))
-        rows = []
+        rows: List[Tuple[str, str]] = []
         for feature, stats in rollup.items():
             name = feature.capitalize()
             rows.append(("%s: groups with counts" % name, _format_number(stats.get("groups"))))
@@ -336,7 +337,7 @@ def _groups_section(summary) -> str:
     return "".join(blocks)
 
 
-def render_html(summary, file_name: str) -> None:
+def render_html(summary: RunSummary, file_name: str) -> None:
     """Write the summary as a standalone HTML page."""
     sections = [
         _kpi_tiles(summary),
