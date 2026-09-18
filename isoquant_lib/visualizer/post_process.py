@@ -15,6 +15,7 @@ import copy
 import json
 from argparse import Namespace
 from collections import defaultdict
+from typing import Dict, Iterator, List, Optional, Set, Tuple
 import tempfile
 import gffutils
 import yaml
@@ -53,8 +54,9 @@ class OutputConfig:
         ("discovered_transcript", "tpm"): "transcript_model_grouped_tpm",
     }
 
-    def __init__(self, output_directory, use_counts=False, ref_only=None, gtf=None,
-                 read_group_strategy=None):
+    def __init__(self, output_directory: str, use_counts: bool = False,
+                 ref_only: Optional[bool] = None, gtf: Optional[str] = None,
+                 read_group_strategy: Optional[str] = None):
         self.output_directory = output_directory
         self.log_details = {}
         self.extended_annotation = None
@@ -81,11 +83,11 @@ class OutputConfig:
         self.ref_only = ref_only
         # Grouping strategy (--read_group) whose counts are visualized, and every
         # strategy found in the output directory.
-        self.read_group_strategy = read_group_strategy
-        self.group_strategies = []
+        self.read_group_strategy: Optional[str] = read_group_strategy
+        self.group_strategies: List[str] = []
         # Sample prefix and --read_group strategies of the run, both from .params.
-        self.sample_prefix = None
-        self.param_group_strategies = []
+        self.sample_prefix: Optional[str] = None
+        self.param_group_strategies: List[str] = []
         # Lazily-created scratch dir for wide matrices converted from *.linear.tsv
         self._linear_conversion_dir = None
 
@@ -292,7 +294,7 @@ class OutputConfig:
         if self.ref_only is None:
             self.ref_only = not self.extended_annotation
 
-    def _collect_read_file(self, file_name, read_files):
+    def _collect_read_file(self, file_name: str, read_files: Dict[str, str]) -> bool:
         """Record file_name if it is a per-read output (read_info or the deprecated
         read_assignments), gzipped or not. Returns True when it was consumed."""
         for suffix in self._read_file_suffixes():
@@ -303,7 +305,7 @@ class OutputConfig:
                 return True
         return False
 
-    def _is_merged_output(self, stem):
+    def _is_merged_output(self, stem: str) -> bool:
         """True when a file with this stem is the merged output of the experiment rather
         than one of the per-chromosome intermediates (SAMPLE_chr1.read_info.tsv,
         SAMPLE_chr1.gene_grouped_barcode_counts.linear.tsv), which live in the same
@@ -311,7 +313,7 @@ class OutputConfig:
         With an unknown sample prefix every file is accepted, as before."""
         return not self.sample_prefix or stem == self.sample_prefix
 
-    def _select_read_file(self, read_files):
+    def _select_read_file(self, read_files: Dict[str, str]) -> None:
         """Keep the best per-read file found, preferring the current read_info format.
         Gzipped files are read as they are - the parser only counts two columns, and
         decompressing a single-cell read_info would write hundreds of GB next to it."""
@@ -321,14 +323,16 @@ class OutputConfig:
                 return
 
     @classmethod
-    def _read_file_suffixes(cls):
+    def _read_file_suffixes(cls) -> Iterator[str]:
         """Per-read file suffixes in preference order: current format before the
         deprecated one, uncompressed before gzipped."""
         for suffix in cls.READ_FILE_SUFFIXES:
             yield suffix
             yield suffix + ".gz"
 
-    def _collect_grouped_file(self, file_name, grouped, linear_grouped, mtx_only_strategies):
+    def _collect_grouped_file(self, file_name: str, grouped: Dict[str, Dict[str, str]],
+                              linear_grouped: Dict[str, Dict[str, str]],
+                              mtx_only_strategies: Set[str]) -> bool:
         """Record file_name if it is a grouped counts/TPM file, keyed by grouping
         strategy. Returns True when it was consumed."""
         if file_name.endswith(".matrix.mtx"):
@@ -351,7 +355,9 @@ class OutputConfig:
         target[strategy][attribute] = os.path.join(self.output_directory, file_name)
         return True
 
-    def _select_grouped_files(self, grouped, linear_grouped, mtx_only_strategies):
+    def _select_grouped_files(self, grouped: Dict[str, Dict[str, str]],
+                              linear_grouped: Dict[str, Dict[str, str]],
+                              mtx_only_strategies: Set[str]) -> None:
         """Pick the grouping strategy to visualize and set the grouped attributes
         from it, converting linear files when no wide matrix was produced."""
         self.group_strategies = sorted(
@@ -400,7 +406,7 @@ class OutputConfig:
                 f"using ungrouped counts."
             )
 
-    def _default_group_strategy(self):
+    def _default_group_strategy(self) -> str:
         """Strategy to visualize when the user did not name one: the first --read_group
         value of the original run that has grouped counts here, falling back to the
         first one found in the directory."""
@@ -584,9 +590,9 @@ class DictionaryBuilder:
     LEGACY_ASSIGNMENT_TYPE_COLUMN = 5
     LEGACY_ADDITIONAL_INFO_COLUMN = 8
 
-    def _process_read_assignment_file(self, file_path):
-        classification_counts = {}
-        assignment_type_counts = {}
+    def _process_read_assignment_file(self, file_path: str) -> Tuple[Dict[str, int], Dict[str, int]]:
+        classification_counts: Dict[str, int] = {}
+        assignment_type_counts: Dict[str, int] = {}
 
         # open_text_read decompresses .gz on the fly, so a huge single-cell read_info
         # is streamed rather than unpacked to disk first.
@@ -627,7 +633,7 @@ class DictionaryBuilder:
         return classification_counts, assignment_type_counts
 
     @staticmethod
-    def _read_file_columns(header_parts):
+    def _read_file_columns(header_parts: List[str]) -> Tuple[int, int, bool, bool]:
         """Locate the assignment type and classification columns from the first
         non-comment line of a per-read file. Returns (type_column, classification_column,
         classification_in_blob, header_found); in the legacy format the classification

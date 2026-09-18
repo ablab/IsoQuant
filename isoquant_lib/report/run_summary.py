@@ -21,8 +21,9 @@ import glob
 import logging
 import json
 import os
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
+from isoquant_lib.assignment.isoform_assignment import ReadAssignmentType
 from isoquant_lib.utils.file_utils import read_stats_tsv
 
 logger = logging.getLogger('IsoQuant')
@@ -41,7 +42,7 @@ MAX_GROUPED_SCAN_GROUPS = 1000000
 RANK_PLOT_FEATURE = "gene"
 
 
-def enum_stats_to_dict(stats_dict) -> Dict[str, int]:
+def enum_stats_to_dict(stats_dict: Dict[Any, int]) -> Dict[str, int]:
     """Convert an EnumStats counter ({enum member: count}) into a plain name -> count."""
     return {key.name: int(value) for key, value in sorted(stats_dict.items(), key=lambda kv: kv[0].name)}
 
@@ -52,7 +53,7 @@ def enum_stats_to_dict(stats_dict) -> Dict[str, int]:
 ASSIGNMENT_BUCKETS = ("unique", "ambiguous", "inconsistent", "unassigned", "other")
 
 
-def assignment_bucket(assignment_type) -> str:
+def assignment_bucket(assignment_type: ReadAssignmentType) -> str:
     """Headline category of a single ReadAssignmentType.
 
     The enum's own predicates decide, so a type added to it later is classified rather
@@ -114,7 +115,8 @@ class RunSummary:
 
     # ------------------------------------------------------------------ collectors
 
-    def set_alignment_stats(self, stats_dict, covers_all_reads: bool = True) -> None:
+    def set_alignment_stats(self, stats_dict: Dict[Any, int],
+                            covers_all_reads: bool = True) -> None:
         """stats_dict: EnumStats.stats_dict keyed by AlignmentType.
 
         covers_all_reads tells whether every reference carrying alignments was
@@ -126,7 +128,7 @@ class RunSummary:
         self.alignment = enum_stats_to_dict(stats_dict)
         self.alignment_covers_all_reads = covers_all_reads
 
-    def set_assignment_stats(self, stats_dict) -> None:
+    def set_assignment_stats(self, stats_dict: Dict[ReadAssignmentType, int]) -> None:
         """stats_dict: EnumStats.stats_dict keyed by ReadAssignmentType.
 
         The headline categories are rolled up here, while the enum members are still
@@ -141,7 +143,7 @@ class RunSummary:
             rollup[assignment_bucket(assignment_type)] += count
         self.assignment_buckets = rollup
 
-    def set_transcript_model_stats(self, stats_dict) -> None:
+    def set_transcript_model_stats(self, stats_dict: Dict[Any, int]) -> None:
         """stats_dict: EnumStats.stats_dict keyed by TranscriptModelType."""
         self.transcript_models = enum_stats_to_dict(stats_dict)
 
@@ -149,7 +151,7 @@ class RunSummary:
         self.total_assignments = total_assignments
         self.polya_reads = polya_reads
 
-    def collect_output_files(self, sample, grouping_strategy_names: Optional[List[str]] = None,
+    def collect_output_files(self, sample: Any, grouping_strategy_names: Optional[List[str]] = None,
                              umi_edit_distance: Optional[int] = None) -> None:
         """Read back the stat files the run has written for this sample.
 
@@ -161,7 +163,7 @@ class RunSummary:
         self._collect_umi_stats(sample, umi_edit_distance)
         self._collect_group_stats(sample, grouping_strategy_names or [])
 
-    def _collect_counts_stats(self, sample) -> None:
+    def _collect_counts_stats(self, sample: Any) -> None:
         # dump_ungrouped() appends __ambiguous / __no_feature / __not_aligned to the
         # tail of the ungrouped counts file; everything above them is a real feature.
         for feature, counts_file in (("gene", getattr(sample, "out_gene_counts_tsv", None)),
@@ -203,7 +205,7 @@ class RunSummary:
                 "no_feature": special.get("no_feature", 0.0),
                 "not_aligned": special.get("not_aligned", 0.0)}
 
-    def _collect_barcode_stats(self, sample) -> None:
+    def _collect_barcode_stats(self, sample: Any) -> None:
         # One stats file per input file, written by the barcode calling stage.
         barcodes_tsv = getattr(sample, "barcodes_tsv", None)
         if barcodes_tsv:
@@ -211,7 +213,7 @@ class RunSummary:
                 read_stats_tsv(stats_file, self.barcodes)
         self.cell_barcodes = read_stats_tsv(getattr(sample, "out_cell_barcodes_stats", None))
 
-    def _collect_umi_stats(self, sample, edit_distance: Optional[int] = None) -> None:
+    def _collect_umi_stats(self, sample: Any, edit_distance: Optional[int] = None) -> None:
         out_umi_filtered = getattr(sample, "out_umi_filtered", None)
         if not out_umi_filtered:
             return
@@ -242,7 +244,7 @@ class RunSummary:
                 found.append((int(distance), stats_file))
         return found
 
-    def _collect_group_stats(self, sample, grouping_strategy_names: List[str]) -> None:
+    def _collect_group_stats(self, sample: Any, grouping_strategy_names: List[str]) -> None:
         """Per-barcode/spot depth from the grouped counts written for each strategy."""
         for strategy in grouping_strategy_names:
             per_feature = {}
