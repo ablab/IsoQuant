@@ -264,6 +264,19 @@ class TestReadFileParsing:
         config = OutputConfig(str(out_dir))
         assert self._counts(config, read_info) == self._counts(config, legacy)
 
+    def test_headerless_file_counts_every_read(self, tmp_path):
+        # A trimmed extract has no header line: taking the first read for one used to
+        # drop it from both histograms.
+        out_dir, sample_dir = _make_output(tmp_path)
+        path = str(sample_dir / (PREFIX + ".read_info.tsv"))
+        with open(path, "w") as f:
+            f.write("".join(READ_INFO_ROWS))
+        config = OutputConfig(str(out_dir))
+        classifications, assignment_types = self._counts(config, path)
+        assert sum(classifications.values()) == len(READ_INFO_ROWS)
+        assert sum(assignment_types.values()) == len(READ_INFO_ROWS)
+        assert classifications["full_splice_match"] == 1
+
     def test_legacy_classification_is_not_taken_from_groups(self, tmp_path):
         # additional_info is the 9th column, the last one is groups; reading the last
         # field returned the group id (or "NA") instead of the classification.
