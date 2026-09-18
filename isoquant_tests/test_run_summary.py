@@ -171,6 +171,26 @@ class TestRates:
         assert umi["molecules"] == 60
         assert umi["duplication_rate"] == 0.6
 
+    def test_umi_stats_come_from_the_round_that_was_counted(self, tmp_path):
+        # Re-running a directory in another mode leaves a second .ED<N>.stats.tsv
+        # behind; the counts come from the first round the run performed.
+        sample = _populated_sample(tmp_path)
+        _write(sample.out_umi_filtered + ".ED10.stats.tsv",
+               "Total reads saved\t20\nTotal assignments processed\t150\n")
+        summary = RunSummary("S")
+        summary.collect_output_files(sample, ["barcode"], umi_edit_distance=4)
+        assert summary.umi_edit_distance == 4
+        assert summary.umi_filtering["Total reads saved"] == 60
+
+    def test_umi_stats_fall_back_to_the_lowest_edit_distance(self, tmp_path):
+        # Without a named round, ED10 must not win over ED4 by sorting as a string.
+        sample = _populated_sample(tmp_path)
+        _write(sample.out_umi_filtered + ".ED10.stats.tsv",
+               "Total reads saved\t20\nTotal assignments processed\t150\n")
+        summary = RunSummary("S")
+        summary.collect_output_files(sample, ["barcode"])
+        assert summary.umi_edit_distance == 4
+
 
 class TestJson:
     def test_written_json_round_trips(self, tmp_path):

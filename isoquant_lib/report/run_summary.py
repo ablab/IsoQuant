@@ -21,7 +21,7 @@ import glob
 import logging
 import json
 import os
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 logger = logging.getLogger('IsoQuant')
 
@@ -155,11 +155,16 @@ class RunSummary:
         self.total_assignments = total_assignments
         self.polya_reads = polya_reads
 
-    def collect_output_files(self, sample, grouping_strategy_names: Optional[List[str]] = None) -> None:
-        """Read back the stat files the run has written for this sample."""
+    def collect_output_files(self, sample, grouping_strategy_names: Optional[List[str]] = None,
+                             umi_edit_distance: Optional[int] = None) -> None:
+        """Read back the stat files the run has written for this sample.
+
+        umi_edit_distance is the filtering round whose survivors were counted; without
+        it the lowest edit distance found on disk is described.
+        """
         self._collect_counts_stats(sample)
         self._collect_barcode_stats(sample)
-        self._collect_umi_stats(sample)
+        self._collect_umi_stats(sample, umi_edit_distance)
         self._collect_group_stats(sample, grouping_strategy_names or [])
 
     def _collect_counts_stats(self, sample) -> None:
@@ -213,19 +218,36 @@ class RunSummary:
                     self.barcodes[key] = self.barcodes.get(key, 0) + value
         self.cell_barcodes = read_stats_tsv(getattr(sample, "out_cell_barcodes_stats", None))
 
-    def _collect_umi_stats(self, sample) -> None:
+    def _collect_umi_stats(self, sample, edit_distance: Optional[int] = None) -> None:
         out_umi_filtered = getattr(sample, "out_umi_filtered", None)
         if not out_umi_filtered:
             return
-        # <prefix>.UMI_filtered.ED<N>.stats.tsv, one per edit distance actually run.
-        for stats_file in sorted(glob.glob(out_umi_filtered + ".ED*.stats.tsv")):
+        # <prefix>.UMI_filtered.ED<N>.stats.tsv, one per edit distance ever run here:
+        # re-running the same directory in another mode leaves the previous one behind,
+        # and its survivors are not the reads that were counted. Only the round the
+        # caller names is reported; without one, the lowest edit distance is taken
+        # (never the lexicographically last, which puts ED10 before ED2).
+        if edit_distance is not None:
+            candidates = [(edit_distance, "%s.ED%d.stats.tsv" % (out_umi_filtered, edit_distance))]
+        else:
+            candidates = sorted(self._umi_stat_files(out_umi_filtered))
+        for found_distance, stats_file in candidates:
             stats = read_stats_tsv(stats_file)
             if not stats:
                 continue
             self.umi_filtering = stats
-            edit_distance = os.path.basename(stats_file).split(".ED")[-1].split(".")[0]
-            if edit_distance.isdigit():
-                self.umi_edit_distance = int(edit_distance)
+            self.umi_edit_distance = found_distance
+            return
+
+    @staticmethod
+    def _umi_stat_files(out_umi_filtered: str) -> List[Tuple[int, str]]:
+        """(edit distance, path) for every UMI filtering stat file of this sample."""
+        found = []
+        for stats_file in glob.glob(out_umi_filtered + ".ED*.stats.tsv"):
+            distance = os.path.basename(stats_file).split(".ED")[-1].split(".")[0]
+            if distance.isdigit():
+                found.append((int(distance), stats_file))
+        return found
 
     def _collect_group_stats(self, sample, grouping_strategy_names: List[str]) -> None:
         """Per-barcode/spot depth from the grouped counts written for each strategy."""
