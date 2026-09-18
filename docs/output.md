@@ -206,6 +206,16 @@ We recommend using `bulk` mode for novel gene and transcript discovery.
 [Full documentation for single-cell and spatial modes](single_cell.md).
 
 
+## Run summary
+
+Produced for every experiment unless `--no_report` is set:
+
+* `SAMPLE_ID.summary.html` - QC summary of the run as a single self-contained page:
+  mapping rate, read assignment breakdown, counted reads per feature type, discovered
+  transcript models and, for single-cell / spatial runs, barcode detection rate,
+  UMI deduplication and per-barcode statistics;
+* `SAMPLE_ID.summary_stats.json` - the same numbers in machine-readable form.
+
 ## Other files
 
 Additionally, an `isoquant.log` log file will be saved to the output directory.  

@@ -39,6 +39,8 @@ from isoquant_lib.utils.bam_utils import (PLACEHOLDERS, collect_unmapped_read_id
                                          load_barcode_umi_tags, merge_bam_files,
                                          references_with_alignments, write_unmapped_bam)
 from .alignment.alignment_processor import AlignmentType
+from .report.run_summary import RunSummary
+from .report.html_report import render_html
 from .assignment.read_groups import prepare_read_groups, get_grouping_strategy_names
 from .assignment.assignment_io import IOSupport, ReadInfoPrinter, VoidPrinter
 from .processed_read_manager import ProcessedReadsManagerHighMemory, ProcessedReadsManagerNoSecondary, ProcessedReadsManagerNormalMemory
@@ -102,6 +104,8 @@ class DatasetProcessor:
         self.grouping_strategy_names = get_grouping_strategy_names(self.args)
         self.alignment_stat_counter = EnumStats()
         self.transcript_type_dict = {}
+        # Per-sample QC summary, written as SAMPLE.summary_stats.json / SAMPLE.summary.html
+        self.run_summary = None
 
         if args.genedb:
             logger.info("Loading gene database from " + self.args.genedb)
@@ -149,6 +153,11 @@ class DatasetProcessor:
     # Run through all genes in db and count stats according to alignments given in bamfile_name
     def process_sample(self, sample):
         logger.info("Processing experiment " + sample.prefix)
+        self.run_summary = RunSummary(sample.prefix, isoquant_version=self.args._version,
+                                      command_line=self.args._cmd_line, mode=self.args.mode.name)
+        # Alignment statistics are per experiment: without the reset a second sample
+        # would report (and store as __not_aligned) the counts of the previous one too.
+        self.alignment_stat_counter = EnumStats()
         logger.info("Experiment has " + proper_plural_form("BAM file", len(sample.file_list)) + ": " + ", ".join(
             map(lambda x: x[0], sample.file_list)))
         self.chr_ids = self.get_chromosome_ids(sample)
@@ -248,6 +257,7 @@ class DatasetProcessor:
         polya_fraction = polya_found / total_assignments if total_assignments > 0 else 0.0
         logger.info("Total assignments used for analysis: %d, polyA tail detected in %d (%.1f%%)" %
                     (total_assignments, polya_found, polya_fraction * 100.0))
+        self.run_summary.set_polya_stats(total_assignments, polya_found)
         if (polya_fraction < self.args.low_polya_percentage_threshold and
                 self.args.polya_requirement_strategy != PolyAUsageStrategies.never):
             logger.warning("PolyA percentage is suspiciously low. IsoQuant expects non-polya-trimmed reads. "
@@ -275,7 +285,24 @@ class DatasetProcessor:
         if barcode_split_done and os.path.exists(barcode_split_done):
             os.remove(barcode_split_done)
 
+        self.write_run_summary(sample)
         logger.info("Processed experiment " + sample.prefix)
+
+    def write_run_summary(self, sample):
+        """Write the QC summary of this experiment. Never fails the run: the numbers
+        are a report, the analysis outputs are already on disk at this point."""
+        if getattr(self.args, "no_report", False) or self.run_summary is None:
+            return
+        try:
+            self.run_summary.collect_output_files(sample, self.grouping_strategy_names)
+            json_file = sample.out_summary_json
+            html_file = sample.out_summary_html
+            self.run_summary.write_json(json_file)
+            render_html(self.run_summary, html_file)
+            logger.info("Run summary is stored in %s (and %s)" % (html_file, json_file))
+        except Exception as e:
+            logger.warning("Could not write the run summary: %s" % e)
+            logger.debug("Run summary error", exc_info=True)
 
     def keep_only_defined_chromosomes(self, chr_set: set):
         if self.args.process_only_chr:
@@ -410,6 +437,7 @@ class DatasetProcessor:
             bam = pysam.AlignmentFile(bam_file, "rb", require_index=True)
             self.alignment_stat_counter.add(AlignmentType.unaligned, bam.unmapped)
         self.alignment_stat_counter.print_start("Alignments collected, overall alignment statistics:")
+        self.run_summary.set_alignment_stats(self.alignment_stat_counter.stats_dict)
 
         info_dumper = open(info_file, "wb")
         write_int(total_assignments, info_dumper)
@@ -518,6 +546,7 @@ class DatasetProcessor:
 
         if not self.args.no_model_construction:
             transcript_stat_counter.print_start("Transcript model statistics")
+            self.run_summary.set_transcript_model_stats(transcript_stat_counter.stats_dict)
             self.merge_transcript_models(sample, aggregator, chr_ids, gff_printer, model_reads_printer)
             logger.info("Transcript model file " + gff_printer.model_fname)
             if self.args.genedb:
@@ -563,6 +592,8 @@ class DatasetProcessor:
                         (".gz" if self.args.gzipped else ""))
         if self.args.genedb:
             aggregator.read_stat_counter.print_start("Read assignment statistics")
+            if self.run_summary is not None:
+                self.run_summary.set_assignment_stats(aggregator.read_stat_counter.stats_dict)
 
             if self.args.run_quantification:
                 logger.info("Gene counts are stored in " + aggregator.gene_counter.output_counts_file_name)

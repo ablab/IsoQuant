@@ -40,6 +40,13 @@ def parse_arguments():
         help="Use only reference transcript quantification instead of transcript model quantification.",
     )
     parser.add_argument(
+        "--read_group_strategy",
+        type=str,
+        help="Grouping strategy (--read_group value, e.g. file_name or barcode) whose grouped "
+        "counts are visualized. Defaults to the first strategy found in the output directory.",
+        default=None,
+    )
+    parser.add_argument(
         "--filter_transcripts",
         type=float,
         help="Filter transcripts by minimum value occurring in at least one condition.",
@@ -74,6 +81,7 @@ def main():
         use_counts=args.counts,
         ref_only=args.ref_only,
         gtf=args.gtf,
+        read_group_strategy=args.read_group_strategy,
     )
     dictionary_builder = DictionaryBuilder(output)
     gene_list = dictionary_builder.read_gene_list(args.gene_list)
