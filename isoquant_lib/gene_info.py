@@ -300,6 +300,7 @@ class GeneInfo:
         gene_info.all_isoforms_exons = {}
         gene_info.all_isoforms_introns = {}
         gene_info.isoform_strands = {}
+        gene_info.gene_strands = {}
         gene_info.sources = {}
         gene_info.other_features = {}
         gene_info.gene_id_map = {}
@@ -316,6 +317,7 @@ class GeneInfo:
             exons.update(gene_info.all_isoforms_exons[t_id])
             introns.update(gene_info.all_isoforms_introns[t_id])
             gene_info.isoform_strands[transcript_model.transcript_id] = transcript_model.strand
+            gene_info.gene_strands[transcript_model.gene_id] = transcript_model.strand
             gene_info.sources[transcript_model.transcript_id] = transcript_model.source
             gene_info.sources[transcript_model.gene_id] = transcript_model.source
             gene_info.other_features[transcript_model.transcript_id] = transcript_model.other_features
@@ -385,6 +387,7 @@ class GeneInfo:
         gene_info.split_exon_profiles.set_profiles(t_id, exons, transcript_region, contains)
 
         gene_info.isoform_strands = {transcript_model.transcript_id: transcript_model.strand}
+        gene_info.gene_strands = {transcript_model.gene_id: transcript_model.strand}
         gene_info.sources = {transcript_model.transcript_id: transcript_model.source,
                              transcript_model.gene_id: transcript_model.source}
         gene_info.other_features = {transcript_model.transcript_id: transcript_model.other_features}
@@ -424,6 +427,7 @@ class GeneInfo:
         gene_info.all_isoforms_exons = {}
         gene_info.all_isoforms_introns = {}
         gene_info.isoform_strands = {}
+        gene_info.gene_strands = {}
         gene_info.other_features = {}
         gene_info.sources = {}
         gene_info.gene_id_map = {}
