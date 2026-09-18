@@ -21,13 +21,22 @@ import glob
 import logging
 import json
 import os
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 
 logger = logging.getLogger('IsoQuant')
 
 # A grouped counts file bigger than this is only scanned for its group count, not for
 # per-group depth: the detailed pass is linear in the number of non-zero cells.
 MAX_GROUPED_SCAN_BYTES = 2 * 1024 ** 3
+
+# ... and the memory of that pass is linear in the number of groups instead, which the
+# file size does not bound: a raw-barcode run has millions of them in a small file. Past
+# this many the per-group maps are dropped and the groups are only counted.
+MAX_GROUPED_SCAN_GROUPS = 1000000
+
+# Feature whose per-group depth curve the report plots. The ranked list is one float
+# per group, so it is only built for that one.
+RANK_PLOT_FEATURE = "gene"
 
 
 def read_stats_tsv(file_name: str) -> Dict[str, int]:
@@ -259,15 +268,21 @@ class RunSummary:
                 if not prefix:
                     continue
                 linear_file = "%s_%s_counts.linear.tsv" % (prefix, strategy)
-                stats = self._scan_linear_counts(linear_file)
+                stats = self._scan_linear_counts(linear_file,
+                                                 keep_ranked=feature == RANK_PLOT_FEATURE)
                 if stats:
                     per_feature[feature] = stats
             if per_feature:
                 self.groups[strategy] = per_feature
 
-    def _scan_linear_counts(self, linear_file: str) -> Dict[str, object]:
+    def _scan_linear_counts(self, linear_file: str, keep_ranked: bool = True) -> Dict[str, object]:
         """One sequential pass over a linear counts file: groups, reads per group and
-        features per group. Returns {} when the file is absent."""
+        features per group. Returns {} when the file is absent.
+
+        The detailed pass keeps two entries per group, so it gives up - on the file size
+        up front and on the group count as it goes - and falls back to counting the
+        groups, which needs one entry per group and no more.
+        """
         if not os.path.exists(linear_file):
             return {}
         detailed = os.path.getsize(linear_file) <= MAX_GROUPED_SCAN_BYTES
@@ -276,7 +291,7 @@ class RunSummary:
                         % os.path.basename(linear_file))
         reads_per_group: Dict[str, float] = {}
         features_per_group: Dict[str, int] = {}
-        groups = set()
+        groups: Set[str] = set()  # only filled once the detailed pass is given up
         total = 0.0
         with open(linear_file) as f:
             next(f, None)  # feature_id  group_id  count
@@ -285,8 +300,8 @@ class RunSummary:
                 if len(values) != 3:
                     continue
                 group_id = values[1]
-                groups.add(group_id)
                 if not detailed:
+                    groups.add(group_id)
                     continue
                 try:
                     count = float(values[2])
@@ -295,13 +310,20 @@ class RunSummary:
                 total += count
                 reads_per_group[group_id] = reads_per_group.get(group_id, 0.0) + count
                 features_per_group[group_id] = features_per_group.get(group_id, 0) + 1
-        if not groups:
+                if len(reads_per_group) > MAX_GROUPED_SCAN_GROUPS:
+                    logger.info("%s holds more than %d groups, only counting them"
+                                % (os.path.basename(linear_file), MAX_GROUPED_SCAN_GROUPS))
+                    detailed = False
+                    groups = set(reads_per_group)
+                    reads_per_group, features_per_group, total = {}, {}, 0.0
+        if not detailed:
+            return {"groups": len(groups)} if groups else {}
+        if not reads_per_group:
             return {}
-        stats: Dict[str, object] = {"groups": len(groups)}
-        if detailed:
-            stats["reads"] = total
-            stats["median_reads_per_group"] = _median(list(reads_per_group.values()))
-            stats["median_features_per_group"] = _median([float(v) for v in features_per_group.values()])
+        stats: Dict[str, object] = {"groups": len(reads_per_group), "reads": total}
+        stats["median_reads_per_group"] = _median(list(reads_per_group.values()))
+        stats["median_features_per_group"] = _median([float(v) for v in features_per_group.values()])
+        if keep_ranked:
             # Depth per group, highest first: the barcode rank curve of the report.
             # Kept as a plain list, not the per-group dict, to stay small for datasets
             # with millions of barcodes.
