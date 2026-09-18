@@ -16,6 +16,7 @@ import contextlib
 import html
 import io
 import logging
+import math
 from typing import List, Optional, Tuple
 
 from isoquant_lib.report.run_summary import ASSIGNMENT_BUCKETS
@@ -262,6 +263,23 @@ def _umi_section(summary) -> str:
     return "<h2>%s</h2>" % html.escape(title) + _table(rows, ("Stage", "Reads"))
 
 
+# Points drawn on the rank curve. Both axes are log-scaled, so a log-spaced sample is
+# indistinguishable from one point per group - and a spatial run has hundreds of
+# thousands of them, each a coordinate pair inlined into the page.
+RANK_PLOT_POINTS = 400
+
+
+def _rank_plot_points(ranked_reads: List[float]) -> Tuple[List[int], List[float]]:
+    """Ranks and depths to draw: the whole curve, or a log-spaced sample of it."""
+    total = len(ranked_reads)
+    if total <= RANK_PLOT_POINTS:
+        return list(range(1, total + 1)), list(ranked_reads)
+    last = math.log10(total)
+    indices = sorted({min(total - 1, int(10 ** (last * step / (RANK_PLOT_POINTS - 1))) - 1)
+                      for step in range(RANK_PLOT_POINTS)})
+    return [index + 1 for index in indices], [ranked_reads[index] for index in indices]
+
+
 def _rank_plot_svg(title: str, ranked_reads) -> str:
     """Barcode rank curve (depth vs rank, log-log), as an inline SVG."""
     if not ranked_reads:
@@ -270,8 +288,9 @@ def _rank_plot_svg(title: str, ranked_reads) -> str:
     if plt is None:
         return ""
     try:
+        ranks, depths = _rank_plot_points(ranked_reads)
         figure, axes = plt.subplots(figsize=(7.5, 3.2))
-        axes.plot(range(1, len(ranked_reads) + 1), ranked_reads, color="#4c78a8")
+        axes.plot(ranks, depths, color="#4c78a8")
         axes.set_xscale("log")
         axes.set_yscale("log")
         axes.set_xlabel("Barcode rank", fontsize=9)

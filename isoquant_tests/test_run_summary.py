@@ -10,7 +10,8 @@ import json
 import os
 
 from isoquant_lib.assignment.isoform_assignment import ReadAssignmentType
-from isoquant_lib.report.html_report import render_html
+from isoquant_lib.report.html_report import RANK_PLOT_POINTS, _rank_plot_points, render_html
+from isoquant_lib.report import run_summary
 from isoquant_lib.report.run_summary import ASSIGNMENT_BUCKETS, RunSummary, read_stats_tsv
 
 
@@ -171,6 +172,27 @@ class TestRates:
         assert umi["molecules"] == 60
         assert umi["duplication_rate"] == 0.6
 
+    def test_ranked_depths_are_kept_for_the_plotted_feature_only(self, tmp_path):
+        # One float per group, and only the gene curve is ever drawn.
+        summary = _summary(tmp_path)
+        assert "ranked_reads" in summary.groups["barcode"]["gene"]
+        assert "ranked_reads" not in summary.groups["barcode"]["transcript"]
+
+    def test_too_many_groups_are_only_counted(self, tmp_path, monkeypatch):
+        # Memory here is driven by the number of groups, which the file size does not
+        # bound: a raw-barcode run has millions of them in a small file.
+        monkeypatch.setattr(run_summary, "MAX_GROUPED_SCAN_GROUPS", 2)
+        sample = FakeSample(str(tmp_path))
+        _write(sample.out_gene_grouped_counts_tsv + "_barcode_counts.linear.tsv",
+               "feature_id\tgroup_id\tcount\n"
+               + "".join("GENE1\tbc%d\t1.00\n" % i for i in range(5)))
+        summary = RunSummary("S")
+        summary.collect_output_files(sample, ["barcode"])
+        stats = summary.groups["barcode"]["gene"]
+        assert stats["groups"] == 5
+        assert "median_reads_per_group" not in stats
+        assert "ranked_reads" not in stats
+
     def test_umi_stats_come_from_the_round_that_was_counted(self, tmp_path):
         # Re-running a directory in another mode leaves a second .ED<N>.stats.tsv
         # behind; the counts come from the first round the run performed.
@@ -269,6 +291,14 @@ class TestHtml:
         render_html(summary, path)
         with open(path, "rb") as f:
             assert "Sämple".encode("utf-8") in f.read()
+
+    def test_rank_curve_is_sampled_for_large_runs(self, tmp_path):
+        # A spatial run has hundreds of thousands of spots; one SVG point each would
+        # add megabytes to a page that is meant to be mailed around on its own.
+        ranks, depths = _rank_plot_points([float(100000 - i) for i in range(100000)])
+        assert len(ranks) <= RANK_PLOT_POINTS
+        assert (ranks[0], ranks[-1]) == (1, 100000)
+        assert depths[0] == 100000.0
 
     def test_sections_are_skipped_when_empty(self, tmp_path):
         summary = RunSummary("S", isoquant_version="4.0.0")
