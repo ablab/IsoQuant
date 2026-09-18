@@ -599,10 +599,13 @@ class DictionaryBuilder:
 
                 if type_column is None:
                     # First non-comment line is the column header; both formats name
-                    # their columns, so the layout is read from it.
-                    type_column, classification_column, classification_in_blob = \
+                    # their columns, so the layout is read from it. When it names no
+                    # columns there is no header at all (a manually trimmed file), and
+                    # the line is a read that still has to be counted below.
+                    type_column, classification_column, classification_in_blob, named = \
                         self._read_file_columns(parts)
-                    continue
+                    if named:
+                        continue
 
                 if len(parts) <= max(type_column, classification_column):
                     continue
@@ -625,23 +628,25 @@ class DictionaryBuilder:
 
     @staticmethod
     def _read_file_columns(header_parts):
-        """Locate the assignment type and classification columns from the header of a
-        per-read file. Returns (type_column, classification_column, classification_in_blob);
-        in the legacy format the classification lives inside the additional_info field."""
+        """Locate the assignment type and classification columns from the first
+        non-comment line of a per-read file. Returns (type_column, classification_column,
+        classification_in_blob, header_found); in the legacy format the classification
+        lives inside the additional_info field. header_found is False when the line is
+        not a header, so the caller has to count it as a read."""
         if "isoform_assignment_type" in header_parts and "classification" in header_parts:
             return (header_parts.index("isoform_assignment_type"),
-                    header_parts.index("classification"), False)
+                    header_parts.index("classification"), False, True)
         if "assignment_type" in header_parts and "additional_info" in header_parts:
             # The last column of a legacy file is groups, not additional_info, so the
             # blob has to be addressed by name.
             return (header_parts.index("assignment_type"),
-                    header_parts.index("additional_info"), True)
+                    header_parts.index("additional_info"), True, True)
         # Unnamed header (e.g. a manually trimmed file): fall back to the fixed
         # read_info layout, which is what IsoQuant produces by default.
         if len(header_parts) > RI_CLASSIFICATION:
-            return RI_ISOFORM_ASSIGNMENT_TYPE, RI_CLASSIFICATION, False
+            return RI_ISOFORM_ASSIGNMENT_TYPE, RI_CLASSIFICATION, False, False
         return (DictionaryBuilder.LEGACY_ASSIGNMENT_TYPE_COLUMN,
-                DictionaryBuilder.LEGACY_ADDITIONAL_INFO_COLUMN, True)
+                DictionaryBuilder.LEGACY_ADDITIONAL_INFO_COLUMN, True, False)
 
     def parse_input_gtf(self):
         """Parses the GTF file using gffutils to build a detailed dictionary of genes, transcripts, and exons."""
