@@ -7,6 +7,7 @@
 
 import os
 import gffutils
+import pytest
 from isoquant_lib.gene_info import *
 
 
@@ -91,6 +92,16 @@ class TestGeneInfo:
         assert gene_info.gene_id_map == {}
         assert gene_info.db is None
         assert gene_info.gene_db_list == []
+
+    def test_init_requires_db(self):
+        # the main constructor is only for gffutils-backed gene lists; every db-less
+        # case has its own constructor that initializes the object completely
+        with pytest.raises(AssertionError):
+            GeneInfo([], None)
+
+    def test_init_requires_gene_list(self):
+        with pytest.raises(AssertionError):
+            GeneInfo([], self.gffutils_db)
 
     def test_serialization(self):
         import io

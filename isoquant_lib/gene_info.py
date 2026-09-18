@@ -231,9 +231,11 @@ class GeneInfo:
                          'tRNA', 'telomerase_RNA', 'Y_RNA', 'scRNA'}
 
     def __init__(self, gene_db_list, db, delta=0, prepare_profiles=True):
-        if db is None:
-            return
-
+        # db-less construction must go through an alternate constructor
+        # (from_region / from_models / from_model / deserialize): each of them sets
+        # every attribute, while returning early here used to leave the object
+        # half-built, e.g. without reference_region (see #425 and #427)
+        assert db is not None
         assert gene_db_list
         # gffutils main structure
         self.db = db
