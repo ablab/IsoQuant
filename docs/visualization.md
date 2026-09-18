@@ -22,7 +22,8 @@ python isoquant_visualize.py <output_directory> --gene_list <gene_list> [options
 * `--ref_only`: Use only reference transcript quantification instead of transcript model quantification.
 * `--filter_transcripts`: Filter transcripts by minimum value occurring in at least one condition.
 * `--read_group_strategy`: Grouping strategy (`--read_group` value, e.g. `file_name` or `barcode`)
-whose grouped counts are visualized. Defaults to the first strategy found in the output directory.
+whose grouped counts are visualized. Defaults to the first `--read_group` value of the original run
+that has grouped counts in the output directory.
 
 ## Input files
 
