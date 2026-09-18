@@ -226,7 +226,7 @@ class TestHtml:
     def _render(self, tmp_path, summary=None):
         path = str(tmp_path / "S.summary.html")
         render_html(summary or _summary(tmp_path), path)
-        with open(path) as f:
+        with open(path, encoding="utf-8") as f:
             return f.read()
 
     def test_page_is_self_contained(self, tmp_path):
@@ -243,6 +243,32 @@ class TestHtml:
         assert "Valid barcodes" in page
         assert "Barcode calling" in page
         assert "UMI deduplication (edit distance 4)" in page
+
+    def test_group_tiles_name_their_strategy(self, tmp_path):
+        # With --read_group file_name barcode the number could be either; reading a
+        # file_name group count as "barcodes with counts" is off by orders of magnitude.
+        page = self._render(tmp_path)
+        assert "Groups with counts (barcode)" in page
+
+    def test_barcode_section_is_skipped_for_umi_only_runs(self, tmp_path):
+        # --barcoded_bam skips barcode calling but still deduplicates UMIs; the
+        # section used to be opened with nothing to put in it.
+        summary = RunSummary("S")
+        summary.umi_filtering = {"Total reads saved": 10,
+                                 "Total assignments processed": 20}
+        page = self._render(tmp_path, summary)
+        assert "Barcode calling" not in page
+        assert "UMI deduplication" in page
+
+    def test_page_is_written_as_utf8(self, tmp_path):
+        # Clusters run under LC_ALL=C, where the default encoding cannot write the
+        # non-ASCII characters an output path or a prefix may contain.
+        summary = RunSummary("Sämple", command_line="isoquant.py -o /data/Sämple")
+        summary.set_alignment_stats(_enum_stats(primary=10, unaligned=0))
+        path = str(tmp_path / "S.summary.html")
+        render_html(summary, path)
+        with open(path, "rb") as f:
+            assert "Sämple".encode("utf-8") in f.read()
 
     def test_sections_are_skipped_when_empty(self, tmp_path):
         summary = RunSummary("S", isoquant_version="4.0.0")

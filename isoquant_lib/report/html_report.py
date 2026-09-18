@@ -148,12 +148,16 @@ def _kpi_tiles(summary) -> str:
                            _format_percent(_safe_rate(rollup.get("unique"), rollup.get("total")))))
     if summary.barcodes:
         tiles.append(_tile("Valid barcodes", _format_percent(summary.barcode_rate)))
-    for strategy, per_feature in (summary.groups or {}).items():
+    for strategy in summary.groups or {}:
+        # Only the first grouping strategy gets tiles - with several --read_group values
+        # the row would grow without saying much - and it is named, so a file_name group
+        # count is not read as a number of barcodes.
         gene_stats = summary.group_rollup(strategy).get("gene") or {}
         if gene_stats.get("groups") is not None:
-            tiles.append(_tile("Barcodes/spots with counts", _format_number(gene_stats["groups"])))
+            tiles.append(_tile("Groups with counts (%s)" % strategy,
+                               _format_number(gene_stats["groups"])))
         if gene_stats.get("share_of_reads") is not None:
-            tiles.append(_tile("Reads in barcodes (gene level)",
+            tiles.append(_tile("Reads in groups (%s, gene level)" % strategy,
                                _format_percent(gene_stats["share_of_reads"])))
         break
     if not tiles:
@@ -232,7 +236,9 @@ def _models_section(summary) -> str:
 
 
 def _barcode_section(summary) -> str:
-    if not summary.barcodes and not summary.cell_barcodes and not summary.umi_filtering:
+    # UMI filtering has a section of its own: a --barcoded_bam run skips barcode calling
+    # and would get nothing but a heading here.
+    if not summary.barcodes and not summary.cell_barcodes:
         return ""
     rows = [(name, _format_number(count)) for name, count in summary.barcodes.items()]
     if summary.barcodes:
@@ -336,5 +342,7 @@ def render_html(summary, file_name: str) -> None:
            subtitle, "\n".join(s for s in sections if s),
            html.escape(summary.command_line))
     )
-    with open(file_name, "w") as f:
+    # The page declares utf-8, so it has to be written as utf-8 whatever the locale
+    # of the machine the pipeline runs on says (clusters often run under LC_ALL=C).
+    with open(file_name, "w", encoding="utf-8") as f:
         f.write(page)

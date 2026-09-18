@@ -398,6 +398,6 @@ class RunSummary:
         return summary
 
     def write_json(self, file_name: str) -> None:
-        with open(file_name, "w") as f:
+        with open(file_name, "w", encoding="utf-8") as f:
             json.dump(self.to_dict(), f, indent=2, sort_keys=False)
             f.write("\n")
