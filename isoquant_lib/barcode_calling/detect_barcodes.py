@@ -28,7 +28,7 @@ from Bio import SeqIO, Seq, SeqRecord
 from ..modes import IsoQuantMode
 from isoquant_lib.utils.error_codes import IsoQuantExitCode
 from ..common import setup_worker_logging, _get_log_params
-from isoquant_lib.utils.file_utils import (GZIP_SUFFIX, open_text_write,
+from isoquant_lib.utils.file_utils import (GZIP_SUFFIX, open_text_write, read_stats_tsv,
                                            strip_compression_suffix)
 from .common import reverese_complement, load_barcodes
 from .cell_selection import NOSEQ, CellBarcodeSelector, select_cell_barcodes
@@ -620,11 +620,7 @@ def _process_single_file_in_parallel(input_file, output_tsv, out_fasta, args, ba
             if tmp_fasta and final_output_fasta:
                 with open(tmp_fasta, "rb") as tmp_fasta_handle:
                     shutil.copyfileobj(tmp_fasta_handle, final_output_fasta)
-            for line in open(stats_file_name(tmp_file), "r"):
-                v = line.strip().split("\t")
-                if len(v) != 2:
-                    continue
-                stat_dict[v[0]] += int(v[1])
+            read_stats_tsv(stats_file_name(tmp_file), stat_dict)
 
         if final_output_fasta is not None:
             final_output_fasta.close()

@@ -23,6 +23,8 @@ import json
 import os
 from typing import Dict, List, Optional, Set, Tuple
 
+from isoquant_lib.utils.file_utils import read_stats_tsv
+
 logger = logging.getLogger('IsoQuant')
 
 # A grouped counts file bigger than this is only scanned for its group count, not for
@@ -37,23 +39,6 @@ MAX_GROUPED_SCAN_GROUPS = 1000000
 # Feature whose per-group depth curve the report plots. The ranked list is one float
 # per group, so it is only built for that one.
 RANK_PLOT_FEATURE = "gene"
-
-
-def read_stats_tsv(file_name: str) -> Dict[str, int]:
-    """Read one of the two-column "name<TAB>count" stat files."""
-    stats = {}
-    if not file_name or not os.path.exists(file_name):
-        return stats
-    with open(file_name) as f:
-        for line in f:
-            values = line.rstrip("\n").split("\t")
-            if len(values) != 2:
-                continue
-            try:
-                stats[values[0]] = int(values[1])
-            except ValueError:
-                continue
-    return stats
 
 
 def enum_stats_to_dict(stats_dict) -> Dict[str, int]:
@@ -223,8 +208,7 @@ class RunSummary:
         barcodes_tsv = getattr(sample, "barcodes_tsv", None)
         if barcodes_tsv:
             for stats_file in sorted(glob.glob(barcodes_tsv + "_*.tsv.stats")):
-                for key, value in read_stats_tsv(stats_file).items():
-                    self.barcodes[key] = self.barcodes.get(key, 0) + value
+                read_stats_tsv(stats_file, self.barcodes)
         self.cell_barcodes = read_stats_tsv(getattr(sample, "out_cell_barcodes_stats", None))
 
     def _collect_umi_stats(self, sample, edit_distance: Optional[int] = None) -> None:

@@ -12,7 +12,8 @@ import os
 from isoquant_lib.assignment.isoform_assignment import ReadAssignmentType
 from isoquant_lib.report.html_report import RANK_PLOT_POINTS, _rank_plot_points, render_html
 from isoquant_lib.report import run_summary
-from isoquant_lib.report.run_summary import ASSIGNMENT_BUCKETS, RunSummary, read_stats_tsv
+from isoquant_lib.report.run_summary import ASSIGNMENT_BUCKETS, RunSummary
+from isoquant_lib.utils.file_utils import read_stats_tsv
 
 
 class FakeEnum:
