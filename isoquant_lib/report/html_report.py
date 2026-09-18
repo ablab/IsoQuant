@@ -18,6 +18,8 @@ import io
 import logging
 from typing import List, Optional, Tuple
 
+from isoquant_lib.report.run_summary import ASSIGNMENT_BUCKETS
+
 logger = logging.getLogger('IsoQuant')
 
 
@@ -187,7 +189,11 @@ def _assignment_section(summary) -> str:
     rows = [(name.replace("_", " "), _format_number(count))
             for name, count in summary.assignment.items()]
     total = rollup.get("total")
-    for label in ("unique", "ambiguous", "inconsistent", "unassigned"):
+    for label in ASSIGNMENT_BUCKETS:
+        # "other" (discarded and suspended reads) is usually empty; the four named
+        # categories plus it always add up to the total.
+        if label == "other" and not rollup.get(label):
+            continue
         rows.append(("%s (share)" % label.capitalize(),
                      _format_percent(_safe_rate(rollup.get(label), total))))
     if summary.total_assignments is not None:

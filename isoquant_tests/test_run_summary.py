@@ -9,8 +9,9 @@
 import json
 import os
 
+from isoquant_lib.assignment.isoform_assignment import ReadAssignmentType
 from isoquant_lib.report.html_report import render_html
-from isoquant_lib.report.run_summary import RunSummary, read_stats_tsv
+from isoquant_lib.report.run_summary import ASSIGNMENT_BUCKETS, RunSummary, read_stats_tsv
 
 
 class FakeEnum:
@@ -25,6 +26,12 @@ class FakeEnum:
 
 def _enum_stats(**counts):
     return {FakeEnum(name): count for name, count in counts.items()}
+
+
+def _assignment_stats(**counts):
+    """Assignment counters are keyed by the real enum: the rollup asks it which
+    headline category each type belongs to."""
+    return {ReadAssignmentType[name]: count for name, count in counts.items()}
 
 
 class FakeSample:
@@ -76,10 +83,10 @@ def _summary(tmp_path):
                          mode="tenX_v3")
     summary.set_alignment_stats(_enum_stats(primary=190, secondary=50, supplementary=20,
                                             unaligned=10))
-    summary.set_assignment_stats(_enum_stats(unique=100, unique_minor_difference=20,
-                                             ambiguous=30, inconsistent=25,
-                                             inconsistent_non_intronic=10, noninformative=5,
-                                             intergenic=5))
+    summary.set_assignment_stats(_assignment_stats(unique=100, unique_minor_difference=20,
+                                                   ambiguous=30, inconsistent=25,
+                                                   inconsistent_non_intronic=10,
+                                                   noninformative=5, intergenic=5))
     summary.set_transcript_model_stats(_enum_stats(known=7, novel_in_catalog=2))
     summary.set_polya_stats(195, 156)
     summary.collect_output_files(_populated_sample(tmp_path), ["barcode"])
@@ -127,6 +134,18 @@ class TestRates:
         assert rollup["ambiguous"] == 30
         assert rollup["inconsistent"] == 35  # inconsistent + inconsistent_non_intronic
         assert rollup["unassigned"] == 10  # noninformative + intergenic
+        assert rollup["other"] == 0
+
+    def test_every_assignment_type_is_in_exactly_one_bucket(self, tmp_path):
+        # discarded and suspended belong to none of the four named categories and used
+        # to be counted in the total only, so the shares did not add up to 100%.
+        summary = RunSummary("S")
+        summary.set_assignment_stats(
+            {assignment_type: 1 for assignment_type in ReadAssignmentType})
+        rollup = summary.assignment_rollup()
+        assert rollup["total"] == len(ReadAssignmentType)
+        assert sum(rollup[bucket] for bucket in ASSIGNMENT_BUCKETS) == rollup["total"]
+        assert rollup["other"] == 2  # discarded, suspended
 
     def test_counted_reads_are_not_turned_into_a_rate_of_their_own(self, tmp_path):
         # Reads dropped by the counting strategy are in neither the features nor the

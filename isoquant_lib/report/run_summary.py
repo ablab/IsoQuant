@@ -52,6 +52,30 @@ def enum_stats_to_dict(stats_dict) -> Dict[str, int]:
     return {key.name: int(value) for key, value in sorted(stats_dict.items(), key=lambda kv: kv[0].name)}
 
 
+# Headline assignment categories, in the order they are reported. Every assignment type
+# ends up in exactly one of them, so the shares add up to the total; "other" holds the
+# types that are none of the four (discarded and suspended reads).
+ASSIGNMENT_BUCKETS = ("unique", "ambiguous", "inconsistent", "unassigned", "other")
+
+
+def assignment_bucket(assignment_type) -> str:
+    """Headline category of a single ReadAssignmentType.
+
+    The enum's own predicates decide, so a type added to it later is classified rather
+    than silently dropped. Inconsistent is checked before ambiguous because
+    inconsistent_ambiguous and inconsistent_multigenic are both.
+    """
+    if assignment_type.is_unique():
+        return "unique"
+    if assignment_type.is_inconsistent():
+        return "inconsistent"
+    if assignment_type.is_unassigned():
+        return "unassigned"
+    if assignment_type.is_ambiguous():
+        return "ambiguous"
+    return "other"
+
+
 def _rate(numerator: float, denominator: float) -> Optional[float]:
     if not denominator:
         return None
@@ -71,10 +95,6 @@ def _median(values: List[float]) -> Optional[float]:
 class RunSummary:
     """Collects the QC numbers of a single experiment (sample)."""
 
-    # Assignment types rolled up into the headline categories.
-    UNIQUE_TYPES = ("unique", "unique_minor_difference")
-    UNASSIGNED_TYPES = ("noninformative", "intergenic")
-
     def __init__(self, sample_name: str, isoquant_version: str = "", command_line: str = "",
                  mode: str = ""):
         self.sample_name = sample_name
@@ -87,6 +107,7 @@ class RunSummary:
         # unaligned counts cover different sets of reads (see set_alignment_stats).
         self.alignment_covers_all_reads: bool = True
         self.assignment: Dict[str, int] = {}
+        self.assignment_buckets: Dict[str, int] = {}
         self.transcript_models: Dict[str, int] = {}
         self.polya_reads: Optional[int] = None
         self.total_assignments: Optional[int] = None
@@ -112,8 +133,19 @@ class RunSummary:
         self.alignment_covers_all_reads = covers_all_reads
 
     def set_assignment_stats(self, stats_dict) -> None:
-        """stats_dict: EnumStats.stats_dict keyed by ReadAssignmentType."""
+        """stats_dict: EnumStats.stats_dict keyed by ReadAssignmentType.
+
+        The headline categories are rolled up here, while the enum members are still
+        at hand: their names alone do not say which category they belong to.
+        """
         self.assignment = enum_stats_to_dict(stats_dict)
+        rollup = {"total": 0}
+        rollup.update({bucket: 0 for bucket in ASSIGNMENT_BUCKETS})
+        for assignment_type, count in stats_dict.items():
+            count = int(count)
+            rollup["total"] += count
+            rollup[assignment_bucket(assignment_type)] += count
+        self.assignment_buckets = rollup
 
     def set_transcript_model_stats(self, stats_dict) -> None:
         """stats_dict: EnumStats.stats_dict keyed by TranscriptModelType."""
@@ -276,20 +308,7 @@ class RunSummary:
 
     def assignment_rollup(self) -> Dict[str, int]:
         """Headline assignment categories on top of the per-type counts."""
-        if not self.assignment:
-            return {}
-        rollup = {"total": sum(self.assignment.values()),
-                  "unique": 0, "ambiguous": 0, "inconsistent": 0, "unassigned": 0}
-        for name, count in self.assignment.items():
-            if name in self.UNIQUE_TYPES:
-                rollup["unique"] += count
-            elif name in self.UNASSIGNED_TYPES:
-                rollup["unassigned"] += count
-            elif name.startswith("inconsistent"):
-                rollup["inconsistent"] += count
-            elif name == "ambiguous":
-                rollup["ambiguous"] += count
-        return rollup
+        return dict(self.assignment_buckets)
 
     def group_rollup(self, strategy: str) -> Dict[str, object]:
         """Reads that carry a group id (barcode/spot) and were counted for a feature,
