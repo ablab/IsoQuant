@@ -34,7 +34,8 @@ from isoquant_lib.utils.serialization import (
 )
 from isoquant_lib.utils.stats import EnumStats
 from isoquant_lib.utils.file_utils import (merge_files, merge_counts, gzip_file_in_place,
-                                          open_text_write, resolve_optionally_gzipped)
+                                          open_text_write, read_stats_tsv,
+                                          resolve_optionally_gzipped)
 from isoquant_lib.utils.bam_utils import (PLACEHOLDERS, collect_unmapped_read_ids,
                                          load_barcode_umi_tags, merge_bam_files,
                                          references_with_alignments, write_unmapped_bam)
@@ -689,11 +690,7 @@ class DatasetProcessor:
             for all_info_file_name, stats_output_file_name, umi_filter_done in results:
                 if save_allinfo:
                     shutil.copyfileobj(open(all_info_file_name, "r"), allinfo_outf)
-                for line in open(stats_output_file_name, "r"):
-                    v = line.strip().split("\t")
-                    if len(v) != 2:
-                        continue
-                    stat_dict[v[0]] += int(v[1])
+                read_stats_tsv(stats_output_file_name, stat_dict)
                 files_to_remove.append(all_info_file_name)
                 files_to_remove.append(stats_output_file_name)
                 files_to_remove.append(umi_filter_done)
@@ -777,11 +774,7 @@ class DatasetProcessor:
                     for all_info_file_name, stats_output_file_name, umi_filter_done in results:
                         if save_allinfo:
                             shutil.copyfileobj(open(all_info_file_name, "r"), allinfo_outf)
-                        for line in open(stats_output_file_name, "r"):
-                            v = line.strip().split("\t")
-                            if len(v) != 2:
-                                continue
-                            stat_dict[v[0]] += int(v[1])
+                        read_stats_tsv(stats_output_file_name, stat_dict)
                         files_to_remove.append(all_info_file_name)
                         files_to_remove.append(stats_output_file_name)
                         files_to_remove.append(umi_filter_done)

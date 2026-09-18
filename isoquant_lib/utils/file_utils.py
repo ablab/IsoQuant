@@ -12,6 +12,7 @@ import re
 import shutil
 import sys
 from collections import defaultdict
+from typing import Dict, Optional
 
 from isoquant_lib.common import rreplace
 from isoquant_lib.utils.error_codes import IsoQuantExitCode
@@ -103,6 +104,30 @@ def check_file_exists(file_path: str, description: str):
     if not os.path.isfile(file_path):
         logger.critical(f"{description} {file_path} does not exist")
         sys.exit(IsoQuantExitCode.INPUT_FILE_NOT_FOUND)
+
+
+def read_stats_tsv(file_name: Optional[str], stats: Optional[Dict[str, int]] = None) -> Dict[str, int]:
+    """Read one of the two-column "name<TAB>count" stat files the stages write.
+
+    Counts are added to stats when one is given, so the per-chunk files of a stage can
+    be summed by calling this once per file. A missing or empty path contributes
+    nothing, and lines that are not a name and a number are skipped.
+    """
+    if stats is None:
+        stats = {}
+    if not file_name or not os.path.exists(file_name):
+        return stats
+    with open(file_name) as f:
+        for line in f:
+            values = line.rstrip("\n").split("\t")
+            if len(values) != 2:
+                continue
+            try:
+                count = int(values[1])
+            except ValueError:
+                continue
+            stats[values[0]] = stats.get(values[0], 0) + count
+    return stats
 
 
 
