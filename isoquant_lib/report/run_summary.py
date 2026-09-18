@@ -83,6 +83,9 @@ class RunSummary:
         self.mode = mode
 
         self.alignment: Dict[str, int] = {}
+        # False when part of the input was not processed, which makes primary and
+        # unaligned counts cover different sets of reads (see set_alignment_stats).
+        self.alignment_covers_all_reads: bool = True
         self.assignment: Dict[str, int] = {}
         self.transcript_models: Dict[str, int] = {}
         self.polya_reads: Optional[int] = None
@@ -96,9 +99,17 @@ class RunSummary:
 
     # ------------------------------------------------------------------ collectors
 
-    def set_alignment_stats(self, stats_dict) -> None:
-        """stats_dict: EnumStats.stats_dict keyed by AlignmentType."""
+    def set_alignment_stats(self, stats_dict, covers_all_reads: bool = True) -> None:
+        """stats_dict: EnumStats.stats_dict keyed by AlignmentType.
+
+        covers_all_reads tells whether every reference carrying alignments was
+        processed. It is not when --process_only_chr / --discard_chr are used, or when
+        the annotation and the genome do not cover the same references: primary
+        alignments are then counted for part of the input while the unaligned count
+        comes from the whole file, so the two cannot be added up into input reads.
+        """
         self.alignment = enum_stats_to_dict(stats_dict)
+        self.alignment_covers_all_reads = covers_all_reads
 
     def set_assignment_stats(self, stats_dict) -> None:
         """stats_dict: EnumStats.stats_dict keyed by ReadAssignmentType."""
@@ -248,8 +259,10 @@ class RunSummary:
     @property
     def total_reads(self) -> Optional[int]:
         """Input reads: primary alignments plus the ones that did not align at all
-        (secondary and supplementary alignments are extra records of the same reads)."""
-        if not self.alignment:
+        (secondary and supplementary alignments are extra records of the same reads).
+        None when part of the input was left out, as the two counts then cover
+        different sets of reads."""
+        if not self.alignment or not self.alignment_covers_all_reads:
             return None
         return self.alignment.get("primary", 0) + self.alignment.get("unaligned", 0)
 
@@ -307,6 +320,7 @@ class RunSummary:
             alignment = dict(self.alignment)
             alignment["total_reads"] = self.total_reads
             alignment["mapping_rate"] = self.mapping_rate
+            alignment["covers_all_input_reads"] = self.alignment_covers_all_reads
             summary["alignment"] = alignment
         if self.assignment:
             assignment = {"by_type": dict(self.assignment)}

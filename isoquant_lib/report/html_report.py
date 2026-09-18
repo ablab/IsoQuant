@@ -172,7 +172,12 @@ def _alignment_section(summary) -> str:
             for name, count in summary.alignment.items()]
     rows.append(("Input reads (primary + unaligned)", _format_number(summary.total_reads)))
     rows.append(("Mapping rate", _format_percent(summary.mapping_rate)))
-    return "<h2>Alignment</h2>" + _table(rows, ("Alignment records", "Count"))
+    note = ""
+    if not summary.alignment_covers_all_reads:
+        note = ('<p class="subtitle">Part of the input was not processed, so primary '
+                'alignments and unaligned reads do not cover the same set of reads: '
+                'input reads and mapping rate are not computed.</p>')
+    return "<h2>Alignment</h2>" + note + _table(rows, ("Alignment records", "Count"))
 
 
 def _assignment_section(summary) -> str:
