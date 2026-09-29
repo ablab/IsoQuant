@@ -26,6 +26,7 @@ import os
 from enum import Enum
 from typing import Dict, List, Optional, Tuple
 
+import numpy as np
 import pandas as pd
 from scipy import sparse
 
@@ -110,6 +111,10 @@ class SplicingStatus(Enum):
 
 
 VELOCITY_COLUMNS = ["cell_id", "gene_id", "spliced", "unspliced", "ambiguous"]
+
+# Peak dense memory one loom column block may cost, per layer. The loom write
+# holds four of these at a time, so ~256 MB, independent of the cell count.
+LOOM_WINDOW_BYTES = 64 * 1024 ** 2
 
 
 class RNAVelocityCounter(AbstractCounter):
@@ -269,33 +274,49 @@ class RNAVelocityCounter(AbstractCounter):
 
         cell_codes, unique_cells = pd.factorize(counts_df['cell_id'])
         gene_codes, unique_genes = pd.factorize(counts_df['gene_id'])
-        shape = (len(unique_genes), len(unique_cells))
+        n_genes, n_cells = len(unique_genes), len(unique_cells)
 
         # Duplicate (gene, cell) entries are summed by coo_matrix, so a gene seen
-        # in more than one merged fragment still ends up with its total.
-        spliced_matrix = sparse.coo_matrix(
-            (counts_df['spliced'], (gene_codes, cell_codes)), shape=shape)
-        unspliced_matrix = sparse.coo_matrix(
-            (counts_df['unspliced'], (gene_codes, cell_codes)), shape=shape)
-        ambiguous_matrix = sparse.coo_matrix(
-            (counts_df['ambiguous'], (gene_codes, cell_codes)), shape=shape)
+        # in more than one merged fragment still ends up with its total. csc so
+        # the column slicing below is cheap. int32 halves the dense block a
+        # window costs; per-(cell, gene) read counts cannot approach 2^31.
+        def to_csc(column: str) -> sparse.csc_matrix:
+            return sparse.coo_matrix(
+                (counts_df[column].to_numpy(dtype=np.int32), (gene_codes, cell_codes)),
+                shape=(n_genes, n_cells), dtype=np.int32).tocsc()
 
-        row_attrs = {'Gene': unique_genes.to_numpy()}
-        col_attrs = {'CellID': unique_cells.to_numpy()}
+        unique_layers = {'spliced': to_csc('spliced'), 'unspliced': to_csc('unspliced'),
+                         'ambiguous': to_csc('ambiguous')}
+        # The main (unnamed) layer repeats the spliced matrix, matching
+        # velocyto's convention, and 'spliced' is written explicitly so scVelo
+        # finds it by name.
+        layer_sources = {'': 'spliced', 'spliced': 'spliced',
+                         'unspliced': 'unspliced', 'ambiguous': 'ambiguous'}
 
         loom_file = self.output_file + ".loom"
-        # loompy.create() refuses to overwrite; remove any stale file from a
-        # previous run (e.g. when re-running with --force).
+        # loompy refuses to overwrite; remove any stale file from a previous run
+        # (e.g. when re-running with --force).
         if os.path.exists(loom_file):
             os.remove(loom_file)
-        # The main (unnamed) layer holds spliced counts, matching velocyto's
-        # convention, and is repeated as an explicit 'spliced' layer so scVelo
-        # finds it by name.
-        loompy.create(loom_file, spliced_matrix, row_attrs, col_attrs)
-        with loompy.connect(loom_file) as ds:
-            ds.layers['spliced'] = spliced_matrix
-            ds.layers['unspliced'] = unspliced_matrix
-            ds.layers['ambiguous'] = ambiguous_matrix
+
+        # Written one column block at a time rather than via loompy.create().
+        # Loom is a dense HDF5 format, and assigning a sparse matrix to a layer
+        # densifies the whole thing in memory: loompy's own window calculation
+        # (layer_manager.py, `1024**3 // 8 * m.shape[0]`) multiplies where it
+        # means to divide, so the window always clamps to every remaining column.
+        # Measured at 5k genes x 20k cells that is +1.4 GB peak RSS; a spatial
+        # run at 30k genes x 500k cells would ask for ~60 GB. add_columns() is
+        # loompy's streaming API and caps the cost at one window instead.
+        window = max(1, LOOM_WINDOW_BYTES // (n_genes * np.dtype(np.int32).itemsize))
+        row_attrs = {'Gene': unique_genes.to_numpy()}
+        cell_ids = unique_cells.to_numpy()
+        with loompy.new(loom_file) as ds:
+            for start in range(0, n_cells, window):
+                stop = min(start + window, n_cells)
+                # '' and 'spliced' are the same matrix, so densify each block once.
+                block = {name: m[:, start:stop].toarray() for name, m in unique_layers.items()}
+                ds.add_columns({name: block[key] for name, key in layer_sources.items()},
+                               {'CellID': cell_ids[start:stop]}, row_attrs=row_attrs)
         logger.info("RNA velocity counts are stored in %s and %s", self.output_file, loom_file)
 
     def finalize(self, args=None) -> None:
