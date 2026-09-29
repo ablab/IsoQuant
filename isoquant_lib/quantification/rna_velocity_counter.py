@@ -4,24 +4,27 @@
 # See file LICENSE for details.
 ############################################################################
 
-"""RNA velocity (spliced / unspliced) per-cell gene counts.
+"""RNA velocity (spliced / unspliced / ambiguous) per-cell gene counts.
 
 One counter instance handles a single chromosome (when constructed inside a
 worker) or the merged sample (when constructed at finalization). Reads are
-bucketed per (cell barcode, gene) into a spliced and an unspliced tally, the
-per-chromosome tallies are written as TSV fragments in :meth:`dump`, and
+bucketed per (cell barcode, gene) into spliced / unspliced / ambiguous tallies,
+the per-chromosome tallies are written as TSV fragments in :meth:`dump`, and
 :meth:`finalize` turns the merged sample-level TSV into a velocyto-style
-``.loom`` with ``spliced`` / ``unspliced`` layers.
+``.loom`` with ``spliced`` / ``unspliced`` / ``ambiguous`` layers.
 
-Splicing status is currently derived from the read's assignment type: a read
-consistent with some annotated isoform is spliced, an inconsistent one is
-unspliced. See ``.claude/RNA_VELOCITY.md`` for the limitations of that proxy.
+Splicing status is derived from **intronic evidence**, not from whether the read
+agrees with the annotation: a read is unspliced when it lies inside an intron
+(``genic_intron``) or retains one (an intron-retention match event), and spliced
+otherwise. A read that looks retained against one isoform and mature against
+another is ambiguous. See ``.claude/RNA_VELOCITY.md``.
 """
 
 import csv
 import logging
 import os
-from typing import Dict, Optional, Tuple
+from enum import Enum
+from typing import Dict, List, Optional, Tuple
 
 import pandas as pd
 from scipy import sparse
@@ -32,6 +35,9 @@ from scipy import sparse
 # processing ("fork() called from a process already using GNU OpenMP").
 
 from isoquant_lib.assignment.isoform_assignment import (
+    IsoformMatch,
+    MatchClassification,
+    MatchEventSubtype,
     ReadAssignment,
     ReadAssignmentType,
 )
@@ -39,29 +45,75 @@ from isoquant_lib.quantification.long_read_counter import AbstractCounter
 
 logger = logging.getLogger('IsoQuant')
 
-SPLICED_ASSIGNMENT_TYPES = frozenset((
+# Intron-retention match events, i.e. the read physically covers intronic
+# sequence of the isoform it was compared against.
+#
+# fake_micro_intron_retention is deliberately excluded: is_alignment_artifact()
+# classes it as an artifact, and it is the only IR-named event treated as a
+# *minor* error rather than a major inconsistency.
+#
+# The two incomplete_* variants carry a 50 bp floor by construction -- both
+# detection sites in junction_comparator.py gate them on
+# overlaps_at_least(read_region, intron, params.minor_exon_extension), and
+# args.minor_exon_extension is 50 (isoquant.py). A read end has to run at least
+# 50 bases into an intron to produce one, so no extra length check is needed (and
+# none is possible here: MatchEvent stores index pairs, not coordinates).
+INTRON_RETENTION_EVENTS = frozenset((
+    MatchEventSubtype.intron_retention,
+    MatchEventSubtype.unspliced_intron_retention,
+    MatchEventSubtype.incomplete_intron_retention_left,
+    MatchEventSubtype.incomplete_intron_retention_right,
+))
+
+# Reads that were matched against isoforms; their splicing status comes from the
+# match events. inconsistent_non_intronic is included: its reads disagree with
+# the annotation for non-intronic reasons, so they are spliced molecules.
+MATCHED_ASSIGNMENT_TYPES = frozenset((
     ReadAssignmentType.unique,
     ReadAssignmentType.unique_minor_difference,
     ReadAssignmentType.ambiguous,
-))
-
-# Note: inconsistent_non_intronic is deliberately absent -- it marks reads whose
-# disagreement with the annotation is not intronic, so it carries no unspliced
-# signal. inconsistent_genic / inconsistent_multigenic never appear here either:
-# they are only ever set as gene_assignment_type, while assignment_type stays
-# noninformative (see .claude/READ_ASSIGNMENT_LIFECYCLE.md).
-UNSPLICED_ASSIGNMENT_TYPES = frozenset((
     ReadAssignmentType.inconsistent,
     ReadAssignmentType.inconsistent_ambiguous,
+    ReadAssignmentType.inconsistent_non_intronic,
 ))
 
-ACCEPTED_ASSIGNMENT_TYPES = SPLICED_ASSIGNMENT_TYPES | UNSPLICED_ASSIGNMENT_TYPES
+# A read lying inside an intron never reaches a transcript: assign_to_isoform's
+# "EMPTY - intronic" branch routes it through assign_to_overlapping_genes, which
+# leaves assignment_type == noninformative and records the gene(s) it overlaps in
+# matches classed genic_intron. These are the pre-mRNA reads velocity is built
+# on, so noninformative is accepted when -- and only when -- such a match is
+# present. See .claude/READ_ASSIGNMENT_LIFECYCLE.md.
+UNMATCHED_ASSIGNMENT_TYPES = frozenset((
+    ReadAssignmentType.noninformative,
+))
 
-VELOCITY_COLUMNS = ["cell_id", "gene_id", "spliced", "unspliced"]
+ACCEPTED_ASSIGNMENT_TYPES = MATCHED_ASSIGNMENT_TYPES | UNMATCHED_ASSIGNMENT_TYPES
+
+# Matches that name a gene but say nothing about splicing: the read overlaps the
+# gene body yet resembles no isoform, so there is no intron/exon structure to read
+# a verdict off. Counting them either way would be a guess.
+#
+# MatchClassification.undefined is deliberately *not* here: it means the SQANTI-style
+# classifier had nothing to say, not that the read resembles no isoform, and such a
+# read still carries match events the verdict can be computed from. Treating it as
+# undecidable would silently drop reads.
+UNDECIDABLE_CLASSIFICATIONS = frozenset((
+    MatchClassification.genic,
+    MatchClassification.intergenic,
+))
+
+
+class SplicingStatus(Enum):
+    spliced = 0
+    unspliced = 1
+    ambiguous = 2
+
+
+VELOCITY_COLUMNS = ["cell_id", "gene_id", "spliced", "unspliced", "ambiguous"]
 
 
 class RNAVelocityCounter(AbstractCounter):
-    """Per-(cell, gene) spliced / unspliced read tallies with loom export."""
+    """Per-(cell, gene) spliced / unspliced / ambiguous read tallies with loom export."""
 
     def __init__(self, args, output_prefix: str,
                  string_pools=None, group_index: int = 0) -> None:
@@ -89,6 +141,10 @@ class RNAVelocityCounter(AbstractCounter):
         # Resolved back to strings once, in dump().
         self.spliced: Dict[Tuple[int, int], int] = {}
         self.unspliced: Dict[Tuple[int, int], int] = {}
+        self.ambiguous: Dict[Tuple[int, int], int] = {}
+        self._tallies = {SplicingStatus.spliced: self.spliced,
+                         SplicingStatus.unspliced: self.unspliced,
+                         SplicingStatus.ambiguous: self.ambiguous}
 
     # -- AbstractCounter interface --------------------------------------------
     # No-ops: the velocity counter only consumes finished read assignments and
@@ -130,12 +186,51 @@ class RNAVelocityCounter(AbstractCounter):
                 return m.assigned_gene_id
         return None
 
+    @staticmethod
+    def _match_status(match: IsoformMatch) -> Optional[SplicingStatus]:
+        """Splicing verdict for one read-to-isoform match, or None if undecidable."""
+        # Read lies inside an intron -- pre-mRNA, whatever else it looks like.
+        if match.match_classification == MatchClassification.genic_intron:
+            return SplicingStatus.unspliced
+        if any(e.event_type in INTRON_RETENTION_EVENTS for e in match.match_subclassifications):
+            return SplicingStatus.unspliced
+        if match.match_classification in UNDECIDABLE_CLASSIFICATIONS:
+            return None
+        return SplicingStatus.spliced
+
+    @classmethod
+    def _read_status(cls, read_assignment: ReadAssignment) -> Optional[SplicingStatus]:
+        """Aggregate per-match verdicts into one status for the read.
+
+        A read that retains an intron against every isoform it matched is
+        unspliced; one that matches only mature isoforms is spliced; one that
+        does both is ambiguous -- it is genuinely compatible with either model,
+        which is what velocyto's third category is for.
+        """
+        statuses: List[SplicingStatus] = []
+        for match in read_assignment.isoform_matches:
+            if match.assigned_gene_id is None:
+                continue
+            status = cls._match_status(match)
+            if status is not None:
+                statuses.append(status)
+        if not statuses:
+            return None
+        if all(st == SplicingStatus.unspliced for st in statuses):
+            return SplicingStatus.unspliced
+        if all(st == SplicingStatus.spliced for st in statuses):
+            return SplicingStatus.spliced
+        return SplicingStatus.ambiguous
+
     def add_read_info(self, read_assignment: Optional[ReadAssignment] = None) -> None:
         if read_assignment is None:
             return
         if read_assignment.assignment_type not in ACCEPTED_ASSIGNMENT_TYPES:
             return
 
+        status = self._read_status(read_assignment)
+        if status is None:
+            return
         gene_id = self._get_gene_id(read_assignment)
         if gene_id is None:
             return
@@ -144,13 +239,11 @@ class RNAVelocityCounter(AbstractCounter):
             return
 
         key = (group_id, gene_id)
-        if read_assignment.assignment_type in SPLICED_ASSIGNMENT_TYPES:
-            self.spliced[key] = self.spliced.get(key, 0) + 1
-        else:
-            self.unspliced[key] = self.unspliced.get(key, 0) + 1
+        tally = self._tallies[status]
+        tally[key] = tally.get(key, 0) + 1
 
     def dump(self) -> None:
-        all_keys = set(self.spliced.keys()) | set(self.unspliced.keys())
+        all_keys = set(self.spliced.keys()) | set(self.unspliced.keys()) | set(self.ambiguous.keys())
 
         # Write a one-line header for each per-chromosome fragment. merge_counts()
         # keeps the header of the first fragment and strips one line from every
@@ -166,9 +259,10 @@ class RNAVelocityCounter(AbstractCounter):
             for key in all_keys:
                 group_id, gene_id = key
                 writer.writerow([group_pool.get_str(group_id), gene_pool.get_str(gene_id),
-                                 self.spliced.get(key, 0), self.unspliced.get(key, 0)])
-        self.spliced.clear()
-        self.unspliced.clear()
+                                 self.spliced.get(key, 0), self.unspliced.get(key, 0),
+                                 self.ambiguous.get(key, 0)])
+        for tally in self._tallies.values():
+            tally.clear()
 
     def create_loom(self, counts_df: pd.DataFrame) -> None:
         import loompy  # lazy import, see note at top of module
@@ -183,6 +277,8 @@ class RNAVelocityCounter(AbstractCounter):
             (counts_df['spliced'], (gene_codes, cell_codes)), shape=shape)
         unspliced_matrix = sparse.coo_matrix(
             (counts_df['unspliced'], (gene_codes, cell_codes)), shape=shape)
+        ambiguous_matrix = sparse.coo_matrix(
+            (counts_df['ambiguous'], (gene_codes, cell_codes)), shape=shape)
 
         row_attrs = {'Gene': unique_genes.to_numpy()}
         col_attrs = {'CellID': unique_cells.to_numpy()}
@@ -199,6 +295,7 @@ class RNAVelocityCounter(AbstractCounter):
         with loompy.connect(loom_file) as ds:
             ds.layers['spliced'] = spliced_matrix
             ds.layers['unspliced'] = unspliced_matrix
+            ds.layers['ambiguous'] = ambiguous_matrix
         logger.info("RNA velocity counts are stored in %s and %s", self.output_file, loom_file)
 
     def finalize(self, args=None) -> None:
