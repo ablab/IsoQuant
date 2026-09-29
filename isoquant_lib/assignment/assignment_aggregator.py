@@ -10,7 +10,7 @@ import logging
 from isoquant_lib.utils.stats import EnumStats
 from isoquant_lib.quantification.long_read_counter import (
     ExonCounter,
-    JointExonCounter,
+    ExonUsageCounter,
     ExonSpliceSiteCounter,
     IntronCounter,
     IntronRetentionCounter,
@@ -152,8 +152,9 @@ class ReadAssignmentAggregator:
         exon_splice_site_counts_path = (sample.get_exon_splice_site_counts_file(chr_id)
                                         if chr_id else sample.out_exon_splice_site_counts_tsv)
         # string_pools=None means ungrouped counting
-        # region-based counts are the default "exon" output now
-        self.exon_counter = JointExonCounter(exon_counts_path)
+        # per-exon usage counts are the default "exon" output
+        self.exon_counter = ExonUsageCounter(exon_counts_path, delta=self.args.delta,
+                                             minimal_exon_overlap=self.args.minimal_exon_overlap)
         self.intron_counter = IntronCounter(intron_counts_path)
         self.exon_splice_site_counter = ExonSpliceSiteCounter(
             exon_splice_site_counts_path,
@@ -241,9 +242,10 @@ class ReadAssignmentAggregator:
             exon_out_file = f"{sample.out_exon_grouped_counts_tsv}_{strategy_name}"
             intron_out_file = f"{sample.out_intron_grouped_counts_tsv}_{strategy_name}"
             exon_splice_site_out_file = f"{sample.out_exon_splice_site_grouped_counts_tsv}_{strategy_name}"
-        # region-based counts are the default "exon" output now
-        exon_counter = JointExonCounter(exon_out_file,
-                                        string_pools=self.string_pools, group_index=group_idx)
+        # per-exon usage counts are the default "exon" output
+        exon_counter = ExonUsageCounter(exon_out_file, string_pools=self.string_pools, group_index=group_idx,
+                                        delta=self.args.delta,
+                                        minimal_exon_overlap=self.args.minimal_exon_overlap)
         intron_counter = IntronCounter(intron_out_file, string_pools=self.string_pools, group_index=group_idx)
         exon_splice_site_counter = ExonSpliceSiteCounter(
             exon_splice_site_out_file, string_pools=self.string_pools, group_index=group_idx,

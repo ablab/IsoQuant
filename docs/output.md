@@ -34,7 +34,7 @@ Requires `--analysis quantification`, which will be set by default.
 
 If `--analysis exon_quantification` is set, exon, splice junction and intron retention counts will be produced:
 
-* `SAMPLE_ID.exon_counts.tsv` - region-based exon counts: overlapping reference exons are grouped into regions, and each region reports per-variant inclusion counts plus one region-level exclusion count;
+* `SAMPLE_ID.exon_counts.tsv` - per-exon counts: number of reads including (fully or only one splice site), skipping, or using an alternative variant of each reference exon;
 * `SAMPLE_ID.exon_splice_site_counts.tsv` - exon splice-site counts: per-candidate full / left / right splice-site support and per-region exclusion / ambiguous counts, one row per feature and group;
 * `SAMPLE_ID.splice_junction_counts.tsv` - reference splice junction inclusion/exclusion read counts (previously named `SAMPLE_ID.intron_counts.tsv`);
 * `SAMPLE_ID.intron_retention_counts.tsv` - intron retention event counts per reference intron (same format as splice junction counts);

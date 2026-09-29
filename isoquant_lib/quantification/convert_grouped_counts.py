@@ -159,19 +159,22 @@ PROFILE_LINEAR_COLS = ['chr', 'start', 'end', 'strand', 'flags',
 
 
 def _load_profile_linear(input_linear_counts: str):
-    """Load 9-column exon/intron linear counts file into a DataFrame.
+    """Load exon/intron linear counts file into a DataFrame.
 
-    Adds a synthetic ``feature_id`` column as ``chr:start-end:strand``.
-    The ``flags`` (exon/intron type) column is preserved on the DataFrame
-    but ignored by downstream matrix conversion.
+    Only the first 9 columns are used; extra columns (e.g. the per-state
+    exon counts) are ignored. Adds a synthetic ``feature_id`` column as
+    ``chr:start-end:strand``. The ``flags`` (exon/intron type) column is
+    preserved on the DataFrame but ignored by downstream matrix conversion.
     """
-    cols = len(open(input_linear_counts).readline().strip().split('\t'))
-    if cols != 9:
-        logger.error("Unexpected number of columns in %s: %d (expected 9)" %
-                     (input_linear_counts, cols))
+    header = open(input_linear_counts).readline().rstrip('\n').split('\t')
+    if len(header) < len(PROFILE_LINEAR_COLS):
+        logger.error("Unexpected number of columns in %s: %d (expected at least %d)" %
+                     (input_linear_counts, len(header), len(PROFILE_LINEAR_COLS)))
         return None
+    extra_cols = ["extra_%d" % i for i in range(len(header) - len(PROFILE_LINEAR_COLS))]
     df = pandas.read_csv(input_linear_counts, delimiter='\t', header=None, skiprows=1,
-                         keep_default_na=False, names=PROFILE_LINEAR_COLS,
+                         keep_default_na=False, names=PROFILE_LINEAR_COLS + extra_cols,
+                         usecols=PROFILE_LINEAR_COLS,
                          dtype={'chr': str, 'start': int, 'end': int, 'strand': str,
                                 'flags': str, 'gene_ids': str, 'group_id': str,
                                 'include_counts': float, 'exclude_counts': float})
