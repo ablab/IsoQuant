@@ -7,7 +7,12 @@
 import pytest
 import tempfile
 import os
-from isoquant_lib.utils.string_pools import StringPool, StringPoolManager
+from isoquant_lib.utils.string_pools import (
+    StringPool,
+    StringPoolManager,
+    UNASSIGNED_GROUP_ID,
+    UNASSIGNED_GROUP_NAME,
+)
 
 
 class TestStringPool:
@@ -487,23 +492,99 @@ class TestStringPoolManager:
         assert recovered == group_strings
 
     def test_read_group_to_ids_with_none(self):
-        """Test that None values are handled correctly."""
+        """A None value is interned under UNASSIGNED_GROUP_NAME, not left as -1.
+
+        Group ids must stay a closed set of valid pool indices: a negative id
+        cannot be serialized (write_int is unsigned) and indexes the pool list
+        from the end on lookup, silently naming a real group.
+        """
         manager = StringPoolManager()
 
         manager.set_group_spec_pool_type(0, 'file_name')
         manager.file_name_pool.add("sample1")
 
-        # Convert with None value
         group_strings = ["sample1", None]
         ids = manager.read_group_to_ids(group_strings)
 
         assert ids[0] == manager.file_name_pool.get_int("sample1")
-        assert ids[1] == -1  # None -> -1
+        assert ids[1] >= 0, "an unset value must not produce a negative id"
 
-        # Convert back
-        recovered = manager.read_group_from_ids(ids)
-        assert recovered[0] == "sample1"
-        assert recovered[1] is None  # -1 -> None
+        # It resolves to the same name every grouper falls back to.
+        assert manager.resolve_read_group(1, ids[1]) == UNASSIGNED_GROUP_NAME
+        assert manager.read_group_from_ids(ids)[0] == "sample1"
+
+    def test_unset_group_id_is_serializable(self):
+        """write_int is unsigned; a negative id would abort the run.
+
+        ReadAssignment.serialize writes read_group_ids with write_int, so an
+        unset value has to survive that. Pins the OverflowError this design
+        removes.
+        """
+        import io
+        from isoquant_lib.utils.serialization import write_int, read_int
+
+        manager = StringPoolManager()
+        manager.set_group_spec_pool_type(0, 'dynamic')
+        ids = manager.read_group_to_ids([None])
+
+        buf = io.BytesIO()
+        write_int(ids[0], buf)          # must not raise OverflowError
+        buf.seek(0)
+        assert read_int(buf) == ids[0]
+
+        with pytest.raises(OverflowError):
+            write_int(UNASSIGNED_GROUP_ID, io.BytesIO())
+
+    def test_resolve_read_group_valid_id(self):
+        manager = StringPoolManager()
+        manager.set_group_spec_pool_type(0, 'file_name')
+        gid = manager.file_name_pool.get_int("sample1")
+        assert manager.resolve_read_group(0, gid) == "sample1"
+
+    def test_resolve_read_group_sentinel(self):
+        """The legacy -1 sentinel resolves to the fallback name, not a real group."""
+        manager = StringPoolManager()
+        manager.set_group_spec_pool_type(0, 'file_name')
+        for name in ("sample1", "sample2", "sample3"):
+            manager.file_name_pool.add(name)
+
+        resolved = manager.resolve_read_group(0, UNASSIGNED_GROUP_ID)
+        assert resolved == UNASSIGNED_GROUP_NAME
+        assert resolved != "sample3", "must not index the pool list from the end"
+
+    def test_resolve_read_group_out_of_range_degrades(self):
+        """A stale id must not abort a finished run."""
+        manager = StringPoolManager()
+        manager.set_group_spec_pool_type(0, 'file_name')
+        manager.file_name_pool.add("sample1")
+
+        assert manager.resolve_read_group(0, 99) == "99"
+
+    def test_resolve_read_group_warns_once_per_spec(self, caplog):
+        manager = StringPoolManager()
+        manager.set_group_spec_pool_type(0, 'file_name')
+        manager.set_group_spec_pool_type(1, 'file_name')
+        manager.file_name_pool.add("sample1")
+
+        with caplog.at_level("WARNING"):
+            for gid in (50, 51, 52):
+                manager.resolve_read_group(0, gid)
+            manager.resolve_read_group(1, 50)
+        warnings = [r for r in caplog.records if "not found in pool" in r.message]
+        assert len(warnings) == 2, "one warning per spec, not per occurrence"
+
+    def test_read_group_from_ids_keeps_none_for_sentinel(self):
+        """The property contract differs from the display contract on purpose.
+
+        ReadAssignment.read_group must round-trip: None -> ids -> None, so that
+        re-assigning the property reproduces the same ids. Output rows use
+        resolve_read_group() instead, which never yields None.
+        """
+        manager = StringPoolManager()
+        manager.set_group_spec_pool_type(0, 'file_name')
+        manager.file_name_pool.add("sample1")
+
+        assert manager.read_group_from_ids([UNASSIGNED_GROUP_ID]) == [None]
 
     def test_read_group_to_ids_empty(self):
         """Test empty list handling."""

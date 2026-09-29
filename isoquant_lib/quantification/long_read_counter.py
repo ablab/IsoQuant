@@ -191,9 +191,47 @@ class AbstractCounter:
         open(self.output_file, "w").close()
         self.output_stats_file_name = None
         self.usable_file_name = None
+        # Grouped subclasses overwrite these right after calling us; the defaults
+        # keep the group-name helpers below well defined for ungrouped counters.
+        self.string_pools = None
+        self.group_index: int = 0
 
     def get_output_file_handler(self):
         return open(self.output_file, "a")
+
+    # ------------------------------------------------- read group names
+    # Two distinct contracts, deliberately separate methods:
+    #
+    #   _get_group_name(id)   resolution -- the id was *observed* on a read, so it
+    #                         may be unassigned or stale. Degrades, never raises.
+    #                         Delegates to StringPoolManager.resolve_read_group,
+    #                         the single owner of what a group id means.
+    #   _get_ordered_groups() enumeration -- walks the pool by position, so every
+    #   _get_num_groups()     index is valid by construction. A miss here is a real
+    #                         bug and is left to raise.
+    #
+    # Defined once here rather than per counter: five counter classes used to carry
+    # identical copies, and they drifted out of sync with resolve_read_group's
+    # guards (a negative id silently named the pool's last group).
+
+    def _get_group_name(self, group_id: int) -> str:
+        """Display name for a group id observed on a read."""
+        if self.string_pools is None:
+            return AbstractReadGrouper.default_group_id
+        return self.string_pools.resolve_read_group(self.group_index, group_id)
+
+    def _get_ordered_groups(self) -> list:
+        """All group names in pool order."""
+        if self.string_pools is None:
+            return [AbstractReadGrouper.default_group_id]
+        pool = self.string_pools.get_read_group_pool(self.group_index)
+        return [pool.get_str(i) for i in range(len(pool))]
+
+    def _get_num_groups(self) -> int:
+        """Number of groups in the pool."""
+        if self.string_pools is None:
+            return 1
+        return len(self.string_pools.get_read_group_pool(self.group_index))
 
     def add_read_info(self, read_assignment):
         raise NotImplementedError()
@@ -377,27 +415,6 @@ class AssignedFeatureCounter(AbstractCounter):
         else:
             self.dump_grouped(all_features)
         self.dump_usable()
-
-    def _get_ordered_groups(self):
-        """Get ordered list of group names from string pool."""
-        if self.string_pools is None:
-            return [AbstractReadGrouper.default_group_id]
-        pool = self.string_pools.get_read_group_pool(self.group_index)
-        return [pool.get_str(i) for i in range(len(pool))]
-
-    def _get_group_name(self, group_id: int) -> str:
-        """Get group name from pool for a group ID."""
-        if self.string_pools is None:
-            return AbstractReadGrouper.default_group_id
-        pool = self.string_pools.get_read_group_pool(self.group_index)
-        return pool.get_str(group_id)
-
-    def _get_num_groups(self) -> int:
-        """Get number of groups from pool."""
-        if self.string_pools is None:
-            return 1
-        pool = self.string_pools.get_read_group_pool(self.group_index)
-        return len(pool)
 
     def dump_ungrouped(self, all_features):
         with self.get_output_file_handler() as output_file:
@@ -587,13 +604,6 @@ class ProfileFeatureCounter(AbstractCounter):
                 if feature_id not in self.feature_name_dict:
                     self.feature_name_dict[feature_id] = feature_property_map[i].to_str()
 
-    def _get_group_name(self, group_id: int) -> str:
-        """Get group name from pool for a group ID."""
-        if self.string_pools is None:
-            return AbstractReadGrouper.default_group_id
-        pool = self.string_pools.get_read_group_pool(self.group_index)
-        return pool.get_str(group_id)
-
     def dump(self):
         with open(self.output_counts_file_name, "w") as f:
             f.write(FeatureInfo.header() + "\tgroup_id\tinclude_counts\texclude_counts\n")
@@ -753,12 +763,6 @@ class JointExonCounter(AbstractCounter):
                 if row_key not in self.feature_row_prefix:
                     self.feature_row_prefix[row_key] = "%s\t%d\t%d\t%s\t.\t.\t%s\texclusion" % (
                         region.chr_id, region.start, region.end, region.strand, read_gene)
-
-    def _get_group_name(self, group_id: int) -> str:
-        if self.string_pools is None:
-            return AbstractReadGrouper.default_group_id
-        pool = self.string_pools.get_read_group_pool(self.group_index)
-        return pool.get_str(group_id)
 
     def dump(self):
         with open(self.output_counts_file_name, "w") as f:
@@ -979,11 +983,6 @@ class ExonSpliceSiteCounter(AbstractCounter):
             self._bump(self._get_cand_bucket(rec, cand, side), group_id, read_id)
         else:
             self._bump(rec["amb"], group_id, read_id)
-
-    def _get_group_name(self, group_id: int) -> str:
-        if self.string_pools is None:
-            return AbstractReadGrouper.default_group_id
-        return self.string_pools.get_read_group_pool(self.group_index).get_str(group_id)
 
     def _header(self) -> str:
         cols = ["region_gene_candidate", "n_full", "n_left", "n_right", "group_id"]
