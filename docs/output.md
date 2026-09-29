@@ -69,12 +69,19 @@ In single-cell and spatial modes, when reads are grouped by cell barcode
 (`--read_group barcode`, `barcode_spot` or `barcode_barcode`) and an annotation is given,
 IsoQuant also writes spliced/unspliced counts per cell and gene for downstream RNA velocity analysis:
 
-* `SAMPLE_ID.RNA_velocity_grouped_<strategy>` - tab-separated `cell_id`, `gene_id`, `spliced`, `unspliced`;
+* `SAMPLE_ID.RNA_velocity_grouped_<strategy>` - tab-separated `cell_id`, `gene_id`, `spliced`, `unspliced`, `ambiguous`;
 * `SAMPLE_ID.RNA_velocity_grouped_<strategy>.loom` - the same counts as a velocyto-style loom file
-  with `spliced` and `unspliced` layers (genes as rows, cells as columns), readable by scVelo.
+  with `spliced`, `unspliced` and `ambiguous` layers (genes as rows, cells as columns), readable by scVelo.
 
-Reads consistent with an annotated isoform are counted as spliced, inconsistent ones as unspliced.
-Reads with no detected barcode and reads that could not be attributed to a gene are not counted.
+A read is counted as **unspliced** when it carries intronic sequence: either it lies inside an intron,
+or it retains one (an intron retention event against the isoform it matched; partial retention needs at
+least 50 intronic bases). A read matching only mature isoforms is **spliced**. A read that looks retained
+against one isoform and mature against another is **ambiguous**.
+
+Note that disagreeing with the annotation does not by itself make a read unspliced - a read with a novel
+splice site or an alternative TSS is still a spliced molecule. Reads with no detected barcode, reads that
+could not be attributed to a gene, and reads that overlap a gene body without resembling any isoform are
+not counted.
 
 
 #### Grouped counts in matrix formats

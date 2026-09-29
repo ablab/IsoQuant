@@ -4,10 +4,10 @@
 # See file LICENSE for details.
 ############################################################################
 
-"""Unit tests for the RNA velocity spliced / unspliced counter.
+"""Unit tests for the RNA velocity spliced / unspliced / ambiguous counter.
 
-These pin the read-acceptance rules (which assignment types count as spliced
-vs unspliced, and which reads are dropped outright), the per-chromosome TSV
+These pin the splicing verdict (which match events and classifications make a
+read unspliced, and which reads are dropped outright), the per-chromosome TSV
 fragment layout that merge_counts() concatenates, and the loom export.
 """
 
@@ -16,8 +16,16 @@ from types import SimpleNamespace
 
 import pytest
 
-from isoquant_lib.assignment.isoform_assignment import ReadAssignmentType
-from isoquant_lib.quantification.rna_velocity_counter import RNAVelocityCounter
+from isoquant_lib.assignment.isoform_assignment import (
+    MatchClassification,
+    MatchEventSubtype,
+    ReadAssignmentType,
+)
+from isoquant_lib.quantification.rna_velocity_counter import (
+    INTRON_RETENTION_EVENTS,
+    RNAVelocityCounter,
+    SplicingStatus,
+)
 
 
 class FakePool:
@@ -37,16 +45,23 @@ class FakeStringPools:
         return self._group_pool
 
 
+class FakeEvent:
+    def __init__(self, event_type):
+        self.event_type = event_type
+
+
 class FakeMatch:
-    def __init__(self, gene_id):
+    def __init__(self, gene_id, events=(), classification=MatchClassification.full_splice_match):
         self.assigned_gene_id = gene_id
+        self.match_subclassifications = [FakeEvent(e) for e in events]
+        self.match_classification = classification
 
 
 class FakeAssignment:
-    def __init__(self, assignment_type, gene_ids, read_group_ids):
+    def __init__(self, assignment_type, matches, read_group_ids=(0,)):
         self.assignment_type = assignment_type
-        self.isoform_matches = [FakeMatch(g) for g in gene_ids]
-        self.read_group_ids = read_group_ids
+        self.isoform_matches = list(matches)
+        self.read_group_ids = list(read_group_ids)
 
 
 def make_counter(tmp_path, group_index=0, cells=("CELL1", "CELL2")):
@@ -63,38 +78,136 @@ def read_rows(counter):
     return sorted(tuple(l.split("\t")) for l in lines[1:])
 
 
-SPLICED_TYPES = [ReadAssignmentType.unique,
-                 ReadAssignmentType.unique_minor_difference,
-                 ReadAssignmentType.ambiguous]
-UNSPLICED_TYPES = [ReadAssignmentType.inconsistent,
-                   ReadAssignmentType.inconsistent_ambiguous]
-IGNORED_TYPES = [ReadAssignmentType.noninformative,
-                 ReadAssignmentType.intergenic,
-                 ReadAssignmentType.inconsistent_non_intronic,
-                 ReadAssignmentType.inconsistent_genic,
-                 ReadAssignmentType.inconsistent_multigenic]
+def one_row(counter):
+    rows = read_rows(counter)
+    assert len(rows) == 1, rows
+    return rows[0]
 
 
-@pytest.mark.parametrize("assignment_type", SPLICED_TYPES)
-def test_consistent_reads_count_as_spliced(tmp_path, assignment_type):
+# --------------------------------------------------------------- splicing verdict
+
+@pytest.mark.parametrize("event", sorted(INTRON_RETENTION_EVENTS, key=lambda e: e.name))
+def test_intron_retention_events_make_a_read_unspliced(tmp_path, event):
     counter = make_counter(tmp_path)
-    counter.add_read_info(FakeAssignment(assignment_type, [0], [0]))
+    counter.add_read_info(FakeAssignment(ReadAssignmentType.inconsistent,
+                                         [FakeMatch(0, events=[event])]))
     counter.dump()
-    assert read_rows(counter) == [("CELL1", "GENE_A", "1", "0")]
+    assert one_row(counter) == ("CELL1", "GENE_A", "0", "1", "0")
 
 
-@pytest.mark.parametrize("assignment_type", UNSPLICED_TYPES)
-def test_inconsistent_reads_count_as_unspliced(tmp_path, assignment_type):
+def test_incomplete_intron_retention_is_included():
+    # The 50 bp floor lives in junction_comparator (minor_exon_extension), so the
+    # counter takes these events at face value; pin that they are in the set.
+    assert MatchEventSubtype.incomplete_intron_retention_left in INTRON_RETENTION_EVENTS
+    assert MatchEventSubtype.incomplete_intron_retention_right in INTRON_RETENTION_EVENTS
+
+
+def test_fake_micro_intron_retention_is_not_unspliced(tmp_path):
+    # An alignment artifact (is_alignment_artifact), not real intronic coverage.
+    assert MatchEventSubtype.fake_micro_intron_retention not in INTRON_RETENTION_EVENTS
     counter = make_counter(tmp_path)
-    counter.add_read_info(FakeAssignment(assignment_type, [0], [0]))
+    counter.add_read_info(FakeAssignment(
+        ReadAssignmentType.unique_minor_difference,
+        [FakeMatch(0, events=[MatchEventSubtype.fake_micro_intron_retention])]))
     counter.dump()
-    assert read_rows(counter) == [("CELL1", "GENE_A", "0", "1")]
+    assert one_row(counter) == ("CELL1", "GENE_A", "1", "0", "0")
 
 
-@pytest.mark.parametrize("assignment_type", IGNORED_TYPES)
+def test_genic_intron_read_is_unspliced_despite_noninformative(tmp_path):
+    # The pre-mRNA case: assignment_type stays noninformative, the gene is only
+    # recorded on genic_intron matches. This is the read class the old
+    # consistency-based rule dropped entirely.
+    counter = make_counter(tmp_path)
+    counter.add_read_info(FakeAssignment(
+        ReadAssignmentType.noninformative,
+        [FakeMatch(0, classification=MatchClassification.genic_intron)]))
+    counter.dump()
+    assert one_row(counter) == ("CELL1", "GENE_A", "0", "1", "0")
+
+
+def test_noninformative_without_genic_intron_is_dropped(tmp_path):
+    # Overlaps the gene body but resembles no isoform -- undecidable, not unspliced.
+    counter = make_counter(tmp_path)
+    counter.add_read_info(FakeAssignment(
+        ReadAssignmentType.noninformative,
+        [FakeMatch(0, classification=MatchClassification.genic)]))
+    counter.dump()
+    assert read_rows(counter) == []
+
+
+@pytest.mark.parametrize("assignment_type", [
+    ReadAssignmentType.unique,
+    ReadAssignmentType.unique_minor_difference,
+    ReadAssignmentType.ambiguous,
+    ReadAssignmentType.inconsistent,
+    ReadAssignmentType.inconsistent_ambiguous,
+    ReadAssignmentType.inconsistent_non_intronic,
+])
+def test_matched_reads_without_intronic_evidence_are_spliced(tmp_path, assignment_type):
+    # The point of the rewrite: disagreeing with the annotation does not make a
+    # read unspliced. A novel splice site is still a spliced molecule.
+    counter = make_counter(tmp_path)
+    counter.add_read_info(FakeAssignment(
+        assignment_type,
+        [FakeMatch(0, events=[MatchEventSubtype.alt_left_site_novel])]))
+    counter.dump()
+    assert one_row(counter) == ("CELL1", "GENE_A", "1", "0", "0")
+
+
+def test_mixed_verdicts_are_ambiguous(tmp_path):
+    # Retained against one isoform, mature against another.
+    counter = make_counter(tmp_path)
+    counter.add_read_info(FakeAssignment(ReadAssignmentType.inconsistent_ambiguous, [
+        FakeMatch(0, events=[MatchEventSubtype.intron_retention]),
+        FakeMatch(0, events=[MatchEventSubtype.fsm]),
+    ]))
+    counter.dump()
+    assert one_row(counter) == ("CELL1", "GENE_A", "0", "0", "1")
+
+
+def test_all_matches_unspliced_is_not_ambiguous(tmp_path):
+    counter = make_counter(tmp_path)
+    counter.add_read_info(FakeAssignment(ReadAssignmentType.inconsistent_ambiguous, [
+        FakeMatch(0, events=[MatchEventSubtype.intron_retention]),
+        FakeMatch(0, events=[MatchEventSubtype.unspliced_intron_retention]),
+    ]))
+    counter.dump()
+    assert one_row(counter) == ("CELL1", "GENE_A", "0", "1", "0")
+
+
+def test_undecidable_matches_do_not_dilute_a_verdict(tmp_path):
+    # A genic match carries no splicing signal; it must not turn an otherwise
+    # unspliced read into an ambiguous one.
+    counter = make_counter(tmp_path)
+    counter.add_read_info(FakeAssignment(ReadAssignmentType.inconsistent, [
+        FakeMatch(0, events=[MatchEventSubtype.intron_retention]),
+        FakeMatch(0, classification=MatchClassification.genic),
+    ]))
+    counter.dump()
+    assert one_row(counter) == ("CELL1", "GENE_A", "0", "1", "0")
+
+
+def test_match_status_helper():
+    assert RNAVelocityCounter._match_status(
+        FakeMatch(0, events=[MatchEventSubtype.intron_retention])) == SplicingStatus.unspliced
+    assert RNAVelocityCounter._match_status(
+        FakeMatch(0, classification=MatchClassification.genic_intron)) == SplicingStatus.unspliced
+    assert RNAVelocityCounter._match_status(
+        FakeMatch(0, events=[MatchEventSubtype.fsm])) == SplicingStatus.spliced
+    assert RNAVelocityCounter._match_status(
+        FakeMatch(0, classification=MatchClassification.genic)) is None
+
+
+# --------------------------------------------------------------- dropped reads
+
+@pytest.mark.parametrize("assignment_type", [
+    ReadAssignmentType.intergenic,
+    ReadAssignmentType.discarded,
+    ReadAssignmentType.suspended,
+])
 def test_unaccepted_types_are_dropped(tmp_path, assignment_type):
     counter = make_counter(tmp_path)
-    counter.add_read_info(FakeAssignment(assignment_type, [0], [0]))
+    counter.add_read_info(FakeAssignment(assignment_type, [FakeMatch(0)]))
     counter.dump()
     assert read_rows(counter) == []
 
@@ -110,7 +223,8 @@ def test_read_without_barcode_is_dropped(tmp_path):
     # Reads whose barcode was not detected carry no group id at all; indexing
     # read_group_ids unconditionally used to raise IndexError inside the worker.
     counter = make_counter(tmp_path)
-    counter.add_read_info(FakeAssignment(ReadAssignmentType.unique, [0], []))
+    counter.add_read_info(FakeAssignment(ReadAssignmentType.unique, [FakeMatch(0)],
+                                         read_group_ids=[]))
     counter.dump()
     assert read_rows(counter) == []
 
@@ -119,7 +233,8 @@ def test_missing_group_for_this_strategy_is_dropped(tmp_path):
     # read_group_to_ids stores -1 when a strategy produced no value; -1 would
     # index the pool list from the end and silently pick a real barcode.
     counter = make_counter(tmp_path)
-    counter.add_read_info(FakeAssignment(ReadAssignmentType.unique, [0], [-1]))
+    counter.add_read_info(FakeAssignment(ReadAssignmentType.unique, [FakeMatch(0)],
+                                         read_group_ids=[-1]))
     counter.dump()
     assert read_rows(counter) == []
 
@@ -128,44 +243,51 @@ def test_read_without_gene_is_dropped(tmp_path):
     # match_inconsistent's quick_mode exit yields an IsoformMatch with no gene;
     # it used to emit a row with an empty gene_id column.
     counter = make_counter(tmp_path)
-    counter.add_read_info(FakeAssignment(ReadAssignmentType.inconsistent, [None], [0]))
+    counter.add_read_info(FakeAssignment(ReadAssignmentType.inconsistent, [FakeMatch(None)]))
     counter.dump()
     assert read_rows(counter) == []
 
 
 def test_first_named_gene_is_used(tmp_path):
     counter = make_counter(tmp_path)
-    counter.add_read_info(FakeAssignment(ReadAssignmentType.unique, [None, 1], [0]))
+    counter.add_read_info(FakeAssignment(ReadAssignmentType.unique,
+                                         [FakeMatch(None), FakeMatch(1)]))
     counter.dump()
-    assert read_rows(counter) == [("CELL1", "GENE_B", "1", "0")]
+    assert one_row(counter) == ("CELL1", "GENE_B", "1", "0", "0")
 
 
 def test_group_index_selects_the_right_strategy(tmp_path):
     counter = make_counter(tmp_path, group_index=1)
-    counter.add_read_info(FakeAssignment(ReadAssignmentType.unique, [0], [0, 1]))
+    counter.add_read_info(FakeAssignment(ReadAssignmentType.unique, [FakeMatch(0)],
+                                         read_group_ids=[0, 1]))
     counter.dump()
-    assert read_rows(counter) == [("CELL2", "GENE_A", "1", "0")]
+    assert one_row(counter) == ("CELL2", "GENE_A", "1", "0", "0")
 
+
+# --------------------------------------------------------------- output plumbing
 
 def test_counts_accumulate_per_cell_and_gene(tmp_path):
     counter = make_counter(tmp_path)
     for _ in range(3):
-        counter.add_read_info(FakeAssignment(ReadAssignmentType.unique, [0], [0]))
-    counter.add_read_info(FakeAssignment(ReadAssignmentType.inconsistent, [0], [0]))
-    counter.add_read_info(FakeAssignment(ReadAssignmentType.unique, [1], [1]))
+        counter.add_read_info(FakeAssignment(ReadAssignmentType.unique, [FakeMatch(0)]))
+    counter.add_read_info(FakeAssignment(
+        ReadAssignmentType.inconsistent,
+        [FakeMatch(0, events=[MatchEventSubtype.intron_retention])]))
+    counter.add_read_info(FakeAssignment(ReadAssignmentType.unique, [FakeMatch(1)],
+                                         read_group_ids=[1]))
     counter.dump()
-    assert read_rows(counter) == [("CELL1", "GENE_A", "3", "1"),
-                                  ("CELL2", "GENE_B", "1", "0")]
+    assert read_rows(counter) == [("CELL1", "GENE_A", "3", "1", "0"),
+                                  ("CELL2", "GENE_B", "1", "0", "0")]
 
 
 def test_dump_clears_state(tmp_path):
     # dump() is called once per chromosome in the worker, but a second dump must
     # not re-emit the same counts into the fragment.
     counter = make_counter(tmp_path)
-    counter.add_read_info(FakeAssignment(ReadAssignmentType.unique, [0], [0]))
+    counter.add_read_info(FakeAssignment(ReadAssignmentType.unique, [FakeMatch(0)]))
     counter.dump()
     counter.dump()
-    assert read_rows(counter) == [("CELL1", "GENE_A", "1", "0")]
+    assert one_row(counter) == ("CELL1", "GENE_A", "1", "0", "0")
 
 
 def test_finalize_on_empty_output_does_not_fail(tmp_path):
@@ -179,26 +301,32 @@ def test_finalize_writes_loom_layers(tmp_path):
     loompy = pytest.importorskip("loompy")
     counter = make_counter(tmp_path)
     for _ in range(2):
-        counter.add_read_info(FakeAssignment(ReadAssignmentType.unique, [0], [0]))
-    counter.add_read_info(FakeAssignment(ReadAssignmentType.inconsistent, [0], [0]))
-    counter.add_read_info(FakeAssignment(ReadAssignmentType.ambiguous, [1], [1]))
+        counter.add_read_info(FakeAssignment(ReadAssignmentType.unique, [FakeMatch(0)]))
+    counter.add_read_info(FakeAssignment(
+        ReadAssignmentType.inconsistent,
+        [FakeMatch(0, events=[MatchEventSubtype.intron_retention])]))
+    counter.add_read_info(FakeAssignment(ReadAssignmentType.inconsistent_ambiguous, [
+        FakeMatch(0, events=[MatchEventSubtype.intron_retention]),
+        FakeMatch(0, events=[MatchEventSubtype.fsm]),
+    ]))
+    counter.add_read_info(FakeAssignment(ReadAssignmentType.ambiguous, [FakeMatch(1)],
+                                         read_group_ids=[1]))
     counter.dump()
     counter.finalize()
 
     loom_file = counter.output_file + ".loom"
     assert os.path.exists(loom_file)
     with loompy.connect(loom_file) as ds:
-        assert set(ds.layers.keys()) == {"", "spliced", "unspliced"}
+        assert set(ds.layers.keys()) == {"", "spliced", "unspliced", "ambiguous"}
         genes = list(ds.ra.Gene)
         cells = list(ds.ca.CellID)
-        spliced = ds.layers["spliced"][:, :]
-        unspliced = ds.layers["unspliced"][:, :]
         i, j = genes.index("GENE_A"), cells.index("CELL1")
-        assert spliced[i][j] == 2
-        assert unspliced[i][j] == 1
+        assert ds.layers["spliced"][i][j] == 2
+        assert ds.layers["unspliced"][i][j] == 1
+        assert ds.layers["ambiguous"][i][j] == 1
         i, j = genes.index("GENE_B"), cells.index("CELL2")
-        assert spliced[i][j] == 1
-        assert unspliced[i][j] == 0
+        assert ds.layers["spliced"][i][j] == 1
+        assert ds.layers["unspliced"][i][j] == 0
 
 
 def test_finalize_sums_duplicate_rows_across_fragments(tmp_path):
@@ -206,10 +334,11 @@ def test_finalize_sums_duplicate_rows_across_fragments(tmp_path):
     loompy = pytest.importorskip("loompy")
     counter = make_counter(tmp_path)
     with open(counter.output_file, "w") as f:
-        f.write("#cell_id\tgene_id\tspliced\tunspliced\n")
-        f.write("CELL1\tGENE_A\t2\t1\n")
-        f.write("CELL1\tGENE_A\t3\t4\n")
+        f.write("#cell_id\tgene_id\tspliced\tunspliced\tambiguous\n")
+        f.write("CELL1\tGENE_A\t2\t1\t1\n")
+        f.write("CELL1\tGENE_A\t3\t4\t2\n")
     counter.finalize()
     with loompy.connect(counter.output_file + ".loom") as ds:
         assert ds.layers["spliced"][0][0] == 5
         assert ds.layers["unspliced"][0][0] == 5
+        assert ds.layers["ambiguous"][0][0] == 3
