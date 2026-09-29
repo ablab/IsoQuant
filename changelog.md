@@ -1,5 +1,9 @@
 # IsoQuant changelog
 
+## IsoQuant 4.0.1 (not released yet)
+
+- Reworked exon counts (`exon_counts.tsv`): each exon is now quantified independently with inclusion, skipping and alternative usage read counts, instead of region-based counts ([#426](https://github.com/ablab/IsoQuant/discussions/426)).
+
 ## Isoquant 4.0.0, 25 July 2026
 
 Major update with new functionality and output formats.

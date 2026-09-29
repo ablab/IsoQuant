@@ -6,14 +6,17 @@
 ############################################################################
 
 import logging
+from bisect import bisect_left, bisect_right
 from collections import defaultdict, OrderedDict
 from enum import Enum, unique
+from functools import partial
 
 from isoquant_lib.assignment.isoform_assignment import (
     MatchEventSubtype,
     ReadAssignmentType,
 )
-from isoquant_lib.common import junctions_from_blocks
+from isoquant_lib.assignment.long_read_profiles import NonOverlappingFeaturesProfileConstructor
+from isoquant_lib.common import junctions_from_blocks, overlaps_at_least_when_overlap
 from isoquant_lib.gene_info import FeatureInfo
 from isoquant_lib.assignment.read_groups import AbstractReadGrouper
 from .convert_grouped_counts import (
@@ -680,33 +683,37 @@ class ExonCounter(ProfileFeatureCounter):
                                         read_assignment.gene_info.exon_property_map, group_id)
 
 
-# Joint exon counter: groups overlapping annotated exons into regions.
-# Per region with N members, dumps N inclusion features + 1 region-exclusion feature.
-# A read either:
-#   - selects one (or more) inclusion variant (any profile[i] == +1), or
-#   - skips the entire region (all profile[i] == -1) → +1 to region exclusion, or
-#   - is ignored (any profile[i] == 0, i.e., insufficient info).
-class JointExonCounter(AbstractCounter):
-    def __init__(self, output_prefix, string_pools=None, group_index: int = 0):
-        AbstractCounter.__init__(self, output_prefix, string_pools is None)
-        self.string_pools = string_pools
-        self.group_index = group_index
-        # inclusion_counter[exon FeatureInfo.id] -> IncrementalDict(group_id -> count)
-        self.inclusion_counter = defaultdict(lambda: IncrementalDict(int))
-        # exclusion_counter[ExonRegion.id] -> IncrementalDict(group_id -> count)
-        self.exclusion_counter = defaultdict(lambda: IncrementalDict(int))
-        # ordered by first-seen; key = ("inc", exon_feature_id) or ("exc", region_id)
-        # value = preformatted row prefix (chr, region_start, region_end, strand, exon_start, exon_end, kind)
-        self.feature_row_prefix = OrderedDict()
-        self.encountered_group_ids = set()
+# Per-read exon states for ExonUsageCounter, indices into per-(exon, gene, group) count vectors.
+EXON_FULL, EXON_LEFT, EXON_RIGHT, EXON_SKIP, EXON_ALT = range(5)
+
+
+# Per-exon usage counts: every annotated exon is classified independently for each read as
+#   - full: a read exon matches both exon boundaries; for a transcript-terminal exon the read
+#     may start / end inside it (only the internal splice site has to match);
+#   - left / right: only the exon's left / right splice site is confirmed, the read starts / ends inside the exon;
+#   - skip: the exon lies within a read intron (all its split-exon segments are absent from the read);
+#   - alt: a read exon overlaps the exon, but with different boundaries (alternative splice site, intron retention).
+# include_counts = full + left + right, exclude_counts = skip, so include / (include + exclude) is the exon PSI.
+class ExonUsageCounter(ProfileFeatureCounter):
+    def __init__(self, output_prefix, string_pools=None, group_index: int = 0,
+                 delta: int = 0, minimal_exon_overlap: int = 5):
+        ProfileFeatureCounter.__init__(self, output_prefix, string_pools, group_index)
+        self.delta: int = delta
+        self.segment_comparator = partial(overlaps_at_least_when_overlap, delta=minimal_exon_overlap)
+        # (exon feature id, gene id) -> {group_id: [full, left, right, skip, alt]}
+        self.exon_counts: dict = defaultdict(dict)
+        # (exon feature id, gene id) -> feature columns, in first-seen order
+        self.exon_row_prefix: OrderedDict = OrderedDict()
+
+    def _feature_type(self) -> str:
+        return "exon"
 
     def add_read_info(self, read_assignment):
-        if not ProfileFeatureCounter.is_valid(read_assignment):
-            return
-        if not ProfileFeatureCounter.is_assigned_to_gene(read_assignment):
+        if not ProfileFeatureCounter.is_valid(read_assignment) or not ProfileFeatureCounter.is_assigned_to_gene(read_assignment):
             return
         gene_info = read_assignment.gene_info
-        if not getattr(gene_info, "exon_overlap_regions", None):
+        index = gene_info.get_exon_usage_index()
+        if index is None:
             return
         read_gene = None
         for m in read_assignment.isoform_matches:
@@ -715,73 +722,106 @@ class JointExonCounter(AbstractCounter):
                 break
         if read_gene is None:
             return
-        if self.ignore_read_groups:
-            group_id = 0
-        elif not read_assignment.read_group_ids:
+        blocks = read_assignment.corrected_exons if read_assignment.corrected_exons else read_assignment.exons
+        if not blocks or len(blocks) < 2:
+            # no splice sites, nothing to say about exon usage
+            return
+        if self.ignore_read_groups or not read_assignment.read_group_ids:
             group_id = 0
         else:
             group_id = read_assignment.read_group_ids[self.group_index]
-        self._classify(read_assignment.exon_gene_profile, read_assignment.strand,
-                       gene_info, group_id, read_gene)
-
-    def _classify(self, profile, read_strand, gene_info, group_id, read_gene):
         self.encountered_group_ids.add(group_id)
-        exon_features = gene_info.exon_profiles.features
+
         property_map = gene_info.exon_property_map
-        for region in gene_info.exon_overlap_regions:
-            members = region.member_exon_indices
-            if not members:
+        exon_features = gene_info.exon_profiles.features
+        for exon_index, state in self._classify(blocks, index, exon_features):
+            exon_property = property_map[exon_index]
+            if read_assignment.strand not in exon_property.strand or read_gene not in exon_property.gene_ids:
                 continue
-            # all members share strand by construction
-            if read_strand not in property_map[members[0]].strand:
+            key = (exon_property.id, read_gene)
+            if key not in self.exon_row_prefix:
+                self.exon_row_prefix[key] = "%s\t%d\t%d\t%s\t%s\t%s" % (
+                    exon_property.chr_id, exon_property.start, exon_property.end,
+                    exon_property.strand, exon_property.type, read_gene)
+            group_counts = self.exon_counts[key]
+            state_counts = group_counts.get(group_id)
+            if state_counts is None:
+                state_counts = [0] * 5
+                group_counts[group_id] = state_counts
+            state_counts[state] += 1
+
+    # yields (exon index, state) for every exon the read is informative about
+    def _classify(self, blocks: list, index, exon_features: list):
+        # split-exon segments within the read span; everything outside is uninformative
+        first = bisect_left(index.segment_ends, blocks[0][0])
+        last = bisect_right(index.segment_starts, blocks[-1][1])
+        if first >= last:
+            return
+        segment_profile = NonOverlappingFeaturesProfileConstructor(
+            index.segments[first:last], comparator=self.segment_comparator).construct_profile(blocks).gene_profile
+
+        seen_exons = set()
+        for k in range(first, last):
+            if segment_profile[k - first] == 0:
                 continue
-            states = [profile[i] for i in members]
-            if any(s == 0 for s in states):
-                continue
-            inclusions = [i for i, s in zip(members, states) if s == 1]
-            if inclusions:
-                for i in inclusions:
-                    # only attribute the inclusion to the read's assigned gene
-                    if read_gene not in property_map[i].gene_ids:
-                        continue
-                    feature_id = property_map[i].id
-                    counter_key = (feature_id, read_gene)
-                    self.inclusion_counter[counter_key].inc(group_id)
-                    row_key = ("inc", counter_key)
-                    if row_key not in self.feature_row_prefix:
-                        exon_start, exon_end = exon_features[i]
-                        self.feature_row_prefix[row_key] = "%s\t%d\t%d\t%s\t%d\t%d\t%s\tinclusion" % (
-                            region.chr_id, region.start, region.end, region.strand,
-                            exon_start, exon_end, read_gene)
-            else:
-                # all states == -1: region skipped entirely; attribute to the read's gene only
-                if read_gene not in region.gene_ids:
+            for exon_index in index.segment_exons[k]:
+                if exon_index in seen_exons:
                     continue
-                counter_key = (region.id, read_gene)
-                self.exclusion_counter[counter_key].inc(group_id)
-                row_key = ("exc", counter_key)
-                if row_key not in self.feature_row_prefix:
-                    self.feature_row_prefix[row_key] = "%s\t%d\t%d\t%s\t.\t.\t%s\texclusion" % (
-                        region.chr_id, region.start, region.end, region.strand, read_gene)
+                seen_exons.add(exon_index)
+                seg_first, seg_last = index.exon_segment_ranges[exon_index]
+                states = segment_profile[max(seg_first, first) - first:min(seg_last, last - 1) - first + 1]
+                if 1 in states:
+                    exon_start, exon_end = exon_features[exon_index]
+                    yield exon_index, self._inclusion_state(blocks, exon_start, exon_end,
+                                                            index.left_terminal[exon_index],
+                                                            index.right_terminal[exon_index])
+                elif seg_first >= first and seg_last < last and all(s == -1 for s in states):
+                    yield exon_index, EXON_SKIP
+
+    # state of an exon overlapped by read blocks: full, left, right or alt
+    def _inclusion_state(self, blocks: list, exon_start: int, exon_end: int,
+                         left_terminal: bool, right_terminal: bool) -> int:
+        delta = self.delta
+        last_block = len(blocks) - 1
+        state = EXON_ALT
+        for j, (block_start, block_end) in enumerate(blocks):
+            if block_end < exon_start:
+                continue
+            if block_start > exon_end:
+                break
+            left_match = abs(block_start - exon_start) <= delta
+            right_match = abs(block_end - exon_end) <= delta
+            if 0 < j < last_block:
+                # both block borders are splice sites
+                if left_match and right_match:
+                    return EXON_FULL
+            elif j == 0:
+                # read starts inside the exon, only the right border is a splice site
+                if right_match and block_start >= exon_start - delta:
+                    if left_terminal:
+                        return EXON_FULL
+                    state = EXON_RIGHT
+            else:
+                # read ends inside the exon, only the left border is a splice site
+                if left_match and block_end <= exon_end + delta:
+                    if right_terminal:
+                        return EXON_FULL
+                    state = EXON_LEFT
+        return state
 
     def dump(self):
         with open(self.output_counts_file_name, "w") as f:
-            f.write("chr\tregion_start\tregion_end\tstrand\texon_start\texon_end\tgene_id\tfeature_kind\tgroup_id\tcount\n")
+            f.write(FeatureInfo.header() + "\tgroup_id\tinclude_counts\texclude_counts\tn_full\tn_left\tn_right\tn_alt\n")
             all_group_ids = sorted(self.encountered_group_ids)
-            for key, prefix in self.feature_row_prefix.items():
-                kind, fid = key
-                counter = self.inclusion_counter if kind == "inc" else self.exclusion_counter
+            for key, prefix in self.exon_row_prefix.items():
+                group_counts = self.exon_counts[key]
                 for group_id in all_group_ids:
-                    count = counter[fid].get(group_id)
-                    if count <= 0:
+                    state_counts = group_counts.get(group_id)
+                    if not state_counts or not any(state_counts):
                         continue
-                    f.write("%s\t%s\t%d\n" % (prefix, self._get_group_name(group_id), count))
-
-    def finalize(self, args=None):
-        # Matrix/MTX conversion is intentionally skipped: the joint counter's
-        # 9-column schema does not match the include/exclude pair layout used by
-        # convert_profile_to_matrix. Linear TSV is the primary output.
-        return
+                    full, left, right, skip, alt = state_counts
+                    f.write("%s\t%s\t%d\t%d\t%d\t%d\t%d\t%d\n" % (prefix, self._get_group_name(group_id),
+                                                              full + left + right, skip, full, left, right, alt))
 
     def add_confirmed_features(self, features):
         return

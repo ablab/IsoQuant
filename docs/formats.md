@@ -248,19 +248,33 @@ Tab-separated values, the columns are:
 
 ### Exon count format
 
-This is the format of `exon_counts.tsv`. Overlapping reference exons are grouped
-into regions; each region emits one row per included exon variant plus one
-region-level exclusion row. Tab-separated values, the columns are:
+This is the format of `exon_counts.tsv`. Every reference exon is quantified independently;
+for each read it is classified as one of the following:
 
-* `chr` - chromosome ID;
-* `region_start` - region leftmost 1-based position;
-* `region_end` - region rightmost 1-based position;
-* `strand` - region strand;
-* `exon_start`, `exon_end` - exon variant coordinates for `inclusion` rows, `.` for `exclusion` rows;
-* `gene_id` - gene the read was assigned to;
-* `feature_kind` - `inclusion` (read selects this exon variant) or `exclusion` (read skips the whole region);
+* full inclusion - a read exon matches both exon boundaries (for the first / last exon of a transcript
+only the internal splice site needs to match, the read may start / end inside the exon);
+* left / right half-inclusion - only the exon's left / right splice site is confirmed, 
+the read starts / ends inside this internal exon;
+* skipping - the exon lies within a read intron;
+* alternative usage - a read exon overlaps the exon but has different boundaries 
+(e.g. an alternative splice site or a retained intron);
+* reads that do not reach the exon are not counted.
+
+Only reads assigned to a single gene are used. Tab-separated values, the columns are:
+
+* `chr`, `start`, `end`, `strand`, `flags` - exon coordinates and flags, same as in the [splice junction count format](#splice-junctions-count-format);
+* `gene_ids` - gene the reads were assigned to;
 * `group_id` - read group if provided (NA by default);
-* `count` - read count.
+* `include_counts` - number of reads including this exon (`n_full + n_left + n_right`);
+* `exclude_counts` - number of reads skipping this exon;
+* `n_full` - number of reads fully including this exon;
+* `n_left` - number of reads confirming only the left splice site of this exon;
+* `n_right` - number of reads confirming only the right splice site of this exon;
+* `n_alt` - number of reads using an overlapping exon with different boundaries.
+
+Exon inclusion level (PSI) can be computed as `include_counts / (include_counts + exclude_counts)`, 
+or `n_full / (n_full + exclude_counts)` to use only reads confirming both splice sites.
+Add `n_alt` to the denominator to obtain the fraction of reads using this exact exon among all reads covering it.
 
 ### Exon splice-site count format
 
