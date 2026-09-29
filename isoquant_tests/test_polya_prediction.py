@@ -201,11 +201,25 @@ def test_flush_sets_predictions_and_clears_buffer(stub_model, tmp_path):
     assert counter._all_transcripts            # merged into chromosome-wide buffer
 
 
+
+def _make_string_pools():
+    """Minimal StringPoolManager stub: id -> name translation.
+
+    Counters resolve observed group ids through ``resolve_read_group`` (the single
+    owner of what a group id means) and walk pools by position through
+    ``get_read_group_pool``; the stub provides both.
+    """
+    pool = types.SimpleNamespace(get_str=lambda i: f"g{i}", __len__=lambda: 2)
+    return types.SimpleNamespace(
+        get_read_group_pool=lambda _idx: pool,
+        resolve_read_group=lambda _idx, group_id: f"g{group_id}",
+    )
+
+
 def test_flush_is_noop_for_grouped_counter(stub_model, tmp_path):
     # A grouped counter accumulates across the whole chromosome (whole-chr
     # prediction in dump); flush() must not touch its buffer or predictions.
-    pool = types.SimpleNamespace(get_str=lambda i: f"g{i}")
-    string_pools = types.SimpleNamespace(get_read_group_pool=lambda _idx: pool)
+    string_pools = _make_string_pools()
     counter = tc.PolyACounter(_make_args(), str(tmp_path / "g.tsv"),
                               string_pools=string_pools, group_index=0)
     exons = [(100, 200), (300, 400)]
@@ -232,10 +246,7 @@ def test_dump_flags_peak_as_known_within_tolerance(stub_model, tmp_path):
 
 
 def test_dump_grouped_emits_group_id_column(stub_model, tmp_path):
-    # Minimal stub for string_pools: an object that returns a pool with a
-    # ``get_str`` method translating integer ids to names.
-    pool = types.SimpleNamespace(get_str=lambda i: f"g{i}")
-    string_pools = types.SimpleNamespace(get_read_group_pool=lambda _idx: pool)
+    string_pools = _make_string_pools()
 
     out = tmp_path / "grouped.tsv"
     counter = tc.PolyACounter(_make_args(), str(out),

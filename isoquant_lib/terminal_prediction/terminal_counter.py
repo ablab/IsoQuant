@@ -32,7 +32,6 @@ from isoquant_lib.assignment.isoform_assignment import (
     ReadAssignmentType,
 )
 from isoquant_lib.quantification.long_read_counter import AbstractCounter
-from isoquant_lib.assignment.read_groups import AbstractReadGrouper
 from .terminal_peaks import (
     ANNOTATION_TOLERANCE,
     FEATURE_COLUMNS,
@@ -486,16 +485,10 @@ class TerminalCounter(AbstractCounter):
                     'counts': peak['counts'],
                     'flag': peak['flag'],
                     'counts_byGroup': count,
-                    'group_id': self._group_name(gid),
+                    'group_id': self._get_group_name(gid),
                 })
         out = pd.DataFrame(rows, columns=EMPTY_COLUMNS_GROUPED)
         out.to_csv(self.output_file, sep="\t", index=False, mode="w", header=True)
-
-    def _group_name(self, group_id: int) -> str:
-        if self.string_pools is None:
-            return AbstractReadGrouper.default_group_id
-        pool = self.string_pools.get_read_group_pool(self.group_index)
-        return pool.get_str(group_id)
 
 
 class PolyACounter(TerminalCounter):

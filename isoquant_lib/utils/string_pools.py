@@ -44,6 +44,19 @@ from .serialization import write_int, write_string, read_int, read_string
 
 logger = logging.getLogger('IsoQuant')
 
+# Name given to a read whose grouping strategy produced no value. Every grouper in
+# read_groups.py already falls back to this for the same situation, so an
+# unassigned read is indistinguishable from a grouper fallback -- one semantic
+# bucket, one output label.
+UNASSIGNED_GROUP_NAME = AbstractReadGrouper.default_group_id
+
+# Legacy sentinel for "no value for this strategy". read_group_to_ids no longer
+# produces it -- it interns UNASSIGNED_GROUP_NAME instead, so group ids are a
+# closed set of valid pool indices, which is what write_int (unsigned) and every
+# counter already assume. Decoding still accepts it for serialized data written
+# before that change.
+UNASSIGNED_GROUP_ID = -1
+
 
 class StringPool:
     """
@@ -144,6 +157,9 @@ class StringPoolManager:
 
         # Mapping from group spec index to pool type ('file_name', 'barcode_spot', 'tsv:N', 'dynamic')
         self.group_spec_pool_types: Dict[int, str] = {}
+
+        # Grouping specs already warned about in resolve_read_group (warn once each)
+        self._warned_unresolved_specs: set = set()
 
     def build_from_gffutils(self, gffutils_db):
         """
@@ -443,42 +459,75 @@ class StringPoolManager:
 
         ids = []
         for spec_index, group_str in enumerate(group_strings):
-            if group_str is not None:
-                pool = self.get_read_group_pool(spec_index)
-                ids.append(pool.get_int(group_str))
-            else:
-                ids.append(-1)  # Use -1 for None values
+            # A missing value is interned under UNASSIGNED_GROUP_NAME rather than
+            # emitted as a negative sentinel: a negative id cannot be serialized
+            # (write_int is unsigned -> OverflowError) and would index the pool
+            # list from the end on lookup, silently naming a real group.
+            if group_str is None:
+                group_str = UNASSIGNED_GROUP_NAME
+            pool = self.get_read_group_pool(spec_index)
+            ids.append(pool.get_int(group_str))
         return ids
+
+    def resolve_read_group(self, spec_index: int, group_id: int) -> str:
+        """
+        Display name for a single *observed* group id. Never raises.
+
+        This is the one place that decides what a group id means. Use it wherever
+        the id came from a read assignment (counter dumps, per-group output rows);
+        for walking a pool by position use get_read_group_pool() directly, where an
+        out-of-range index is a real bug and should surface.
+
+        Unresolvable ids degrade to a printable name rather than raising, because a
+        miss here is data-dependent: pools are loaded per chromosome, and a stale
+        or not-yet-populated pool must not abort a finished run.
+        """
+        if group_id == UNASSIGNED_GROUP_ID:
+            return UNASSIGNED_GROUP_NAME
+        pool = self.get_read_group_pool(spec_index)
+        try:
+            return pool.get_str(group_id)
+        except IndexError:
+            # Pool not populated yet or id out of range: can happen during
+            # deserialization if pools were not loaded (e.g. the default grouper
+            # with 'NA', or dynamic pools not yet built). Fall back to the id as a
+            # string so the row is still identifiable.
+            self._warn_unresolved_group(spec_index, group_id, len(pool))
+            return str(group_id)
+
+    def _warn_unresolved_group(self, spec_index: int, group_id: int, pool_size: int) -> None:
+        """Warn once per grouping spec -- a bad pool would otherwise log per read."""
+        if spec_index in self._warned_unresolved_specs:
+            return
+        self._warned_unresolved_specs.add(spec_index)
+        pool_type = self.group_spec_pool_types.get(spec_index, 'unknown')
+        logger.warning("Read group ID %d not found in pool for spec %d (type=%s, pool_size=%d), "
+                       "using ID as string; further such IDs for this spec are not reported",
+                       group_id, spec_index, pool_type, pool_size)
 
     def read_group_from_ids(self, group_ids: List[int]) -> List[str]:
         """
         Convert list of integer IDs to list of group strings.
 
+        Mirrors ReadAssignment.read_group's contract, which is *not* the display
+        contract: an unset value round-trips as None so that re-assigning the
+        property reproduces the same ids. Output rows want resolve_read_group().
+
         Args:
             group_ids: List of integer IDs
 
         Returns:
-            List of group ID strings
+            List of group ID strings (None where the value was unset)
         """
         if not group_ids:
             return []
 
         strings = []
         for spec_index, group_id in enumerate(group_ids):
-            if group_id < 0:
-                strings.append(None)  # -1 means None
+            if group_id == UNASSIGNED_GROUP_ID:
+                strings.append(None)
             else:
-                pool = self.get_read_group_pool(spec_index)
-                try:
-                    strings.append(pool.get_str(group_id))
-                except IndexError:
-                    # Pool not populated yet or ID out of range
-                    # This can happen during deserialization if pools weren't loaded
-                    # (e.g., default grouper with 'NA' or dynamic pools not yet built)
-                    # Fall back to returning the ID as a string
-                    pool_type = self.group_spec_pool_types.get(spec_index, 'unknown')
-                    logger.warning(f"Read group ID {group_id} not found in pool for spec {spec_index} (type={pool_type}, pool_size={len(pool)}), using ID as string")
-                    strings.append(str(group_id))
+                strings.append(self.resolve_read_group(spec_index, group_id))
         return strings
 
     def has_dynamic_pools(self) -> bool:
