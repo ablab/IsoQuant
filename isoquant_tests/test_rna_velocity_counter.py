@@ -342,3 +342,33 @@ def test_finalize_sums_duplicate_rows_across_fragments(tmp_path):
         assert ds.layers["spliced"][0][0] == 5
         assert ds.layers["unspliced"][0][0] == 5
         assert ds.layers["ambiguous"][0][0] == 3
+
+
+def test_loom_is_written_in_several_column_blocks(tmp_path, monkeypatch):
+    # The loom layers are filled one column window at a time, so that peak
+    # memory tracks the window and not the cell count. Shrink the window so a
+    # small fixture spans several blocks, and check nothing is lost at the seams.
+    loompy = pytest.importorskip("loompy")
+    from isoquant_lib.quantification import rna_velocity_counter as rvc
+
+    n_cells = 7
+    monkeypatch.setattr(rvc, "LOOM_WINDOW_BYTES", 8)  # 2 cells per block at int32
+    counter = make_counter(tmp_path)
+    with open(counter.output_file, "w") as f:
+        f.write("#cell_id\tgene_id\tspliced\tunspliced\tambiguous\n")
+        for i in range(n_cells):
+            f.write("CELL%d\tGENE_A\t%d\t%d\t%d\n" % (i, i, 100 + i, 200 + i))
+    counter.finalize()
+
+    with loompy.connect(counter.output_file + ".loom") as ds:
+        assert ds.shape == (1, n_cells)
+        cells = list(ds.ca.CellID)
+        assert cells == ["CELL%d" % i for i in range(n_cells)]
+        assert list(ds.ra.Gene) == ["GENE_A"]
+        for i in range(n_cells):
+            j = cells.index("CELL%d" % i)
+            assert ds.layers["spliced"][0][j] == i
+            assert ds.layers["unspliced"][0][j] == 100 + i
+            assert ds.layers["ambiguous"][0][j] == 200 + i
+        # The unnamed main layer mirrors spliced, per velocyto convention.
+        assert (ds.layers[""][:, :] == ds.layers["spliced"][:, :]).all()

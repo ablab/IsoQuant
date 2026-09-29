@@ -49,6 +49,32 @@ where a "cell" would be a whole sample. It reads `get_grouping_pool_types(args)`
 Each strategy writes to its own path. Sharing one path across strategies makes
 the merge stage delete the same per-chr fragment twice (`FileNotFoundError`).
 
+### Why no CLI flag
+
+Deliberate: the output is cheap enough that a flag would cost more than it
+saves. Conditions 2 and 3 already restrict it to runs where the output is
+meaningful, and guarding a small extra output behind an option makes the
+`--analysis` surface larger for no benefit.
+
+The per-read cost is the part that has to be negligible, and it is:
+`add_read_info` walks `isoform_matches` and their `match_subclassifications`
+once. `IntronRetentionCounter`, already in `global_counter` under
+`--analysis exon_quantification`, walks the same matches *and* an inner loop over
+isoform intron indices, so velocity is strictly less per-read work than a counter
+the pipeline already runs.
+
+The finalize-time loom export is the part that needed fixing rather than gating —
+see `create_loom` below. After the windowed write, peak RSS is flat in the cell
+count (0.79 GB at 5k genes x 20k cells, 0.65 GB at 80k cells, where a dense
+int32 grid would be 0.4 GB and 1.6 GB). What remains is *time*, linear in
+genes x cells because loom is dense: measured ~65 s and ~250 MB of file per 1e9
+grid entries (4.5 s / 12.8 MB at 5k x 10k, scaling cleanly to 25.9 s / 98.6 MB at
+5k x 80k). Extrapolated, a 30k-gene 10x run with 100k cells spends ~3 min and
+~750 MB on the export; a 500k-spot spatial run spends ~15 min and ~4 GB. That is
+tolerable at the end of a multi-hour run but is the number to revisit if spatial
+cell counts grow — the fix then is a sparsity threshold on the loom step, not a
+CLI flag, since the TSV is written either way.
+
 ## Architecture
 
 `RNAVelocityCounter` is an ordinary `AbstractCounter` living in
@@ -98,6 +124,38 @@ difference between a workable and an unworkable worker footprint, and it keeps
 
 `dump()` clears all three dicts. It is called once per chromosome today, but a second
 call must not re-emit the same counts.
+
+### The loom write (`create_loom`)
+
+Layers are filled **one column block at a time** via `loompy.new()` +
+`add_columns()`, not by assigning a sparse matrix to `ds.layers[name]`.
+
+The reason is a bug in loompy itself. Loom is a dense HDF5 format, and
+`LayerManager.__setitem__` does intend to fill a sparse layer in windows — but it
+computes the window as
+
+```python
+window = max(1, 1024**3 // 8 * m.shape[0])   # loompy 3.0.8, layer_manager.py:150
+```
+
+which **multiplies where it means to divide** (`1024**3 // (8 * m.shape[0])`).
+The result is ~1.3e8 x n_genes, so the subsequent `min(window, remaining)` always
+clamps to every remaining column and the whole matrix is densified in one
+`toarray()`. Measured at 5k genes x 20k cells: +1.4 GB peak RSS for a single
+int64 layer, and the old code wrote four layers. At 30k genes x 500k spots it
+would ask for ~60 GB.
+
+`add_columns()` is loompy's streaming API and does not go through that path.
+`LOOM_WINDOW_BYTES` (64 MB) caps the dense block per layer, so the write costs
+~256 MB across the four layers regardless of cell count. Counts are cast to
+`int32` — per-(cell, gene) read counts cannot approach 2^31, and it halves both
+the block and the file.
+
+Do not "simplify" this back to `loompy.create(...)` + `ds.layers[x] = matrix`
+unless loompy has fixed that expression; the unit test
+`test_loom_is_written_in_several_column_blocks` shrinks `LOOM_WINDOW_BYTES` so
+the multi-block path is actually exercised, but it will not catch the memory
+regression.
 
 ## Classification
 
@@ -262,18 +320,11 @@ first gene that names it, even though it sits in an intron of several.
 
 ## Known limitations
 
-- **No CLI gate.** Any non-bulk run with a barcode grouping and a genedb
-  produces these files. There is no way to opt out, and `loompy` is a hard
-  dependency in `requirements.txt` / `pyproject.toml` purely for this export.
-  The natural fit is a new `--analysis rna_velocity` value (see
-  `.claude/ANALYSIS_OPTION.md`) resolving to an internal `args.rna_velocity`
-  flag. Not implemented — it changes default behaviour for every single-cell
-  user.
-- **`finalize()` loads the whole merged TSV into a pandas DataFrame**, then
-  builds three matrices. Loom is a *dense* HDF5 format: 100k cells × 30k genes is
-  ~12 GB per layer before compression, and there are now four layers. Fine at current scales, a wall at
-  billion-read ones. The TSV is always written first, so the counts survive even
-  if the loom step is skipped.
+- **`finalize()` loads the whole merged TSV into a pandas DataFrame** before
+  factorizing it. That is proportional to the number of populated (cell, gene)
+  pairs, not to the grid, and it is the one part of the export that is not
+  bounded. The TSV is always written first, so the counts survive even if the
+  loom step fails.
 - **`loompy` import failure is caught** and degraded to a warning — it happens at
   the very end of a long run and the TSV already holds the same numbers.
 - **No end-to-end CI test.** Verified manually once (see the SIRV run above:
