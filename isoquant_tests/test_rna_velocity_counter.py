@@ -26,6 +26,7 @@ from isoquant_lib.quantification.rna_velocity_counter import (
     RNAVelocityCounter,
     SplicingStatus,
 )
+from isoquant_lib.utils.string_pools import UNASSIGNED_GROUP_ID, UNASSIGNED_GROUP_NAME
 
 
 class FakePool:
@@ -229,14 +230,47 @@ def test_read_without_barcode_is_dropped(tmp_path):
     assert read_rows(counter) == []
 
 
-def test_missing_group_for_this_strategy_is_dropped(tmp_path):
-    # read_group_to_ids stores -1 when a strategy produced no value; -1 would
+def test_legacy_sentinel_group_id_is_dropped(tmp_path):
+    # Assignments serialized before read_group_to_ids started interning
+    # UNASSIGNED_GROUP_NAME can still carry the negative sentinel, which would
     # index the pool list from the end and silently pick a real barcode.
     counter = make_counter(tmp_path)
     counter.add_read_info(FakeAssignment(ReadAssignmentType.unique, [FakeMatch(0)],
-                                         read_group_ids=[-1]))
+                                         read_group_ids=[UNASSIGNED_GROUP_ID]))
     counter.dump()
     assert read_rows(counter) == []
+
+
+def test_unassigned_group_is_not_emitted_as_a_cell(tmp_path):
+    """A read with no barcode must not become a cell called 'NA'.
+
+    BarcodeGrouper returns UNASSIGNED_GROUP_NAME for any read carrying no barcode
+    (e.g. absent from --barcoded_reads), and since the group-id unification an
+    unset value interns as that same name -- so it arrives as an ordinary, valid
+    pool id. Velocity output is per cell, so that pseudo-cell is dropped.
+    """
+    counter = make_counter(tmp_path, cells=("CELL1", UNASSIGNED_GROUP_NAME))
+    counter.add_read_info(FakeAssignment(ReadAssignmentType.unique, [FakeMatch(0)],
+                                         read_group_ids=[0]))
+    counter.add_read_info(FakeAssignment(ReadAssignmentType.unique, [FakeMatch(0)],
+                                         read_group_ids=[1]))   # the 'NA' bucket
+    counter.dump()
+    assert read_rows(counter) == [("CELL1", "GENE_A", "1", "0", "0")]
+
+
+def test_unassigned_group_is_kept_out_of_the_loom(tmp_path):
+    loompy = pytest.importorskip("loompy")
+    counter = make_counter(tmp_path, cells=("CELL1", UNASSIGNED_GROUP_NAME))
+    counter.add_read_info(FakeAssignment(ReadAssignmentType.unique, [FakeMatch(0)],
+                                         read_group_ids=[0]))
+    for _ in range(5):
+        counter.add_read_info(FakeAssignment(ReadAssignmentType.unique, [FakeMatch(0)],
+                                             read_group_ids=[1]))
+    counter.dump()
+    counter.finalize()
+    with loompy.connect(counter.output_file + ".loom") as ds:
+        assert list(ds.ca.CellID) == ["CELL1"]
+        assert ds.layers["spliced"][:, :].sum() == 1
 
 
 def test_read_without_gene_is_dropped(tmp_path):

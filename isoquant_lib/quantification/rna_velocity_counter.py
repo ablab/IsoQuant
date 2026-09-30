@@ -43,6 +43,7 @@ from isoquant_lib.assignment.isoform_assignment import (
     ReadAssignmentType,
 )
 from isoquant_lib.quantification.long_read_counter import AbstractCounter
+from isoquant_lib.utils.string_pools import UNASSIGNED_GROUP_ID, UNASSIGNED_GROUP_NAME
 
 logger = logging.getLogger('IsoQuant')
 
@@ -166,20 +167,34 @@ class RNAVelocityCounter(AbstractCounter):
         return
 
     def _get_group_id(self, read_assignment: ReadAssignment) -> Optional[int]:
-        # A read with no barcode has no cell to be counted against; unlike the
-        # feature counters (which fold such reads into group 0) velocity output
-        # is per cell, so drop it rather than invent a cell.
+        # A read with no barcode has no cell to be counted against. The feature
+        # counters give it the UNASSIGNED_GROUP_NAME bucket like any other group;
+        # velocity output is per cell and 'NA' is not a cell, so it is dropped
+        # instead. The id-shaped half of that policy lives here, the name-shaped
+        # half in dump() -- see _is_unassigned_group.
         if self.ignore_read_groups or not read_assignment.read_group_ids:
             return None
         if self.group_index >= len(read_assignment.read_group_ids):
             return None
         group_id = read_assignment.read_group_ids[self.group_index]
-        # read_group_to_ids stores -1 when a strategy yielded no value for the
-        # read. StringPool.get_str indexes a list, so -1 would silently resolve
-        # to whatever barcode happens to be last in the pool.
-        if group_id < 0:
+        # Legacy sentinel, only reachable from assignments serialized before
+        # read_group_to_ids started interning UNASSIGNED_GROUP_NAME. A negative id
+        # indexes the pool list from the end, naming a real barcode.
+        if group_id == UNASSIGNED_GROUP_ID:
             return None
         return group_id
+
+    @staticmethod
+    def _is_unassigned_group(cell_id: str) -> bool:
+        """True for the bucket every grouper falls back to when it cannot place a read.
+
+        BarcodeGrouper returns UNASSIGNED_GROUP_NAME whenever a read carries no
+        barcode (e.g. it is absent from --barcoded_reads), and since the group-id
+        unification that name is also what an unset value interns as. Either way it
+        is a pseudo-cell pooling every unplaceable read, not a real one, so it is
+        kept out of the counts and out of the loom.
+        """
+        return cell_id == UNASSIGNED_GROUP_NAME
 
     @staticmethod
     def _get_gene_id(read_assignment: ReadAssignment) -> Optional[int]:
@@ -263,7 +278,13 @@ class RNAVelocityCounter(AbstractCounter):
                 writer.writerow(["#" + VELOCITY_COLUMNS[0]] + VELOCITY_COLUMNS[1:])
             for key in all_keys:
                 group_id, gene_id = key
-                writer.writerow([group_pool.get_str(group_id), gene_pool.get_str(gene_id),
+                cell_id = group_pool.get_str(group_id)
+                # Filtering by name happens here rather than per read in
+                # _get_group_id: this loop already resolves the name, so the
+                # hot path stays an integer compare.
+                if self._is_unassigned_group(cell_id):
+                    continue
+                writer.writerow([cell_id, gene_pool.get_str(gene_id),
                                  self.spliced.get(key, 0), self.unspliced.get(key, 0),
                                  self.ambiguous.get(key, 0)])
         for tally in self._tallies.values():
