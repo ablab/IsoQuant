@@ -251,22 +251,21 @@ Tab-separated values, the columns are:
 This is the format of `exon_counts.tsv`. Every reference exon is quantified independently;
 for each read it is classified as one of the following:
 
-* full inclusion - a read exon matches both exon boundaries (for the first / last exon of a transcript
-only the internal splice site needs to match, the read may start / end inside the exon);
+* full inclusion - a read exon matches both exon splice sites; for the first and last exon of a transcript
+only the internal splice site needs to match, the read may start / end inside the exon;
 * left / right half-inclusion - only the exon's left / right splice site is confirmed, 
 the read starts / ends inside this internal exon;
 * skipping - the exon lies within a read intron;
-* alternative usage - a read exon overlaps the exon but has different boundaries 
-(e.g. an alternative splice site or a retained intron);
-* reads that do not reach the exon are not counted.
+* alternative usage - a read exon overlaps the reference exon but has alternative splice sites or a retained intron;
+* reads that do not overlap the exon are not counted.
 
 Only reads assigned to a single gene are used. Tab-separated values, the columns are:
 
 * `chr`, `start`, `end`, `strand`, `flags` - exon coordinates and flags, same as in the [splice junction count format](#splice-junctions-count-format);
-* `gene_ids` - gene the reads were assigned to;
+* `gene_ids` - gene id the reads were assigned to;
 * `group_id` - read group if provided (NA by default);
-* `include_counts` - number of reads including this exon (`n_full + n_left + n_right`);
-* `exclude_counts` - number of reads skipping this exon;
+* `include_counts` - total number of reads including this exon (`n_full + n_left + n_right`);
+* `exclude_counts` - total number of reads skipping this exon;
 * `n_full` - number of reads fully including this exon;
 * `n_left` - number of reads confirming only the left splice site of this exon;
 * `n_right` - number of reads confirming only the right splice site of this exon;
@@ -274,7 +273,7 @@ Only reads assigned to a single gene are used. Tab-separated values, the columns
 
 Exon inclusion level (PSI) can be computed as `include_counts / (include_counts + exclude_counts)`, 
 or `n_full / (n_full + exclude_counts)` to use only reads confirming both splice sites.
-Add `n_alt` to the denominator to obtain the fraction of reads using this exact exon among all reads covering it.
+Alternatively, `n_alt` can be added to the denominator to obtain the fraction of reads using this exact exon among all reads covering it.
 
 ### Exon splice-site count format
 
