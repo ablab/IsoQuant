@@ -754,7 +754,9 @@ class GeneInfo:
             last = bisect_right(segment_ends, exon_end) - 1
             if first > last or first >= len(segments) or last < 0 or \
                     segment_starts[first] != exon_start or segment_ends[last] != exon_end:
-                # exon is not tiled by segments, should not happen
+                # segments are split from the same exons, so this should never happen
+                logger.warning("Exon %s:%d-%d is not tiled by split exon segments and will not be counted" %
+                               (self.chr_id, exon_start, exon_end))
                 exon_segment_ranges.append(None)
                 continue
             exon_segment_ranges.append((first, last))

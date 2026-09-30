@@ -781,33 +781,28 @@ class ExonUsageCounter(ProfileFeatureCounter):
     # state of an exon overlapped by read blocks: full, left, right or alt
     def _inclusion_state(self, blocks: list, exon_start: int, exon_end: int,
                          left_terminal: bool, right_terminal: bool) -> int:
+        overlapping_blocks = [j for j, (block_start, block_end) in enumerate(blocks)
+                              if block_end >= exon_start and block_start <= exon_end]
+        if len(overlapping_blocks) != 1:
+            # read has an intron inside the exon, i.e. it uses a shorter variant
+            return EXON_ALT
+        j = overlapping_blocks[0]
+        block_start, block_end = blocks[j]
         delta = self.delta
-        last_block = len(blocks) - 1
-        state = EXON_ALT
-        for j, (block_start, block_end) in enumerate(blocks):
-            if block_end < exon_start:
-                continue
-            if block_start > exon_end:
-                break
-            left_match = abs(block_start - exon_start) <= delta
-            right_match = abs(block_end - exon_end) <= delta
-            if 0 < j < last_block:
-                # both block borders are splice sites
-                if left_match and right_match:
-                    return EXON_FULL
-            elif j == 0:
-                # read starts inside the exon, only the right border is a splice site
-                if right_match and block_start >= exon_start - delta:
-                    if left_terminal:
-                        return EXON_FULL
-                    state = EXON_RIGHT
-            else:
-                # read ends inside the exon, only the left border is a splice site
-                if left_match and block_end <= exon_end + delta:
-                    if right_terminal:
-                        return EXON_FULL
-                    state = EXON_LEFT
-        return state
+        left_match = abs(block_start - exon_start) <= delta
+        right_match = abs(block_end - exon_end) <= delta
+        if 0 < j < len(blocks) - 1:
+            # both block borders are splice sites
+            return EXON_FULL if left_match and right_match else EXON_ALT
+        if j == 0:
+            # read starts inside the exon, only the right border is a splice site
+            if right_match and block_start >= exon_start - delta:
+                return EXON_FULL if left_terminal else EXON_RIGHT
+            return EXON_ALT
+        # read ends inside the exon, only the left border is a splice site
+        if left_match and block_end <= exon_end + delta:
+            return EXON_FULL if right_terminal else EXON_LEFT
+        return EXON_ALT
 
     def dump(self):
         with open(self.output_counts_file_name, "w") as f:
