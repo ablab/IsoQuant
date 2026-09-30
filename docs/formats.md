@@ -252,7 +252,8 @@ This is the format of `exon_counts.tsv`. Every reference exon is quantified inde
 for each read it is classified as one of the following:
 
 * full inclusion - a read exon matches both exon splice sites; for the first and last exon of a transcript
-only the internal splice site needs to match, the read may start / end inside the exon;
+only the internal splice site needs to match, the read may start / end inside the exon
+(exons that are terminal in some isoforms and internal in others are treated as internal);
 * left / right half-inclusion - only the exon's left / right splice site is confirmed, 
 the read starts / ends inside this internal exon;
 * skipping - the exon lies within a read intron;
@@ -274,6 +275,8 @@ Only reads assigned to a single gene are used. Tab-separated values, the columns
 Exon inclusion level (PSI) can be computed as `include_counts / (include_counts + exclude_counts)`, 
 or `n_full / (n_full + exclude_counts)` to use only reads confirming both splice sites.
 Alternatively, `n_alt` can be added to the denominator to obtain the fraction of reads using this exact exon among all reads covering it.
+Note that PSI values are meaningful mostly for internal exons; counts for terminal exons are less reliable,
+e.g. reads extending beyond the annotated transcript start / end are counted as alternative usage.
 
 ### Exon splice-site count format
 
