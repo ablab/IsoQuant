@@ -349,20 +349,39 @@ first gene that names it, even though it sits in an intron of several.
 
 ## Barcode attribution
 
-`_get_group_id` drops a read when:
+One policy — *a read that cannot be placed in a cell is dropped, not given one* —
+split across two places by cost. The feature counters instead keep such reads
+under `UNASSIGNED_GROUP_NAME` like any other group; velocity output is per cell
+and `'NA'` is not a cell.
+
+**By id, in `_get_group_id`** (per read, so integer compares only):
 
 - `ignore_read_groups` (no string pools), or
-- `read_group_ids` is empty — no barcode was detected. The feature counters fold
-  these into group `0`; velocity output is per cell, so inventing a cell is worse
-  than dropping the read. Indexing unconditionally here raised `IndexError`
-  inside the worker.
-- `read_group_ids[group_index] < 0`. `read_group_to_ids`
-  (`isoquant_lib/utils/string_pools.py`) stores `-1` when a strategy produced no
-  value for the read. `StringPool.get_str` indexes a plain list, so `-1` resolves
-  to *the last barcode in the pool* — a silent mis-attribution to a real cell.
-  **This sentinel is unhandled elsewhere in the codebase too** (e.g.
-  `long_read_counter.py:393`, `:595`, `:761`, `:986` all call `get_str(group_id)`
-  on a possibly-`-1` id); that is pre-existing and out of scope here.
+- `read_group_ids` is empty — no group at all. Indexing unconditionally here
+  raised `IndexError` inside the worker.
+- `group_index` past the end of `read_group_ids`.
+- `read_group_ids[group_index] == UNASSIGNED_GROUP_ID` (`-1`). Legacy only:
+  since the group-id unification, `read_group_to_ids` interns
+  `UNASSIGNED_GROUP_NAME` instead of emitting a negative sentinel, so this is
+  reachable only from assignments serialized before that. A negative id indexes
+  the pool list from the end and names a real barcode. See
+  `.claude/MULTI_GROUP_IMPLEMENTATION.md` § B2.
+
+**By name, in `dump()`** (`_is_unassigned_group`): the loop already resolves each
+group id to a string, so filtering there keeps the hot path integer-only.
+
+The name-shaped half is the one that fires in practice. `BarcodeGrouper` returns
+`UNASSIGNED_GROUP_NAME` for any read carrying no barcode, and `BarcodeSpotGrouper`
+does the same for a barcode with no entry in `--barcode2spot` — both arrive as
+ordinary, *valid* pool ids, which no sentinel check would catch.
+
+**Measured.** SIRV run with half the `barcode2spot` mappings removed
+(`--read_group barcode --barcode2spot <half>`): without the filter the
+`barcode_spot` loom gains a spot literally called `NA` holding **2473 reads** —
+in a real Visium/Stereo-seq matrix that pseudo-spot would be the largest column
+present. With it, the spots are exactly `SIRV1 SIRV2`. The `barcode` strategy is
+unaffected either way: single-cell modes filter unbarcoded reads upstream of
+assignment, so they never reach a counter.
 
 ## Known limitations
 
