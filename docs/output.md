@@ -78,9 +78,7 @@ or it retains one (an intron retention event against the isoform it matched; par
 least 50 intronic bases). A read matching only mature isoforms is **spliced**. A read that looks retained
 against one isoform and mature against another is **ambiguous**.
 
-Note that disagreeing with the annotation does not by itself make a read unspliced - a read with a novel
-splice site or an alternative TSS is still a spliced molecule. Reads with no detected barcode, reads that
-could not be attributed to a gene, and reads that overlap a gene body without resembling any isoform are
+Reads with no detected barcode, reads that could not be attributed to a gene or overlap a gene body without resembling any isoform are
 not counted.
 
 
