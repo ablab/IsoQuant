@@ -67,13 +67,59 @@ The finalize-time loom export is the part that needed fixing rather than gating 
 see `create_loom` below. After the windowed write, peak RSS is flat in the cell
 count (0.79 GB at 5k genes x 20k cells, 0.65 GB at 80k cells, where a dense
 int32 grid would be 0.4 GB and 1.6 GB). What remains is *time*, linear in
-genes x cells because loom is dense: measured ~65 s and ~250 MB of file per 1e9
-grid entries (4.5 s / 12.8 MB at 5k x 10k, scaling cleanly to 25.9 s / 98.6 MB at
-5k x 80k). Extrapolated, a 30k-gene 10x run with 100k cells spends ~3 min and
-~750 MB on the export; a 500k-spot spatial run spends ~15 min and ~4 GB. That is
-tolerable at the end of a multi-hour run but is the number to revisit if spatial
-cell counts grow — the fix then is a sparsity threshold on the loom step, not a
-CLI flag, since the TSV is written either way.
+genes x cells because loom is dense: ~65 s and ~250 MB of file per 1e9 grid
+entries in a synthetic sweep.
+
+### Measured end to end
+
+Whole-pipeline A/B against master (which has no velocity counter at all), both
+CI single-cell allinfo configs, `run_type: allinfo,performance`, `-t 10`,
+sequential arms on an idle box with the page cache pre-warmed. **allinfo
+baselines passed with zero failures on every arm** — velocity does not perturb
+existing output.
+
+| config | cells x genes | grid | density | TSV | loom | loom write |
+|---|---|---|---|---|---|---|
+| `SC.Mouse.10x.allinfo` | 5,000 x 19,742 | 0.099e9 | 0.73% | 32 MB | 21 MB | 6 s |
+| `SC.Human.Curio.custom_sc.allinfo` | 66,964 x 18,237 | 1.22e9 | 0.018% | 8.8 MB | 295 MB | 56 s |
+
+| config | metric | master | velocity | delta |
+|---|---|---|---|---|
+| Mouse 10x | cpu_time | 4500 s | 4504 s | +0.1% |
+| | clock_time | 745 s | 745 s | **+0.0%** |
+| | max_rss | 7.44 GB | 7.45 GB | +0.1% |
+| Curio (n=2 each) | cpu_time | 8686 s | 8715 s | +0.3% |
+| | clock_time | 1141 s | 1191 s | **+4.4%** |
+| | max_rss | 13.24 GB | 13.62 GB | inconclusive, see below |
+
+**CPU is free** (+0.1% / +0.3%), confirming the per-read argument above. The
+whole cost is the single-threaded loom write at finalize, which is why it shows
+up in wall clock but not in CPU: +50 s on Curio ~= the 56 s loom write, and the
+master/velocity clock ranges do not overlap across repeats (master 1137-1145,
+velocity 1185-1197).
+
+**max_rss is not affected.** Run 1 showed +5.6%, which did not reproduce: across
+two repeats master was 13.22/13.26 GB (0.3% spread) and velocity 13.96/13.28 GB
+(5.0% spread), so velocity's own runs disagree by more than the apparent delta.
+The mechanism rules it out anyway — in all four runs peak RSS lands in the
+*parallel* phase (18-28% through the run), while the loom write is a
+single-threaded tail using **0.61 GB**, twenty times below the 13 GB pipeline
+peak. It cannot raise the maximum.
+
+**The scaling lesson is the grid, not the data.** Curio writes a 295 MB loom
+from an 8.8 MB TSV because 67k spots x 18k genes is a 12x bigger grid than
+Mouse's from *less* actual data. Loom is dense, so cost tracks cells x genes and
+is worst exactly where the biology is sparsest. The synthetic extrapolation held
+up (predicted ~305 MB / ~79 s for a 1.22e9 grid; measured 295 MB / 56 s), so
+scaling on to a 500k-spot spatial run means roughly 15 min and ~4 GB. Tolerable
+at the end of a multi-hour run, and the number to revisit if spot counts grow —
+the fix then is a sparsity threshold on the loom step, not a CLI flag, since the
+TSV is written either way.
+
+Reproduce with `run_type: allinfo,performance` on
+`isoquant_tests/github/configs/SC.*.allinfo.yaml`; compare `stats.tsv` between a
+master worktree and this branch. Use two repeats per arm — one run cannot
+separate a real delta from parallel-phase RSS variance.
 
 ## Architecture
 
