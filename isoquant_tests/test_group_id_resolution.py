@@ -26,9 +26,9 @@ from isoquant_lib.quantification.long_read_counter import (
     AbstractCounter,
     ExonCounter,
     ExonSpliceSiteCounter,
+    ExonUsageCounter,
     IntronCounter,
     IntronRetentionCounter,
-    JointExonCounter,
     create_gene_counter,
     create_transcript_counter,
 )
@@ -64,8 +64,8 @@ def all_grouped_counters(tmpdir, pools):
         "IntronCounter": IntronCounter(path("intron"), string_pools=pools, group_index=0),
         "IntronRetentionCounter": IntronRetentionCounter(
             path("ir"), string_pools=pools, group_index=0),
-        "JointExonCounter": JointExonCounter(
-            path("joint_exon"), string_pools=pools, group_index=0),
+        "ExonUsageCounter": ExonUsageCounter(
+            path("exon_usage"), string_pools=pools, group_index=0),
         "ExonSpliceSiteCounter": ExonSpliceSiteCounter(
             path("splice_site"), string_pools=pools, group_index=0),
     }
