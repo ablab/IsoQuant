@@ -7,10 +7,15 @@
 """Tests for ExonUsageCounter: per-exon full / half / skip / alt quantification."""
 
 import os
+import random
 import tempfile
+from bisect import bisect_left, bisect_right
+from functools import partial
 
 import pytest
 
+from isoquant_lib.assignment.long_read_profiles import NonOverlappingFeaturesProfileConstructor
+from isoquant_lib.common import overlaps_at_least_when_overlap
 from isoquant_lib.gene_info import FeatureInfo, GeneInfo
 from isoquant_lib.quantification.convert_grouped_counts import _load_profile_linear
 from isoquant_lib.quantification.long_read_counter import (
@@ -205,6 +210,41 @@ class TestExonUsageCounter:
         assert df is not None
         cassette = df[(df["start"] == 300) & (df["end"] == 400)].iloc[0]
         assert cassette["include_counts"] == 2 and cassette["exclude_counts"] == 1
+
+
+def _random_blocks(rng: random.Random, max_pos: int) -> list:
+    # sorted non-adjacent blocks (at least 1bp introns) within [1, max_pos]
+    n = rng.randint(1, 5)
+    borders = sorted(rng.sample(range(1, max_pos), 2 * n))
+    blocks = [(borders[2 * i], borders[2 * i + 1]) for i in range(n)]
+    return [b for i, b in enumerate(blocks) if i == 0 or b[0] > blocks[i - 1][1] + 1]
+
+
+class TestSlicedSplitProfile:
+    """The counter builds the split-exon profile only over segments within the read span;
+    it must equal the corresponding part of the profile built over all segments (as the assigner does)."""
+
+    def test_sliced_profile_equals_full_profile(self):
+        rng = random.Random(42)
+        comparator = partial(overlaps_at_least_when_overlap, delta=5)
+        checked = 0
+        for _ in range(3000):
+            exons = sorted({(s, s + rng.randint(0, 60)) for s in (rng.randint(1, 300) for _ in range(rng.randint(1, 8)))})
+            segments = GeneInfo.split_exons(exons)
+            blocks = _random_blocks(rng, 400)
+            first = bisect_left([seg[1] for seg in segments], blocks[0][0])
+            last = bisect_right([seg[0] for seg in segments], blocks[-1][1])
+            if first >= last:
+                continue
+            full = NonOverlappingFeaturesProfileConstructor(
+                segments, comparator=comparator).construct_profile(blocks).gene_profile
+            sliced = NonOverlappingFeaturesProfileConstructor(
+                segments[first:last], comparator=comparator).construct_profile(blocks).gene_profile
+            assert sliced == full[first:last], (exons, blocks)
+            # segments outside the read span are uninformative
+            assert all(v == 0 for v in full[:first] + full[last:]), (exons, blocks)
+            checked += 1
+        assert checked > 1000
 
 
 if __name__ == "__main__":
