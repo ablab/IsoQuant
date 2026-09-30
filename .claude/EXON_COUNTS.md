@@ -26,7 +26,7 @@ to many exons.
 | full | an internal read block matches both exon borders within `delta`; **or** the first/last read block matches the exon's internal splice site, its free end lies inside the exon (`delta` outward tolerance) and that side of the exon is transcript-terminal, i.e. **no** transcript has a splice site there (no TSS/polyA anchoring required). Exons that are terminal in some isoforms and internal in others (flag `T`) are internal on that side, so reads starting/ending inside them give half-inclusions — only `n_full` vs `n_left`/`n_right` changes, `include_counts` does not |
 | left / right | same as the terminal case, but the exon is not transcript-terminal on that side: only its left/right splice site is confirmed |
 | skip | all split-exon segments of the exon are −1 (exon lies within a read intron) |
-| alt | a block overlaps the exon (some segment +1) but none of the above holds: other splice site, block running past the exon, retained intron |
+| alt | a block overlaps the exon (some segment +1) but none of the above holds: other splice site, block running past the exon, retained intron; also whenever more than one read block overlaps the exon (read has an intron inside it) |
 | — | otherwise (exon not reached by the read) nothing is counted |
 
 Filters: `ProfileFeatureCounter.is_valid` / `is_assigned_to_gene` (unique gene only),
@@ -53,6 +53,9 @@ inside the slice with all segments −1; any +1 triggers the coordinate check
 (`_inclusion_state`). The split profile is built by the assigner too, but it is not stored
 on `ReadAssignment` and counting runs on deserialized assignments, so it is recomputed
 (cheap: O(log S + blocks + features under the read)); nothing is serialized.
+
+An exon not exactly tiled by segments is skipped with a warning; it cannot happen while segments come from
+`split_exons(exon_profiles.features)` (fuzzed: 200k random exon sets, always tiled).
 
 Note: a segment only slightly overlapped by a block (< `minimal_exon_overlap`) stays 0 in
 the split profile, not −1, so such an exon is neither skipped nor included.

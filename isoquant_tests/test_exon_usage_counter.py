@@ -175,6 +175,12 @@ class TestExonUsageCounter:
         assert self._state_counts((300, 400))[EXON_SKIP] == 2
         assert self._state_counts((700, 800))[EXON_FULL] == 1
 
+    def test_read_with_intron_inside_exon_is_alt(self):
+        # both blocks lie within the intron-retaining (300, 600), the read uses shorter exons instead
+        self._add([(300, 400), (500, 550)])
+        self._add([(350, 400), (500, 600)])
+        assert self._state_counts((300, 600))[EXON_ALT] == 2
+
     def test_uninformative_reads(self):
         self._add([(100, 600)])
         self._add([(100, 200), (500, 600)], strand="-")
