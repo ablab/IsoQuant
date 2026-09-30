@@ -159,7 +159,7 @@ class ExonUsageIndex:
         self.exon_segment_ranges: list = exon_segment_ranges
         # segment index -> exon indices containing it
         self.segment_exons: list = segment_exons
-        # exon index -> whether the exon is the leftmost / rightmost exon of some transcript
+        # exon index -> whether the exon side has no splice site in any transcript (transcript start / end only)
         self.left_terminal: list = left_terminal
         self.right_terminal: list = right_terminal
 
@@ -761,14 +761,17 @@ class GeneInfo:
             for k in range(first, last + 1):
                 segment_exons[k].append(i)
 
-        leftmost_exons = set()
-        rightmost_exons = set()
+        # an exon side is terminal only if no transcript has a splice site there,
+        # exons that are both terminal and internal are treated as internal
+        left_spliced = set()
+        right_spliced = set()
         for exons in self.all_isoforms_exons.values():
-            if exons:
-                leftmost_exons.add(tuple(exons[0]))
-                rightmost_exons.add(tuple(exons[-1]))
-        left_terminal = [tuple(e) in leftmost_exons for e in exon_features]
-        right_terminal = [tuple(e) in rightmost_exons for e in exon_features]
+            for exon in exons[1:]:
+                left_spliced.add(tuple(exon))
+            for exon in exons[:-1]:
+                right_spliced.add(tuple(exon))
+        left_terminal = [tuple(e) not in left_spliced for e in exon_features]
+        right_terminal = [tuple(e) not in right_spliced for e in exon_features]
         return ExonUsageIndex(list(segments), exon_segment_ranges, segment_exons, left_terminal, right_terminal)
 
     def build_exon_splice_site_regions(self) -> list:

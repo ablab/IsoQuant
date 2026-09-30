@@ -23,7 +23,7 @@ to many exons.
 
 | state | rule |
 |---|---|
-| full | an internal read block matches both exon borders within `delta`; **or** the first/last read block matches the exon's internal splice site, its free end lies inside the exon (`delta` outward tolerance) and the exon is the leftmost/rightmost exon of some transcript (no TSS/polyA anchoring required) |
+| full | an internal read block matches both exon borders within `delta`; **or** the first/last read block matches the exon's internal splice site, its free end lies inside the exon (`delta` outward tolerance) and that side of the exon is transcript-terminal, i.e. **no** transcript has a splice site there (no TSS/polyA anchoring required). Exons that are terminal in some isoforms and internal in others (flag `T`) are internal on that side, so reads starting/ending inside them give half-inclusions — only `n_full` vs `n_left`/`n_right` changes, `include_counts` does not |
 | left / right | same as the terminal case, but the exon is not transcript-terminal on that side: only its left/right splice site is confirmed |
 | skip | all split-exon segments of the exon are −1 (exon lies within a read intron) |
 | alt | a block overlaps the exon (some segment +1) but none of the above holds: other splice site, block running past the exon, retained intron |
@@ -39,7 +39,11 @@ reads with a single block are ignored (no splice sites). Blocks are `corrected_e
 `GeneInfo.get_exon_usage_index()` lazily builds and caches an `ExonUsageIndex`
 (`isoquant_lib/gene_info.py`) from `split_exon_profiles.features` (non-overlapping atomic
 segments, monotone starts and ends): exon → segment range, segment → exons, and
-per-exon left/right transcript-terminal flags (from `all_isoforms_exons`).
+per-exon left/right transcript-terminal flags (from `all_isoforms_exons`: a side is terminal iff no
+transcript has an intron adjacent to the exon on that side).
+
+Terminal exons are low priority by design: PSI is used for internal exons. A read whose free end
+overshoots a terminal exon by more than `delta` (unannotated TSS/APA) gets alt; this is accepted.
 
 Per read: bisect the segments to the read span, recompute the split profile on that
 slice with `NonOverlappingFeaturesProfileConstructor` (comparator
@@ -73,5 +77,6 @@ add n_alt to the denominator.
 ## Tests
 
 `isoquant_tests/test_exon_usage_counter.py` — skip inside an overlap chain, alt 3′ variant,
-intron-retaining exon as alt, half inclusion, terminal exons, shared splice site,
+intron-retaining exon as alt, half inclusion, terminal exons, terminal-and-internal exons treated as internal,
+shared splice site,
 exons beyond the read end not counted, uninformative reads, dump + matrix loading.

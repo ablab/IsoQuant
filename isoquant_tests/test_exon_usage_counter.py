@@ -100,7 +100,8 @@ class TestExonUsageCounter:
             (300, 400): EXON_SKIP,
             (300, 450): EXON_SKIP,
             (300, 600): EXON_ALT,
-            (500, 600): EXON_FULL,
+            # last exon of T2 / T3, but internal in T1: the read end does not confirm its right splice site
+            (500, 600): EXON_LEFT,
         }
 
     def test_internal_inclusion_and_alt_variants(self):
@@ -134,14 +135,27 @@ class TestExonUsageCounter:
         states = self._states()
         assert states[(300, 400)] == EXON_RIGHT
         assert states[(300, 450)] == EXON_ALT
-        assert states[(500, 600)] == EXON_FULL
+        assert states[(500, 600)] == EXON_LEFT
 
     def test_terminal_exons_need_only_internal_splice_site(self):
-        self._add([(150, 200), (300, 400), (500, 550)])
+        self._add([(150, 200), (300, 400), (500, 600), (700, 750)])
         states = self._states()
         assert states[(100, 200)] == EXON_FULL
-        # (500, 600) is the last exon of T2 / T3
-        assert states[(500, 600)] == EXON_FULL
+        assert states[(700, 800)] == EXON_FULL
+
+    def test_terminal_and_internal_exon_is_treated_as_internal(self):
+        # (500, 600) is the last exon of T2 / T3 and internal in T1
+        self._add([(150, 200), (300, 400), (500, 550)])
+        assert self._states()[(500, 600)] == EXON_LEFT
+
+    def test_first_and_last_exon_is_treated_as_internal(self):
+        gene_info = _make_gene_info({"T1": [(100, 200), (300, 400)],
+                                     "T2": [(10, 50), (100, 200)]})
+        self._add([(150, 200), (300, 400)], gene_info=gene_info)
+        self._add([(10, 50), (100, 150)], gene_info=gene_info)
+        assert self._state_counts((100, 200))[EXON_RIGHT] == 1
+        assert self._state_counts((100, 200))[EXON_LEFT] == 1
+        assert self._state_counts((100, 200))[EXON_FULL] == 0
 
     def test_terminal_block_extending_past_exon_is_alt(self):
         self._add([(50, 200), (300, 400)])
