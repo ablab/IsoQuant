@@ -246,6 +246,19 @@ Tab-separated values, the columns are:
 * `include_counts` - number of reads that include this feature;
 * `exclude_counts` - number of reads that span, but do not include this feature;
 
+In `intron_retention_counts.tsv` the two count columns have a different meaning:
+
+* `include_counts` - number of reads retaining this intron, i.e. covering it fully (spliced or mono-exonic reads)
+or running at least 50 bp into it from a read end; retention is detected relative to the isoform(s) the read was assigned to,
+and a read is counted once even when assigned to several isoforms sharing this intron;
+* `exclude_counts` - number of reads that splice this intron out, i.e. contain a matching splice junction;
+this equals `include_counts` of the same intron in `splice_junction_counts.tsv`.
+
+Thus, `include_counts / (include_counts + exclude_counts)` estimates the intron retention ratio.
+Reads skipping the intron via other splice junctions are counted in neither column.
+Reads consistent with an annotated intron-retaining isoform are not reported as retaining,
+and reads lying entirely within an intron are not counted.
+
 ### Exon count format
 
 This is the format of `exon_counts.tsv`. Every reference exon is quantified independently;

@@ -507,6 +507,8 @@ class AlignmentCollector:
 
             if self.params.count_exons:
                 read_assignment.exon_gene_profile = alignment_info.combined_profile.read_exon_profile.gene_profile
+            # intron retention counting also needs the intron profile (spliced reads -> exclusion counts)
+            if self.params.count_exons or self.params.count_intron_retentions:
                 read_assignment.intron_gene_profile = alignment_info.combined_profile.read_intron_profile.gene_profile
 
             logger.debug("=== Finished read " + read_id + " ===")

@@ -229,8 +229,8 @@ as an artifact, and it is the only IR-named event treated as a *minor* error
 rather than a major inconsistency. `MatchClassification.undefined` is **not**
 undecidable — it means the SQANTI-style classifier had nothing to say, not that
 the read resembles no isoform, and such a read still carries events the verdict
-can be read off. Note `long_read_counter.INTRON_RETENTION_EVENT_TYPES` holds only
-the two complete variants, so velocity defines its own set rather than importing.
+can be read off. The set lives in `long_read_counter.INTRON_RETENTION_EVENTS` and
+is shared with `IntronRetentionCounter`, so both outputs agree on what retention is.
 
 **The incomplete variants already carry a 50 bp floor**, so the counter adds no
 length check of its own. Both detection sites in `junction_comparator.py` (line
