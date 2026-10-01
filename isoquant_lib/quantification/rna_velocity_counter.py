@@ -38,34 +38,15 @@ from scipy import sparse
 from isoquant_lib.assignment.isoform_assignment import (
     IsoformMatch,
     MatchClassification,
-    MatchEventSubtype,
     ReadAssignment,
     ReadAssignmentType,
 )
-from isoquant_lib.quantification.long_read_counter import AbstractCounter
+# INTRON_RETENTION_EVENTS (shared with IntronRetentionCounter) is defined next to
+# the counter classes; see the comment there for which events count and why.
+from isoquant_lib.quantification.long_read_counter import AbstractCounter, INTRON_RETENTION_EVENTS
 from isoquant_lib.utils.string_pools import UNASSIGNED_GROUP_ID, UNASSIGNED_GROUP_NAME
 
 logger = logging.getLogger('IsoQuant')
-
-# Intron-retention match events, i.e. the read physically covers intronic
-# sequence of the isoform it was compared against.
-#
-# fake_micro_intron_retention is deliberately excluded: is_alignment_artifact()
-# classes it as an artifact, and it is the only IR-named event treated as a
-# *minor* error rather than a major inconsistency.
-#
-# The two incomplete_* variants carry a 50 bp floor by construction -- both
-# detection sites in junction_comparator.py gate them on
-# overlaps_at_least(read_region, intron, params.minor_exon_extension), and
-# args.minor_exon_extension is 50 (isoquant.py). A read end has to run at least
-# 50 bases into an intron to produce one, so no extra length check is needed (and
-# none is possible here: MatchEvent stores index pairs, not coordinates).
-INTRON_RETENTION_EVENTS = frozenset((
-    MatchEventSubtype.intron_retention,
-    MatchEventSubtype.unspliced_intron_retention,
-    MatchEventSubtype.incomplete_intron_retention_left,
-    MatchEventSubtype.incomplete_intron_retention_right,
-))
 
 # Reads that were matched against isoforms; their splicing status comes from the
 # match events. inconsistent_non_intronic is included: its reads disagree with

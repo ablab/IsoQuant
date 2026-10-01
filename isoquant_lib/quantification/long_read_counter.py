@@ -10,6 +10,7 @@ from bisect import bisect_left, bisect_right
 from collections import defaultdict, OrderedDict
 from enum import Enum, unique
 from functools import partial
+from typing import Set
 
 from isoquant_lib.assignment.isoform_assignment import (
     MatchEventSubtype,
@@ -1106,17 +1107,51 @@ class IntronCounter(ProfileFeatureCounter):
                                         read_assignment.gene_info.intron_property_map, group_id)
 
 
-INTRON_RETENTION_EVENT_TYPES = {
+# Intron-retention match events, i.e. the read physically covers intronic
+# sequence of the isoform it was compared against. Shared by
+# IntronRetentionCounter and RNAVelocityCounter.
+#
+# fake_micro_intron_retention is deliberately excluded: is_alignment_artifact()
+# classes it as an artifact, and it is the only IR-named event treated as a
+# *minor* error rather than a major inconsistency.
+#
+# The two incomplete_* variants carry a 50 bp floor by construction -- both
+# detection sites in junction_comparator.py gate them on
+# overlaps_at_least(read_region, intron, params.minor_exon_extension), and
+# args.minor_exon_extension is 50 (isoquant.py). A read end has to run at least
+# 50 bases into an intron to produce one, so no extra length check is needed (and
+# none is possible here: MatchEvent stores index pairs, not coordinates).
+INTRON_RETENTION_EVENTS = frozenset((
     MatchEventSubtype.intron_retention,
     MatchEventSubtype.unspliced_intron_retention,
-}
+    MatchEventSubtype.incomplete_intron_retention_left,
+    MatchEventSubtype.incomplete_intron_retention_right,
+))
 
 
 class IntronRetentionCounter(ProfileFeatureCounter):
-    def __init__(self, output_prefix, string_pools=None, group_index: int = 0):
+    """Per reference intron: reads retaining it (include) vs reads splicing it out (exclude).
+
+    include_counts -- reads with an intron-retention event (full, mono-exonic or a
+    >= 50 bp partial retention at a read end) on this intron, relative to the
+    isoform(s) the read was matched to. A read matched to several isoforms
+    sharing the intron is counted once.
+    exclude_counts -- reads having a junction that matches this intron (within
+    delta), i.e. exactly the splice junction include_counts for the same reads.
+    Reads skipping the intron via other junctions are counted in neither column.
+
+    Only the exclusion side is strand-filtered (as in IntronCounter): mono-exonic
+    retaining reads often have strand '.', and the retained intron is already tied
+    to the matched transcript.
+    """
+
+    def __init__(self, output_prefix: str, string_pools=None, group_index: int = 0) -> None:
         ProfileFeatureCounter.__init__(self, output_prefix, string_pools, group_index)
 
-    def add_read_info(self, read_assignment):
+    def _feature_type(self) -> str:
+        return "intron"
+
+    def add_read_info(self, read_assignment) -> None:
         if not ProfileFeatureCounter.is_valid(read_assignment) or not ProfileFeatureCounter.is_assigned_to_gene(read_assignment):
             return
         if not read_assignment.isoform_matches:
@@ -1130,34 +1165,56 @@ class IntronRetentionCounter(ProfileFeatureCounter):
             group_id = read_assignment.read_group_ids[self.group_index]
 
         gene_info = read_assignment.gene_info
-        intron_features = gene_info.intron_profiles.features
         property_map = gene_info.intron_property_map
         if not property_map:
             return
 
+        retained = self._retained_feature_indices(read_assignment)
+        spliced: Set[int] = set()
+        for i, value in enumerate(read_assignment.intron_gene_profile):
+            if value == 1 and read_assignment.strand in property_map[i].strand and i not in retained:
+                spliced.add(i)
+
+        if not retained and not spliced:
+            return
+        self.encountered_group_ids.add(group_id)
+        for feature_idx in retained:
+            feature_id = self._register_feature(property_map[feature_idx])
+            self.inclusion_feature_counter[feature_id].inc(group_id)
+        for feature_idx in spliced:
+            feature_id = self._register_feature(property_map[feature_idx])
+            self.exclusion_feature_counter[feature_id].inc(group_id)
+
+    def _register_feature(self, feature_property) -> int:
+        feature_id = feature_property.id
+        if feature_id not in self.feature_name_dict:
+            self.feature_name_dict[feature_id] = feature_property.to_str()
+        return feature_id
+
+    @staticmethod
+    def _retained_feature_indices(read_assignment) -> Set[int]:
+        """Gene intron feature indices retained by the read in any of its isoform matches."""
+        gene_info = read_assignment.gene_info
         # coords -> gene intron feature index, built once per gene_info and shared
         # across ungrouped + grouped IR counters (replaces per-lookup O(n) .index())
         feature_index = getattr(gene_info, "_intron_feature_index", None)
         if feature_index is None:
-            feature_index = {coords: i for i, coords in enumerate(intron_features)}
+            feature_index = {coords: i for i, coords in enumerate(gene_info.intron_profiles.features)}
             gene_info._intron_feature_index = feature_index
 
+        retained: Set[int] = set()
         for match in read_assignment.isoform_matches:
             if match.assigned_transcript is None:
                 continue
             isoform_introns = gene_info.all_isoforms_introns.get(match.assigned_transcript, [])
             for event in match.match_subclassifications:
-                if event.event_type not in INTRON_RETENTION_EVENT_TYPES:
+                if event.event_type not in INTRON_RETENTION_EVENTS:
                     continue
+                # alternative-structure retentions may span a range of isoform introns; all are counted
                 for idx in range(event.isoform_region[0], event.isoform_region[1] + 1):
                     if idx >= len(isoform_introns):
                         continue
-                    intron_coords = isoform_introns[idx]
-                    feature_idx = feature_index.get(intron_coords)
-                    if feature_idx is None:
-                        continue
-                    feature_id = property_map[feature_idx].id
-                    self.inclusion_feature_counter[feature_id].inc(group_id)
-                    self.encountered_group_ids.add(group_id)
-                    if feature_id not in self.feature_name_dict:
-                        self.feature_name_dict[feature_id] = property_map[feature_idx].to_str()
+                    feature_idx = feature_index.get(isoform_introns[idx])
+                    if feature_idx is not None:
+                        retained.add(feature_idx)
+        return retained

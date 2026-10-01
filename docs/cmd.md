@@ -255,7 +255,7 @@ Space-separated list of analyses to run. Supported values (short aliases in brac
   - Exon counts (`*.exon_counts.tsv`);
   - Exon splice-site counts (`*.exon_splice_site_counts.tsv`);
   - Splice junction counts (`*.splice_junction_counts.tsv`);
-  - Intron retention counts (`*.intron_retention_counts.tsv`);
+  - Intron retention counts (`*.intron_retention_counts.tsv`): reads retaining vs splicing out each reference intron;
   
 * `fusion` (requires gene annotation): fusion gene detection, produces:
   - Fusion gene predictions (`fusion_<bam_basename>.tsv`, one file per input BAM).
@@ -292,7 +292,7 @@ Feeding you data as pseudo-bulk (`--mode bulk`) is recommended for full transcri
 
 `--count_intron_retentions`
     _Deprecated_: use `--analysis exon_quantification` instead.
-    Count intron retention events per reference intron.
+    Count reads retaining and splicing out each reference intron.
 
 
 ## Single-cell and spatial transcriptomics options

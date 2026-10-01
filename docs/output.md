@@ -37,7 +37,7 @@ If `--analysis exon_quantification` is set, exon, splice junction and intron ret
 * `SAMPLE_ID.exon_counts.tsv` - per-exon counts: number of reads including (fully or only one splice site), skipping, or using an alternative variant of each reference exon;
 * `SAMPLE_ID.exon_splice_site_counts.tsv` - exon splice-site counts: per-candidate full / left / right splice-site support and per-region exclusion / ambiguous counts, one row per feature and group;
 * `SAMPLE_ID.splice_junction_counts.tsv` - reference splice junction inclusion/exclusion read counts (previously named `SAMPLE_ID.intron_counts.tsv`);
-* `SAMPLE_ID.intron_retention_counts.tsv` - intron retention event counts per reference intron (same format as splice junction counts);
+* `SAMPLE_ID.intron_retention_counts.tsv` - per reference intron, the number of reads retaining it (`include_counts`) and splicing it out (`exclude_counts`); same layout as splice junction counts, see [formats](formats.md#splice-junctions-count-format);
 
 The old per-exon inclusion/exclusion counts (previous IsoQuant exon format) are no longer produced by default. 
 Use `--old_exon_count_format` to additionally output them as `SAMPLE_ID.old_exon_counts.tsv` (deprecated, will be removed in a future release).
