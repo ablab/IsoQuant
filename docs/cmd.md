@@ -97,25 +97,15 @@ Indicate that reads were poly-A trimmed. Possible values are:
   having a poly-A tail on the 3'; read direction will be based on the alignment strand flag. 
   Thus, when using this option, make sure read sequences are properly oriented, i.e. match the original mRNA strand.
   Use this option at your own risk.
-
-The following values take poly-A status from an external tool. Sequence-based detection still runs for every read,
-but when the external tool and the sequence disagree (e.g. a poly-T is found in the sequence while the tool reports a 
-poly-A on the other end), the external information is used, since these tools locate tails by adapter/primer anchoring.
-Reads the external source says nothing about keep the sequence-based result.
-
-  - `tag:<TAG>`: read poly-A status from a BAM tag, e.g. `tag:pt` for Dorado (requires basecalling with `--estimate-poly-a`).
-  A tail is considered present when the tag value is 0 or greater (`-1` means Dorado could not locate the primer and is ignored).
-  If the read has a `TS:A` tag (transcript strand relative to the read), the tail is placed on the corresponding end before
-  isoform assignment. Dorado writes `TS:A` only when primer trimming is enabled (the default; not with `--no-trim`),
-  and normally not for direct RNA reads. Without `TS:A`, the side is taken from `--stranded`
-  (`forward`: reads match the transcript strand, as in direct RNA; `reverse`: the opposite);
-  if `--stranded` is `none`, the tail is placed according to the strand assigned to the read, as with `stranded`.
+  - `tag:<TAG>`: read poly-A status from a BAM tag, e.g. `tag:pt` for Dorado (requires basecalling with `--estimate-poly-a`). A tail is considered present when the tag value >= 0.
+  If the read has a `TS:A` tag (transcript strand relative to the read), the tail is placed on the corresponding end. Otherwise internal IsoQuant strand detection is used.
   - `list:<FILE>`: a file with IDs of reads that have a poly-A tail, one per line (may be gzipped).
-  An optional second column (tab or space separated) with `+` or `-` gives the transcript strand relative to the read,
-  and is treated as `TS:A` above; any other value is ignored.
+  An optional second column (tab or space separated) with `+` or `-` gives the transcript strand relative to the read, and is treated as `TS:A` above; any other value is ignored.
   - `flnc:<FILE>`: `flnc.report.csv` produced by `isoseq refine`. Reads with `polyAlen` > 0 have a tail at their 3' end;
   the side is taken from the `strand` column (FLNC reads are oriented, so it is normally `+`); reads with `polyAlen` 0 are treated as having no tail, and tails detected in their sequence are discarded.
-  Use this option only with `flnc.bam` input (where tails are removed); CCS or `fl.bam` reads keep their tails and work with the default `none`.
+  Use this option only with `flnc.bam` input (where tails are removed).
+
+Note that IsoQuant still runs sequence-based polyA tail detection for every read. If the external information and the sequence disagree, the external information is used.
 
 `--prefix` or `-p`
     Prefix for all output files and subfolder name. `OUT` if not set.
