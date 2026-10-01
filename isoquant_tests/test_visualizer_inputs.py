@@ -49,7 +49,7 @@ def _write_read_info(path, gzipped=False):
     return path
 
 
-def _make_output(tmp_path, file_names=(), prefix=PREFIX, read_group=None):
+def _make_output(tmp_path, file_names=(), prefix=PREFIX, read_group=None, **extra_params):
     """Build a minimal IsoQuant output directory: <out>/.params + <out>/<prefix>/."""
     out_dir = tmp_path / "out"
     sample_dir = out_dir / prefix
@@ -57,7 +57,7 @@ def _make_output(tmp_path, file_names=(), prefix=PREFIX, read_group=None):
     gtf = tmp_path / "ref.gtf"
     gtf.write_text("")
     params = Namespace(genedb=str(gtf), genedb_filename=None, fastq=None,
-                       prefix=prefix, yaml=None, read_group=read_group)
+                       prefix=prefix, yaml=None, read_group=read_group, **extra_params)
     with open(str(out_dir / ".params"), "wb") as f:
         pickle.dump(params, f)
     for name in file_names:
@@ -200,6 +200,16 @@ class TestGroupedCountsDiscovery:
         assert config.read_group_strategy == "file_name"
         assert config.gene_grouped_counts == str(
             sample_dir / (PREFIX + ".gene_grouped_file_name_counts.tsv"))
+
+    def test_unreadable_read_group_spec_is_not_fatal(self, tmp_path):
+        # The --read_group order only picks the default strategy; a .params whose
+        # barcode2spot spec cannot be parsed must not abort the visualizer.
+        out_dir, sample_dir = _make_output(tmp_path, [
+            PREFIX + ".gene_grouped_barcode_counts.tsv",
+        ], read_group=["barcode_spot"], barcode2spot=object())
+        config = OutputConfig(str(out_dir))
+        assert config.param_group_strategies == []
+        assert config.read_group_strategy == "barcode"
 
     def test_mtx_only_falls_back_to_ungrouped(self, tmp_path):
         out_dir, _ = _make_output(tmp_path, [
