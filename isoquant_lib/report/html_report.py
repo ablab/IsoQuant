@@ -139,10 +139,18 @@ def _bar_chart_svg(title: str, labels: List[str], values: List[float]) -> str:
     return "<figure>%s</figure>" % svg[start:] if start >= 0 else ""
 
 
+def _input_reads_label(summary: RunSummary) -> str:
+    """Label of the primary + unaligned total: it is the input read count only when
+    every reference carrying alignments was processed."""
+    if summary.alignment_covers_all_reads:
+        return "Input reads"
+    return "Reads on processed references"
+
+
 def _kpi_tiles(summary: RunSummary) -> str:
     tiles: List[str] = []
     if summary.total_reads is not None:
-        tiles.append(_tile("Input reads", _format_number(summary.total_reads)))
+        tiles.append(_tile(_input_reads_label(summary), _format_number(summary.total_reads)))
         tiles.append(_tile("Mapping rate", _format_percent(summary.mapping_rate)))
     rollup = summary.assignment_rollup()
     if rollup:
@@ -178,13 +186,15 @@ def _alignment_section(summary: RunSummary) -> str:
         return ""
     rows = [(name.replace("_", " ").capitalize(), _format_number(count))
             for name, count in summary.alignment.items()]
-    rows.append(("Input reads (primary + unaligned)", _format_number(summary.total_reads)))
+    rows.append(("%s (primary + unaligned)" % _input_reads_label(summary),
+                 _format_number(summary.total_reads)))
     rows.append(("Mapping rate", _format_percent(summary.mapping_rate)))
     note = ""
     if not summary.alignment_covers_all_reads:
-        note = ('<p class="subtitle">Part of the input was not processed, so primary '
-                'alignments and unaligned reads do not cover the same set of reads: '
-                'input reads and mapping rate are not computed.</p>')
+        note = ('<p class="subtitle">Some references carrying alignments were not processed '
+                '(--process_only_chr / --discard_chr, or an annotation not covering the whole '
+                'genome): primary alignments are counted on processed references only, while '
+                'unaligned reads are counted for the whole input.</p>')
     return "<h2>Alignment</h2>" + note + _table(rows, ("Alignment records", "Count"))
 
 

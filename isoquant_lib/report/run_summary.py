@@ -123,7 +123,7 @@ class RunSummary:
         processed. It is not when --process_only_chr / --discard_chr are used, or when
         the annotation and the genome do not cover the same references: primary
         alignments are then counted for part of the input while the unaligned count
-        comes from the whole file, so the two cannot be added up into input reads.
+        comes from the whole file, and the totals are labelled as such.
         """
         self.alignment = enum_stats_to_dict(stats_dict)
         self.alignment_covers_all_reads = covers_all_reads
@@ -322,9 +322,10 @@ class RunSummary:
     def total_reads(self) -> Optional[int]:
         """Input reads: primary alignments plus the ones that did not align at all
         (secondary and supplementary alignments are extra records of the same reads).
-        None when part of the input was left out, as the two counts then cover
-        different sets of reads."""
-        if not self.alignment or not self.alignment_covers_all_reads:
+        When part of the input was left out, primary alignments only cover the processed
+        references, so this is the reads on processed references plus all unaligned
+        reads, and the report labels it accordingly."""
+        if not self.alignment:
             return None
         return self.alignment.get("primary", 0) + self.alignment.get("unaligned", 0)
 

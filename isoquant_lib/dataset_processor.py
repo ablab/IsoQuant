@@ -460,7 +460,7 @@ class DatasetProcessor:
         skipped_references = set(references_with_alignments(bam_files)) - set(chr_ids)
         if skipped_references:
             logger.info("%d reference(s) carrying alignments were not processed, "
-                        "input read count and mapping rate are left out of the run summary"
+                        "the run summary reports reads on processed references"
                         % len(skipped_references))
         self.alignment_stat_counter.print_start("Alignments collected, overall alignment statistics:")
         # Primary alignments are only counted for the chromosomes that were processed,

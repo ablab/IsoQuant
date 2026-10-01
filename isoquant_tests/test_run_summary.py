@@ -113,15 +113,21 @@ class TestRates:
         assert summary.total_reads == 200
         assert summary.mapping_rate == 0.95
 
-    def test_partial_input_has_no_input_read_count(self, tmp_path):
+    def test_partial_input_is_labelled_as_such(self, tmp_path):
         # --process_only_chr and friends count primary alignments for part of the
-        # input only, while unaligned reads are counted for the whole file.
+        # input only, while unaligned reads are counted for the whole file: the total
+        # is still reported, but not as the number of input reads.
         summary = _summary(tmp_path)
         summary.set_alignment_stats(_enum_stats(primary=190, unaligned=10),
                                     covers_all_reads=False)
-        assert summary.total_reads is None
-        assert summary.mapping_rate is None
+        assert summary.total_reads == 200
         assert summary.to_dict()["alignment"]["covers_all_input_reads"] is False
+        path = str(tmp_path / "S.summary.html")
+        render_html(summary, path)
+        with open(path, encoding="utf-8") as f:
+            page = f.read()
+        assert "Reads on processed references" in page
+        assert "Input reads" not in page
 
     def test_barcode_rate_sums_all_input_files(self, tmp_path):
         summary = _summary(tmp_path)
