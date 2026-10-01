@@ -122,7 +122,14 @@ class OutputConfig:
         # Grouping strategies in the order the run received them, so the strategy
         # visualized by default is the first --read_group value, not the first
         # file name alphabetically.
-        self.param_group_strategies = get_grouping_strategy_names(Namespace(**params))
+        try:
+            self.param_group_strategies = get_grouping_strategy_names(Namespace(**params))
+        except Exception as e:
+            # Only used to pick the default strategy; without it the first one found
+            # in the directory is used, so a .params this cannot read is not fatal.
+            print(f"Could not read the --read_group order from .params ({e}); "
+                  f"the first grouping strategy found will be visualized by default.")
+            self.param_group_strategies = []
         self.input_gtf = self.input_gtf or params.get("genedb")
         self.genedb_filename = params.get("genedb_filename")
 
