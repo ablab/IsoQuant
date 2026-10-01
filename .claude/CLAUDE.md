@@ -259,6 +259,7 @@ IsoQuant can use short Illumina reads (`--illumina_bam`) to correct long-read ex
 - Tool expects reads to contain polyA tails
 - Don't trim polyA tails for better transcript model construction
 - PolyA verification integrated into assignment process
+- `--polya_trimmed tag:<TAG>|list:<FILE>|flnc:<FILE>` take polyA status from Dorado (`pt` tag) / a read list / `isoseq refine` report (`isoquant_lib/terminal_prediction/external_polya.py`). Sequence detection still runs; **the external source wins on conflicts** (`reconcile_polya`, applied before `PolyAFixer` so contradicted tails do not trim exons). Known side (`TS:A`, else `--stranded forward/reverse` for `tag:`; list col 2; flnc `strand` column) → injected before assignment; unknown side → after, by assigned strand. Only flnc `polyAlen`=0 clears tails. list/flnc tables are split per chromosome like barcode tables.
 
 ## Testing Strategy
 

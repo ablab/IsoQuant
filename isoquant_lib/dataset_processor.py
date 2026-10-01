@@ -16,7 +16,7 @@ import sys
 from enum import Enum, unique
 from collections import defaultdict
 from concurrent.futures import ProcessPoolExecutor
-from typing import Optional
+from typing import Dict, Optional, Tuple
 
 import gffutils
 import pysam
@@ -43,6 +43,7 @@ from isoquant_lib.utils.bam_utils import (PLACEHOLDERS, collect_unmapped_read_id
 from .alignment.alignment_processor import AlignmentType
 from .report.run_summary import RunSummary
 from .report.html_report import render_html
+from .terminal_prediction.external_polya import normalize_polya_reads
 from .assignment.read_groups import prepare_read_groups, get_grouping_strategy_names
 from .assignment.assignment_io import IOSupport, ReadInfoPrinter, VoidPrinter
 from .processed_read_manager import ProcessedReadsManagerHighMemory, ProcessedReadsManagerNoSecondary, ProcessedReadsManagerNormalMemory
@@ -54,6 +55,7 @@ from isoquant_lib.utils.file_naming import (
     reads_collected_lock_file_name,
     reads_processed_lock_file_name,
     split_barcodes_lock_filename,
+    split_polya_lock_filename,
     umi_barcode2barcode_global_lock,
     umi_barcode2barcode_prefix,
     umi_filtered_global_lock_file_name,
@@ -202,6 +204,8 @@ class DatasetProcessor:
             prepare_read_groups(self.args, sample)
             open(fname, "w").close()
 
+        split_polya_dict, polya_split_done = self.split_external_polya(sample)
+
         # Initialize for later cleanup (after process_assigned_reads)
         split_barcodes_dict = {}
         barcode_split_done = None
@@ -291,6 +295,8 @@ class DatasetProcessor:
             self.args.polya_requirement_strategy)
 
         self.process_assigned_reads(sample, saves_file)
+
+        self.clean_up_external_polya(split_polya_dict, polya_split_done)
 
         # Clean up split barcode files after all processing is done
         if split_barcodes_dict:
@@ -880,6 +886,37 @@ class DatasetProcessor:
         for table in produced:
             gzipped = gzip_file_in_place(table)
             logger.info("Compressed barcode table to %s" % gzipped)
+
+    def split_external_polya(self, sample) -> Tuple[Dict[str, str], Optional[str]]:
+        """Normalize and split the --polya_trimmed list:/flnc: table per chromosome."""
+        if not self.args.polya_trimmed.uses_read_table():
+            return {}, None
+
+        split_polya_dict = {chr_id: sample.get_polya_split_file(chr_id) for chr_id in self.get_chr_list()}
+        polya_split_done = split_polya_lock_filename(sample)
+        if self.args.resume and os.path.exists(polya_split_done):
+            logger.info("External polyA table was split during the previous run, existing files will be used")
+            return split_polya_dict, polya_split_done
+        if os.path.exists(polya_split_done):
+            os.remove(polya_split_done)
+
+        logger.info("Splitting external polyA table")
+        normalize_polya_reads(self.args.polya_trimmed_file, self.args.polya_trimmed.name,
+                              sample.polya_reads_normalized)
+        split_read_table_parallel(sample, [sample.polya_reads_normalized], split_polya_dict, self.args.threads,
+                                  read_column=0, group_columns=(1,), delim='\t')
+        os.remove(sample.polya_reads_normalized)
+        open(polya_split_done, "w").close()
+        logger.info("External polyA table was split")
+        return split_polya_dict, polya_split_done
+
+    @staticmethod
+    def clean_up_external_polya(split_polya_dict: Dict[str, str], polya_split_done: Optional[str]) -> None:
+        if polya_split_done is None:
+            return
+        for fname in list(split_polya_dict.values()) + [polya_split_done]:
+            if os.path.exists(fname):
+                os.remove(fname)
 
     def split_read_barcode_table(self, sample, split_barcodes_file_names):
         logger.info("Splitting read barcode table")

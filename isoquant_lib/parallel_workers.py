@@ -7,6 +7,7 @@
 
 import logging
 import os
+from typing import Dict
 
 import gffutils
 import pysam
@@ -14,6 +15,8 @@ from pyfaidx import Fasta
 
 from isoquant_lib.utils.stats import EnumStats
 from .alignment.alignment_processor import AlignmentCollector
+from .terminal_prediction.external_polya import ExternalPolyA
+from .terminal_prediction.external_polya import load_polya_read_dict as load_polya_table
 from .assignment.assignment_io import IOSupport, TmpFileAssignmentPrinter, SqantiTSVPrinter, ReadInfoPrinter, VoidPrinter
 from .assignment.assignment_loader import create_assignment_loader, BasicReadAssignmentLoader
 from .barcode_calling.umi_filtering import create_transcript_info_dict, UMIFilter
@@ -116,6 +119,18 @@ def load_barcode_dict(sample, chr_id):
     return barcode_dict
 
 
+def load_polya_read_dict(sample, chr_id: str, args) -> Dict[str, ExternalPolyA]:
+    """Load external polyA information (--polya_trimmed list:/flnc:) for a chromosome."""
+    if not args.polya_trimmed.uses_read_table():
+        return {}
+    polya_file = sample.get_polya_split_file(chr_id)
+    if not os.path.exists(polya_file):
+        return {}
+    polya_dict = load_polya_table(polya_file)
+    logger.debug("Loaded external polyA information for %d reads" % len(polya_dict))
+    return polya_dict
+
+
 def collect_reads_in_parallel(sample, chr_id, chr_ids, args, processed_read_manager_type):
     current_chr_record = Fasta(args.reference, indexname=args.fai_file_name)[chr_id]
     if args.high_memory:
@@ -171,11 +186,13 @@ def collect_reads_in_parallel(sample, chr_id, chr_ids, args, processed_read_mana
 
     # Load barcode dict for this chromosome if available
     barcode_dict = load_barcode_dict(sample, chr_id)
+    polya_read_dict = load_polya_read_dict(sample, chr_id, args)
 
     logger.info("Processing chromosome " + chr_id)
     alignment_collector = \
         AlignmentCollector(chr_id, bam_file_pairs, args, illumina_bam, gffutils_db, current_chr_record, read_grouper,
-                           barcode_dict, args.max_coverage_small_chr, args.max_coverage_normal_chr, string_pools)
+                           barcode_dict, args.max_coverage_small_chr, args.max_coverage_normal_chr, string_pools,
+                           polya_read_dict=polya_read_dict)
 
     for gene_info, assignment_storage in alignment_collector.process():
         tmp_printer.add_gene_info(gene_info)

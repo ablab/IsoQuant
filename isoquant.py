@@ -33,6 +33,7 @@ from collections import namedtuple
 from io import StringIO
 from traceback import print_exc
 from concurrent.futures import ProcessPoolExecutor
+from typing import Optional, Tuple
 import concurrent.futures
 
 import pysam
@@ -55,6 +56,7 @@ from isoquant_lib.utils.read_mapper import (
     DataSetReadMapper
 )
 from isoquant_lib.alignment.alignment_processor import PolyATrimmed
+from isoquant_lib.terminal_prediction.external_polya import check_flnc_report
 from isoquant_lib.dataset_processor import DatasetProcessor, PolyAUsageStrategies
 from isoquant_lib.model_construction.model_construction import StrandnessReportingLevel
 from isoquant_lib.assignment.long_read_assigner import AmbiguityResolvingMethod
@@ -170,8 +172,10 @@ def parse_args(cmd_args=None, namespace=None):
     add_option_to_group(input_args_group, '--stranded',  type=str, choices=SUPPORTED_STRANDEDNESS,
                         help="reads strandness type [none]", default="none")
     add_option_to_group(input_args_group, '--polya_trimmed', default=PolyATrimmed.none.name, type=str,
-                        choices=[e.name for e in PolyATrimmed],
-                        help="define reads which had polyA tail trimmed [%s]" % PolyATrimmed.none.name)
+                        help="define reads which had polyA tail trimmed or take polyA status from an external "
+                             "source: none, all, stranded, tag:<TAG> (e.g. Dorado's tag:pt), "
+                             "list:<FILE> (read ids, optional strand column), "
+                             "flnc:<FILE> (isoseq refine flnc.report.csv) [%s]" % PolyATrimmed.none.name)
     add_option_to_group(input_args_group, '--fl_data', action='store_true', default=False,
                         help="reads represent FL transcripts; both ends of the read are considered to be reliable")
 
@@ -639,6 +643,10 @@ def save_params(args):
                 updated_specs.append(spec)
         args.read_group = updated_specs
 
+    polya_name, sep, polya_file = args.polya_trimmed.partition(":")
+    if sep and polya_name in (PolyATrimmed.list.name, PolyATrimmed.flnc.name) and polya_file:
+        args.polya_trimmed = polya_name + ":" + os.path.abspath(polya_file)
+
     pickler = pickle.Pickler(open(args.param_file, "wb"),  -1)
     pickler.dump(args)
     pass
@@ -1088,6 +1096,30 @@ def set_splice_correction_options(args):
     args.correct_microintron_retention = strategy.microintron_retention
 
 
+def parse_polya_trimmed(value: str) -> Tuple[PolyATrimmed, Optional[str], Optional[str]]:
+    """Parse --polya_trimmed name[:value]; returns the mode, BAM tag and file. Raises ValueError."""
+    name, sep, option_value = value.partition(":")
+    if name not in PolyATrimmed.__members__:
+        raise ValueError("unknown value %s, use one of none, all, stranded, tag:<TAG>, list:<FILE>, flnc:<FILE>"
+                         % name)
+    mode = PolyATrimmed[name]
+    if not mode.uses_external_source():
+        if sep:
+            raise ValueError("%s does not take a value" % name)
+        return mode, None, None
+    if not option_value:
+        raise ValueError("%s requires a value, e.g. %s:%s" % (name, name, "pt" if mode == PolyATrimmed.tag else "FILE"))
+    if mode == PolyATrimmed.tag:
+        return mode, option_value, None
+
+    if not os.path.isfile(option_value):
+        raise ValueError("file %s does not exist" % option_value)
+    file_name = os.path.abspath(option_value)
+    if mode == PolyATrimmed.flnc:
+        check_flnc_report(file_name)
+    return mode, None, file_name
+
+
 def set_model_construction_options(args):
     ModelConstructionStrategy = namedtuple('ModelConstructionStrategy',
                                            ('min_novel_intron_count',
@@ -1159,7 +1191,12 @@ def set_model_construction_options(args):
     args.require_monointronic_polya = strategy.require_monointronic_polya
     args.require_monoexonic_polya = strategy.require_monoexonic_polya
     args.polya_requirement_strategy = PolyAUsageStrategies[args.polya_requirement]
-    args.polya_trimmed = PolyATrimmed[args.polya_trimmed]
+    try:
+        args.polya_trimmed, args.polya_trimmed_tag, args.polya_trimmed_file = \
+            parse_polya_trimmed(args.polya_trimmed)
+    except ValueError as e:
+        logger.critical("Incorrect --polya_trimmed value: %s" % str(e))
+        sys.exit(IsoQuantExitCode.INVALID_PARAMETER)
     args.report_canonical_strategy = StrandnessReportingLevel[args.report_canonical]
     if args.report_canonical_strategy == StrandnessReportingLevel.auto:
         args.report_canonical_strategy = strategy.report_canonical

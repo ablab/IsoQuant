@@ -6,6 +6,7 @@
 
 import logging
 import math
+from typing import Dict, Optional
 from collections import defaultdict
 from queue import PriorityQueue
 
@@ -24,6 +25,15 @@ from isoquant_lib.assignment.isoform_assignment import (
 from isoquant_lib.assignment.read_groups import DefaultReadGrouper
 from isoquant_lib.terminal_prediction.polya_finder import PolyAFinder
 from isoquant_lib.terminal_prediction.polya_verification import PolyAFixer
+from isoquant_lib.terminal_prediction.external_polya import (
+    ExternalPolyA,
+    ExternalPolyAStatus,
+    UNKNOWN,
+    external_polya_from_tag,
+    has_any_polya,
+    hint_from_strandedness,
+    resolve_external_strand,
+)
 from isoquant_lib.assignment.exon_corrector import ExonCorrector
 from .alignment_info import AlignmentInfo
 from isoquant_lib.assignment.illumina_exon_corrector import IlluminaExonCorrector, VoidExonCorrector
@@ -39,7 +49,16 @@ class PolyATrimmed(Enum):
     none = 1
     all = 2
     stranded = 3
-    # file = 3
+    # polyA status comes from an external source, sequence-based detection still runs
+    tag = 4
+    list = 5
+    flnc = 6
+
+    def uses_external_source(self) -> bool:
+        return self in (PolyATrimmed.tag, PolyATrimmed.list, PolyATrimmed.flnc)
+
+    def uses_read_table(self) -> bool:
+        return self in (PolyATrimmed.list, PolyATrimmed.flnc)
 
 
 @unique
@@ -248,7 +267,8 @@ class AlignmentCollector:
                  barcode_dict=None,
                  small_chr_max_coverage=1000000,
                  usual_gene_max_coverage=-1,
-                 string_pools=None):
+                 string_pools=None,
+                 polya_read_dict: Optional[Dict[str, ExternalPolyA]] = None):
         self.chr_id = chr_id
         self.bam_pairs = bam_pairs
         self.params = params
@@ -263,6 +283,9 @@ class AlignmentCollector:
         self.strand_detector = StrandDetector(self.chr_record)
         self.read_groupper = read_groupper
         self.barcode_dict = barcode_dict  # read_id -> (barcode, umi)
+        self.polya_read_dict = polya_read_dict if polya_read_dict is not None else {}
+        self.polya_tag = getattr(params, 'polya_trimmed_tag', None)
+        self.polya_default_hint = hint_from_strandedness(getattr(params, 'stranded', None))
         self.barcode_tag = params.barcode_tag if getattr(params, 'barcoded_bam', False) else None
         self.umi_tag = params.umi_tag if getattr(params, 'barcoded_bam', False) else None
         self.strip_barcode_suffix = getattr(params, 'strip_barcode_suffix', False)
@@ -381,8 +404,10 @@ class AlignmentCollector:
             if skip_read_fraction > 1 and counter % skip_read_fraction != 0:
                 continue
 
-            if self.params.polya_trimmed == PolyATrimmed.none:
-                alignment_info.add_polya_info(self.polya_finder, self.polya_fixer)
+            mapped_strand = "-" if alignment.is_reverse else "+"
+            external_polya = self.get_external_polya(alignment, read_id)
+            if self.params.polya_trimmed == PolyATrimmed.none or self.params.polya_trimmed.uses_external_source():
+                self.add_polya_info(alignment_info, external_polya, mapped_strand)
 
             read_assignment = ReadAssignment(read_id, ReadAssignmentType.intergenic, self.string_pools,
                                              match=IsoformMatch(MatchClassification.intergenic, string_pools=self.string_pools))
@@ -412,17 +437,14 @@ class AlignmentCollector:
             group_ids = self.read_groupper.get_group_id(alignment, read_assignment, self.bam_merger.bam_pairs[bam_index][1])
             # Ensure read_group is always a list
             read_assignment.read_group = group_ids if isinstance(group_ids, list) else [group_ids]
-            read_assignment.mapped_strand = "-" if alignment.is_reverse else "+"
+            read_assignment.mapped_strand = mapped_strand
             read_assignment.strand = self.get_assignment_strand(read_assignment)
             read_assignment.chr_id = self.chr_id
             read_assignment.multimapper = alignment.is_secondary
             read_assignment.mapping_quality = alignment.mapping_quality
 
-            self.add_artificial_polya(read_assignment)
-            read_assignment.polyA_found = (alignment_info.polya_info.external_polya_pos != -1 or
-                                           alignment_info.polya_info.external_polyt_pos != -1 or
-                                           alignment_info.polya_info.internal_polya_pos != -1 or
-                                           alignment_info.polya_info.internal_polyt_pos != -1)
+            self.add_artificial_polya(read_assignment, external_polya)
+            read_assignment.polyA_found = has_any_polya(alignment_info.polya_info)
 
             AlignmentCollector.import_bam_tags(alignment, read_assignment, self.params.bam_tags)
             yield read_assignment
@@ -453,7 +475,9 @@ class AlignmentCollector:
                 logger.warning("Read %s has no aligned exons" % read_id)
                 continue
 
-            alignment_info.add_polya_info(self.polya_finder, self.polya_fixer)
+            mapped_strand = "-" if alignment.is_reverse else "+"
+            external_polya = self.get_external_polya(alignment, read_id)
+            self.add_polya_info(alignment_info, external_polya, mapped_strand)
             # if self.params.cage:
             #    alignment_info.add_cage_info(self.cage_finder)
             alignment_info.construct_profiles(profile_constructor)
@@ -491,7 +515,7 @@ class AlignmentCollector:
             group_ids = self.read_groupper.get_group_id(alignment, read_assignment, self.bam_merger.bam_pairs[bam_index][1])
             # Ensure read_group is always a list
             read_assignment.read_group = group_ids if isinstance(group_ids, list) else [group_ids]
-            read_assignment.mapped_strand = "-" if alignment.is_reverse else "+"
+            read_assignment.mapped_strand = mapped_strand
             read_assignment.strand = self.get_assignment_strand(read_assignment)
             AlignmentCollector.check_antisense(read_assignment)
             AlignmentCollector.import_bam_tags(alignment, read_assignment, self.params.bam_tags)
@@ -499,11 +523,8 @@ class AlignmentCollector:
             read_assignment.multimapper = alignment.is_secondary
             read_assignment.mapping_quality = alignment.mapping_quality
 
-            self.add_artificial_polya(read_assignment)
-            read_assignment.polyA_found = (alignment_info.polya_info.external_polya_pos != -1 or
-                                           alignment_info.polya_info.external_polyt_pos != -1 or
-                                           alignment_info.polya_info.internal_polya_pos != -1 or
-                                           alignment_info.polya_info.internal_polyt_pos != -1)
+            self.add_artificial_polya(read_assignment, external_polya)
+            read_assignment.polyA_found = has_any_polya(alignment_info.polya_info)
 
             if self.params.count_exons:
                 read_assignment.exon_gene_profile = alignment_info.combined_profile.read_exon_profile.gene_profile
@@ -583,17 +604,37 @@ class AlignmentCollector:
             gene_info.set_reference_sequence(current_region[0], current_region[1], self.chr_record)
         return gene_info
 
-    def add_artificial_polya(self, read_assignment):
+    def get_external_polya(self, alignment, read_id: str) -> ExternalPolyA:
+        if self.params.polya_trimmed == PolyATrimmed.tag:
+            return external_polya_from_tag(alignment, self.polya_tag, self.polya_default_hint)
+        if self.params.polya_trimmed.uses_read_table():
+            return self.polya_read_dict.get(read_id, UNKNOWN)
+        return UNKNOWN
+
+    def add_polya_info(self, alignment_info: AlignmentInfo, external_polya: ExternalPolyA,
+                       mapped_strand: str) -> None:
+        # phase 1: the source tells the side of the tail (or that there is none),
+        # so the tail is known before profiles are built and the read is assigned
+        alignment_info.add_polya_info(self.polya_finder, self.polya_fixer,
+                                      external_strand=resolve_external_strand(external_polya, mapped_strand),
+                                      external_no_tail=external_polya.status == ExternalPolyAStatus.no_tail)
+
+    def add_artificial_polya(self, read_assignment, external_polya: ExternalPolyA = UNKNOWN) -> None:
         if self.params.polya_trimmed == PolyATrimmed.stranded:
-            if read_assignment.strand == '+':
-                read_assignment.polya_info.external_polya_pos = read_assignment.corrected_exons[-1][1] + 1
-            elif read_assignment.strand == '-':
-                read_assignment.polya_info.external_polyt_pos = read_assignment.corrected_exons[0][0] - 1
+            AlignmentCollector.set_artificial_polya(read_assignment, read_assignment.strand)
         elif self.params.polya_trimmed == PolyATrimmed.all:
-            if read_assignment.mapped_strand == '+':
-                read_assignment.polya_info.external_polya_pos = read_assignment.corrected_exons[-1][1] + 1
-            elif read_assignment.mapped_strand == '-':
-                read_assignment.polya_info.external_polyt_pos = read_assignment.corrected_exons[0][0] - 1
+            AlignmentCollector.set_artificial_polya(read_assignment, read_assignment.mapped_strand)
+        elif (external_polya.status == ExternalPolyAStatus.present and external_polya.hint is None
+              and not has_any_polya(read_assignment.polya_info)):
+            # phase 2: the source only says there is a tail, its side comes from the assigned strand
+            AlignmentCollector.set_artificial_polya(read_assignment, read_assignment.strand)
+
+    @staticmethod
+    def set_artificial_polya(read_assignment, strand: str) -> None:
+        if strand == '+':
+            read_assignment.polya_info.external_polya_pos = read_assignment.corrected_exons[-1][1] + 1
+        elif strand == '-':
+            read_assignment.polya_info.external_polyt_pos = read_assignment.corrected_exons[0][0] - 1
 
     @staticmethod
     def split_coverage_regions(genomic_region, alignment_storage):

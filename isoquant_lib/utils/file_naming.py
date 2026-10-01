@@ -29,6 +29,10 @@ def split_barcodes_lock_filename(sample):
     return sample.barcodes_split_reads + "_lock"
 
 
+def split_polya_lock_filename(sample) -> str:
+    return sample.polya_split_reads + "_lock"
+
+
 def tagged_bam_lock_filename(sample):
     # in the aux dir, so it outlives clean_up and a resumed run does not copy the whole
     # input BAM again for an output that is already complete
