@@ -6,8 +6,10 @@
 ############################################################################
 
 import logging
+from typing import Optional
 
 from isoquant_lib.common import get_read_blocks
+from isoquant_lib.terminal_prediction.external_polya import inject_external_polya, reconcile_polya
 from isoquant_lib.terminal_prediction.polya_finder import PolyAInfo
 from isoquant_lib.terminal_prediction.polya_verification import shift_polya, shift_polyt
 
@@ -116,8 +118,12 @@ class AlignmentInfo:
     def add_cage_info(self, cage_finder):
         self.cage_hits = cage_finder.find_cage_peak(self.alignment)
 
-    def add_polya_info(self, polya_finder, polya_fixer):
+    def add_polya_info(self, polya_finder, polya_fixer,
+                       external_strand: Optional[str] = None, external_no_tail: bool = False):
+        # external_strand / external_no_tail: what --polya_trimmed tag:/list:/flnc: says about the read;
+        # it overrides the sequence-based detection when the two disagree
         self.polya_info = polya_finder.detect_polya(self.alignment)
+        reconcile_polya(self.polya_info, external_strand, external_no_tail)
         polya_exon_count, polyt_exon_count = polya_fixer.correct_read_info(self.read_exons, self.polya_info)
 
         if polya_exon_count > 0:
@@ -145,3 +151,5 @@ class AlignmentInfo:
         if self.exons_changed:
             self.read_start = self.read_exons[0][0]
             self.read_end = self.read_exons[-1][1]
+
+        inject_external_polya(self.polya_info, self.read_exons, external_strand)

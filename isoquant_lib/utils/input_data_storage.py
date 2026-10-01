@@ -90,6 +90,9 @@ class SampleData:
         self.barcodes_tsv = self._make_path(self.prefix + ".barcoded_reads")
         self.barcodes_done = self._make_aux_path(self.prefix + ".barcodes_done")
         self.barcodes_split_reads = self._make_aux_path(self.prefix + ".split_barcodes")
+        # --polya_trimmed list:/flnc:, normalized to read_id<TAB>{+,-,.,0} and split per chromosome
+        self.polya_reads_normalized = self._make_aux_path(self.prefix + ".external_polya.tsv")
+        self.polya_split_reads = self._make_aux_path(self.prefix + ".split_external_polya")
         # cell barcode detection: the first pass only counts barcodes (nothing is written),
         # the second pass fills barcodes_tsv as usual
         self.raw_barcodes_done = self._make_aux_path(self.prefix + ".raw_barcodes_done")
@@ -162,6 +165,11 @@ class SampleData:
         """Get path to split barcodes file for a chromosome."""
         from isoquant_lib.utils.file_naming import convert_chr_id_to_file_name_str
         return self.barcodes_split_reads + "_" + convert_chr_id_to_file_name_str(chr_id)
+
+    def get_polya_split_file(self, chr_id: str) -> str:
+        """Get path to split external polyA file for a chromosome."""
+        from isoquant_lib.utils.file_naming import convert_chr_id_to_file_name_str
+        return self.polya_split_reads + "_" + convert_chr_id_to_file_name_str(chr_id)
 
     # Chromosome-specific output file getters (for parallel processing)
 
