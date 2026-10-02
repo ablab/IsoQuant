@@ -24,6 +24,9 @@ class VoidTranscriptPrinter:
     def dump(self, transcript_model_constructor, transcript_model_storage=None):
         pass
 
+    def close(self):
+        pass
+
 
 class GFFPrinter:
     exon_id_dict = {}
@@ -43,6 +46,9 @@ class GFFPrinter:
         self.check_canonical = check_canonical
 
     def __del__(self):
+        self.out_gff.close()
+
+    def close(self):
         self.out_gff.close()
 
     def dump(self, gene_info, transcript_model_storage):

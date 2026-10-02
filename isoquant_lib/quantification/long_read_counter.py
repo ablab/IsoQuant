@@ -184,7 +184,7 @@ class ReadWeightCounter:
 
 
 class AbstractCounter:
-    def __init__(self, output_prefix, ignore_read_groups=False):
+    def __init__(self, output_prefix, ignore_read_groups=False, truncate_output: bool = True):
         self.ignore_read_groups = ignore_read_groups
         self.output_prefix = output_prefix
         self.output_counts_prefix = counts_prefix(output_prefix)
@@ -192,7 +192,10 @@ class AbstractCounter:
         self.output_counts_file_name = counts_file_name(self.output_counts_prefix, linear=not ignore_read_groups)
         self.output_tpm_file_name = tpm_file_name(self.output_tpm_prefix)
         self.output_file = self.output_counts_file_name
-        open(self.output_file, "w").close()
+        # the merge driver builds counters with truncate_output=False: each merge unit truncates
+        # only its own output, so a resumed merge cannot empty an output finished earlier
+        if truncate_output:
+            open(self.output_file, "w").close()
         self.output_stats_file_name = None
         self.usable_file_name = None
         # Grouped subclasses overwrite these right after calling us; the defaults
@@ -307,8 +310,8 @@ class CompositeCounter:
 # get_feature_id --- function that returns feature id form IsoformMatch object
 class AssignedFeatureCounter(AbstractCounter):
     def __init__(self, output_prefix, assignment_extractor, string_pools, read_counter,
-                 all_features=None, group_index: int = 0):
-        AbstractCounter.__init__(self, output_prefix, string_pools is None)
+                 all_features=None, group_index: int = 0, truncate_output: bool = True):
+        AbstractCounter.__init__(self, output_prefix, string_pools is None, truncate_output)
         self.assignment_extractor = assignment_extractor
         self.string_pools = string_pools
         self.all_features = set(all_features) if all_features is not None else set()
@@ -519,17 +522,20 @@ class AssignedFeatureCounter(AbstractCounter):
                                convert_to_tpm=True, usable_reads_per_group=reads_for_tpm)
 
 
-def create_gene_counter(output_file_name, strategy, complete_feature_list=None, string_pools=None, group_index: int = 0):
+def create_gene_counter(output_file_name, strategy, complete_feature_list=None, string_pools=None, group_index: int = 0,
+                        truncate_output: bool = True):
     read_weight_counter = ReadWeightCounter(strategy)
     return AssignedFeatureCounter(output_file_name, GeneAssignmentExtractor,
-                                  string_pools, read_weight_counter, complete_feature_list, group_index)
+                                  string_pools, read_weight_counter, complete_feature_list, group_index,
+                                  truncate_output)
 
 
 def create_transcript_counter(output_file_name, strategy, complete_feature_list=None,
-                              string_pools=None, group_index: int = 0):
+                              string_pools=None, group_index: int = 0, truncate_output: bool = True):
     read_weight_counter = ReadWeightCounter(strategy)
     return AssignedFeatureCounter(output_file_name, TranscriptAssignmentExtractor,
-                                  string_pools, read_weight_counter, complete_feature_list, group_index)
+                                  string_pools, read_weight_counter, complete_feature_list, group_index,
+                                  truncate_output)
 
 
 @unique
@@ -577,8 +583,8 @@ def convert_ungrouped_to_tpm(counts_file_name, output_tpm_file_name, normalizati
 
 # count simple features inclusion/exclusion (exons / introns)
 class ProfileFeatureCounter(AbstractCounter):
-    def __init__(self, output_prefix, string_pools=None, group_index: int = 0):
-        AbstractCounter.__init__(self, output_prefix, string_pools is None)
+    def __init__(self, output_prefix, string_pools=None, group_index: int = 0, truncate_output: bool = True):
+        AbstractCounter.__init__(self, output_prefix, string_pools is None, truncate_output)
         self.string_pools = string_pools
         self.group_index = group_index  # Index in read_group list to use
         # feature_id -> (group_id -> count)  -- group_id is now an integer pool index
@@ -664,8 +670,8 @@ class ProfileFeatureCounter(AbstractCounter):
 
 
 class ExonCounter(ProfileFeatureCounter):
-    def __init__(self, output_prefix, string_pools=None, group_index: int = 0):
-        ProfileFeatureCounter.__init__(self, output_prefix, string_pools, group_index)
+    def __init__(self, output_prefix, string_pools=None, group_index: int = 0, truncate_output: bool = True):
+        ProfileFeatureCounter.__init__(self, output_prefix, string_pools, group_index, truncate_output)
 
     def _feature_type(self) -> str:
         return "exon"
@@ -697,8 +703,8 @@ EXON_FULL, EXON_LEFT, EXON_RIGHT, EXON_SKIP, EXON_ALT = range(5)
 # include_counts = full + left + right, exclude_counts = skip, so include / (include + exclude) is the exon PSI.
 class ExonUsageCounter(ProfileFeatureCounter):
     def __init__(self, output_prefix, string_pools=None, group_index: int = 0,
-                 delta: int = 0, minimal_exon_overlap: int = 5):
-        ProfileFeatureCounter.__init__(self, output_prefix, string_pools, group_index)
+                 delta: int = 0, minimal_exon_overlap: int = 5, truncate_output: bool = True):
+        ProfileFeatureCounter.__init__(self, output_prefix, string_pools, group_index, truncate_output)
         self.delta: int = delta
         self.segment_comparator = partial(overlaps_at_least_when_overlap, delta=minimal_exon_overlap)
         # (exon feature id, gene id) -> {group_id: [full, left, right, skip, alt]}
@@ -853,8 +859,8 @@ DEFAULT_EXCLUSION_MARGIN = 50
 class ExonSpliceSiteCounter(AbstractCounter):
     def __init__(self, output_prefix, string_pools=None, group_index: int = 0,
                  delta: int = 6, exclusion_margin: int = DEFAULT_EXCLUSION_MARGIN,
-                 emit_read_ids: bool = False):
-        AbstractCounter.__init__(self, output_prefix, string_pools is None)
+                 emit_read_ids: bool = False, truncate_output: bool = True):
+        AbstractCounter.__init__(self, output_prefix, string_pools is None, truncate_output)
         self.string_pools = string_pools
         self.group_index: int = group_index
         self.delta: int = delta
@@ -1087,8 +1093,8 @@ class ExonSpliceSiteCounter(AbstractCounter):
 
 
 class IntronCounter(ProfileFeatureCounter):
-    def __init__(self, output_prefix, string_pools=None, group_index: int = 0):
-        ProfileFeatureCounter.__init__(self, output_prefix, string_pools, group_index)
+    def __init__(self, output_prefix, string_pools=None, group_index: int = 0, truncate_output: bool = True):
+        ProfileFeatureCounter.__init__(self, output_prefix, string_pools, group_index, truncate_output)
 
     def _feature_type(self) -> str:
         return "intron"
@@ -1145,8 +1151,9 @@ class IntronRetentionCounter(ProfileFeatureCounter):
     to the matched transcript.
     """
 
-    def __init__(self, output_prefix: str, string_pools=None, group_index: int = 0) -> None:
-        ProfileFeatureCounter.__init__(self, output_prefix, string_pools, group_index)
+    def __init__(self, output_prefix: str, string_pools=None, group_index: int = 0,
+                 truncate_output: bool = True) -> None:
+        ProfileFeatureCounter.__init__(self, output_prefix, string_pools, group_index, truncate_output)
 
     def _feature_type(self) -> str:
         return "intron"

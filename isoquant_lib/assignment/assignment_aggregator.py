@@ -38,8 +38,13 @@ logger = logging.getLogger('IsoQuant')
 
 
 class ReadAssignmentAggregator:
-    def __init__(self, args, sample, string_pools, gffutils_db=None, chr_id=None, gzipped=False, grouping_strategy_names=None):
+    def __init__(self, args, sample, string_pools, gffutils_db=None, chr_id=None, gzipped=False, grouping_strategy_names=None,
+                 truncate_outputs: bool = True):
+        # truncate_outputs=False is the merge driver's mode: no printers are opened and no
+        # counter truncates its file, so building the aggregator has no filesystem side
+        # effects and a resumed merge cannot empty an output that was already finished
         self.args = args
+        self.truncate_outputs = truncate_outputs
         self.string_pools = string_pools
         self.grouping_strategy_names = grouping_strategy_names if grouping_strategy_names else ["default"]
         self.common_header = "# Command line: " + args._cmd_line + "\n# IsoQuant version: " + args._version + "\n"
@@ -62,6 +67,13 @@ class ReadAssignmentAggregator:
 
     def _init_printers(self, sample, chr_id, gzipped):
         printer_list = []
+        if not self.truncate_outputs:
+            self.corrected_bed_printer = None
+            self.read_info_printer = None
+            self.basic_printer = None
+            self.t2t_sqanti_printer = VoidTranscriptPrinter()
+            self.global_printer = ReadAssignmentCompositePrinter(printer_list)
+            return
         self.corrected_bed_printer = self._make_corrected_bed_printer(sample, chr_id, gzipped, printer_list)
         self.read_info_printer = self._make_read_info_printer(sample, chr_id, gzipped, printer_list)
         self.basic_printer = self._make_basic_printer(sample, chr_id, gzipped, printer_list)
@@ -125,10 +137,12 @@ class ReadAssignmentAggregator:
         transcript_counts_path = sample.get_transcript_counts_file(chr_id) if chr_id else sample.out_transcript_counts_tsv
         self.gene_counter = create_gene_counter(gene_counts_path,
                                                 self.args.gene_quantification,
-                                                complete_feature_list=self.gene_set)
+                                                complete_feature_list=self.gene_set,
+                                                truncate_output=self.truncate_outputs)
         self.transcript_counter = create_transcript_counter(transcript_counts_path,
                                                             self.args.transcript_quantification,
-                                                            complete_feature_list=self.transcript_set)
+                                                            complete_feature_list=self.transcript_set,
+                                                            truncate_output=self.truncate_outputs)
         self.global_counter.add_counters([self.gene_counter, self.transcript_counter])
 
     def _add_ungrouped_model_counters(self, sample, chr_id):
@@ -137,9 +151,11 @@ class ReadAssignmentAggregator:
         transcript_model_counts_path = sample.get_transcript_model_counts_file(chr_id) if chr_id else sample.out_transcript_model_counts_tsv
         gene_model_counts_path = sample.get_gene_model_counts_file(chr_id) if chr_id else sample.out_gene_model_counts_tsv
         self.transcript_model_counter = create_transcript_counter(transcript_model_counts_path,
-                                                                  self.args.transcript_quantification)
+                                                                  self.args.transcript_quantification,
+                                                                  truncate_output=self.truncate_outputs)
         self.gene_model_counter = create_gene_counter(gene_model_counts_path,
-                                                      self.args.gene_quantification)
+                                                      self.args.gene_quantification,
+                                                      truncate_output=self.truncate_outputs)
 
         self.transcript_model_global_counter.add_counter(self.transcript_model_counter)
         self.gene_model_global_counter.add_counter(self.gene_model_counter)
@@ -154,19 +170,21 @@ class ReadAssignmentAggregator:
         # string_pools=None means ungrouped counting
         # per-exon usage counts are the default "exon" output
         self.exon_counter = ExonUsageCounter(exon_counts_path, delta=self.args.delta,
-                                             minimal_exon_overlap=self.args.minimal_exon_overlap)
-        self.intron_counter = IntronCounter(intron_counts_path)
+                                             minimal_exon_overlap=self.args.minimal_exon_overlap,
+                                             truncate_output=self.truncate_outputs)
+        self.intron_counter = IntronCounter(intron_counts_path, truncate_output=self.truncate_outputs)
         self.exon_splice_site_counter = ExonSpliceSiteCounter(
             exon_splice_site_counts_path,
             delta=self.args.delta,
-            emit_read_ids=getattr(self.args, "emit_read_ids", False))
+            emit_read_ids=getattr(self.args, "emit_read_ids", False),
+            truncate_output=self.truncate_outputs)
         ungrouped_exon_counters = [self.exon_counter, self.intron_counter,
                                    self.exon_splice_site_counter]
         # legacy per-exon inclusion/exclusion counts (deprecated) only on request
         if getattr(self.args, "old_exon_count_format", False):
             old_exon_counts_path = (sample.get_old_exon_counts_file(chr_id)
                                     if chr_id else sample.out_old_exon_counts_tsv)
-            self.old_exon_counter = ExonCounter(old_exon_counts_path)
+            self.old_exon_counter = ExonCounter(old_exon_counts_path, truncate_output=self.truncate_outputs)
             ungrouped_exon_counters.append(self.old_exon_counter)
         self.global_counter.add_counters(ungrouped_exon_counters)
 
@@ -178,18 +196,18 @@ class ReadAssignmentAggregator:
         if not self.args.predict_terminal_sites:
             return
         polya_path = sample.get_polya_prediction_file(chr_id) if chr_id else sample.out_polya_prediction_tsv
-        self.polya_counter = PolyACounter(self.args, polya_path)
+        self.polya_counter = PolyACounter(self.args, polya_path, truncate_output=self.truncate_outputs)
         self.global_counter.add_counter(self.polya_counter)
         if self.args.fl_data:
             tss_path = sample.get_tss_prediction_file(chr_id) if chr_id else sample.out_tss_prediction_tsv
-            self.tss_counter = TSSCounter(self.args, tss_path)
+            self.tss_counter = TSSCounter(self.args, tss_path, truncate_output=self.truncate_outputs)
             self.global_counter.add_counter(self.tss_counter)
 
     def _add_ungrouped_ir_counter(self, sample, chr_id):
         if not (self.args.count_intron_retentions and self.args.genedb):
             return
         ir_counts_path = sample.get_intron_retention_counts_file(chr_id) if chr_id else sample.out_intron_retention_counts_tsv
-        self.intron_retention_counter = IntronRetentionCounter(ir_counts_path)
+        self.intron_retention_counter = IntronRetentionCounter(ir_counts_path, truncate_output=self.truncate_outputs)
         self.global_counter.add_counter(self.intron_retention_counter)
 
     # ----------------------------------------------------------- grouped counters
@@ -224,12 +242,14 @@ class ReadAssignmentAggregator:
                                            self.args.gene_quantification,
                                            complete_feature_list=self.gene_set,
                                            string_pools=self.string_pools,
-                                           group_index=group_idx)
+                                           group_index=group_idx,
+                                           truncate_output=self.truncate_outputs)
         transcript_counter = create_transcript_counter(transcript_out_file,
                                                        self.args.transcript_quantification,
                                                        complete_feature_list=self.transcript_set,
                                                        string_pools=self.string_pools,
-                                                       group_index=group_idx)
+                                                       group_index=group_idx,
+                                                       truncate_output=self.truncate_outputs)
 
         self.global_counter.add_counters([gene_counter, transcript_counter])
 
@@ -245,11 +265,14 @@ class ReadAssignmentAggregator:
         # per-exon usage counts are the default "exon" output
         exon_counter = ExonUsageCounter(exon_out_file, string_pools=self.string_pools, group_index=group_idx,
                                         delta=self.args.delta,
-                                        minimal_exon_overlap=self.args.minimal_exon_overlap)
-        intron_counter = IntronCounter(intron_out_file, string_pools=self.string_pools, group_index=group_idx)
+                                        minimal_exon_overlap=self.args.minimal_exon_overlap,
+                                        truncate_output=self.truncate_outputs)
+        intron_counter = IntronCounter(intron_out_file, string_pools=self.string_pools, group_index=group_idx,
+                                       truncate_output=self.truncate_outputs)
         exon_splice_site_counter = ExonSpliceSiteCounter(
             exon_splice_site_out_file, string_pools=self.string_pools, group_index=group_idx,
-            delta=self.args.delta, emit_read_ids=getattr(self.args, "emit_read_ids", False))
+            delta=self.args.delta, emit_read_ids=getattr(self.args, "emit_read_ids", False),
+            truncate_output=self.truncate_outputs)
         grouped_exon_counters = [exon_counter, intron_counter, exon_splice_site_counter]
         if getattr(self.args, "old_exon_count_format", False):
             if chr_id:
@@ -257,7 +280,8 @@ class ReadAssignmentAggregator:
             else:
                 old_exon_out_file = f"{sample.out_old_exon_grouped_counts_tsv}_{strategy_name}"
             old_exon_counter = ExonCounter(old_exon_out_file,
-                                           string_pools=self.string_pools, group_index=group_idx)
+                                           string_pools=self.string_pools, group_index=group_idx,
+                                           truncate_output=self.truncate_outputs)
             grouped_exon_counters.append(old_exon_counter)
         self.global_counter.add_counters(grouped_exon_counters)
 
@@ -273,7 +297,8 @@ class ReadAssignmentAggregator:
                 polya_out_file = f"{sample.out_polya_prediction_grouped_tsv}_{strategy_name}.tsv"
             grouped_polya_counter = PolyACounter(self.args, polya_out_file,
                                                  string_pools=self.string_pools,
-                                                 group_index=group_idx)
+                                                 group_index=group_idx,
+                                                 truncate_output=self.truncate_outputs)
             self.global_counter.add_counter(grouped_polya_counter)
         if self.args.predict_terminal_sites and self.args.fl_data and not getattr(self.args, "collect_tss_training", None):
             if chr_id:
@@ -282,7 +307,8 @@ class ReadAssignmentAggregator:
                 tss_out_file = f"{sample.out_tss_prediction_grouped_tsv}_{strategy_name}.tsv"
             grouped_tss_counter = TSSCounter(self.args, tss_out_file,
                                              string_pools=self.string_pools,
-                                             group_index=group_idx)
+                                             group_index=group_idx,
+                                             truncate_output=self.truncate_outputs)
             self.global_counter.add_counter(grouped_tss_counter)
 
     def _add_grouped_velocity_counter(self, sample, chr_id, group_idx, strategy_name,
@@ -302,7 +328,8 @@ class ReadAssignmentAggregator:
             rna_velocity_path = f"{sample.out_rna_velocity_grouped}_{strategy_name}"
         rna_velocity_counter = RNAVelocityCounter(self.args, rna_velocity_path,
                                                   string_pools=self.string_pools,
-                                                  group_index=group_idx)
+                                                  group_index=group_idx,
+                                                  truncate_output=self.truncate_outputs)
         self.global_counter.add_counter(rna_velocity_counter)
 
     def _add_grouped_ir_counter(self, sample, chr_id, group_idx, strategy_name):
@@ -310,7 +337,8 @@ class ReadAssignmentAggregator:
             ir_out_file = sample.get_grouped_counts_file(chr_id, "intron_retention", strategy_name)
         else:
             ir_out_file = f"{sample.out_intron_retention_grouped_counts_tsv}_{strategy_name}"
-        ir_counter = IntronRetentionCounter(ir_out_file, string_pools=self.string_pools, group_index=group_idx)
+        ir_counter = IntronRetentionCounter(ir_out_file, string_pools=self.string_pools, group_index=group_idx,
+                                            truncate_output=self.truncate_outputs)
         self.global_counter.add_counter(ir_counter)
 
     # ----------------------------------------------------- grouped model counters
@@ -330,12 +358,14 @@ class ReadAssignmentAggregator:
                 transcript_model_out_file,
                 self.args.transcript_quantification,
                 string_pools=self.string_pools,
-                group_index=group_idx)
+                group_index=group_idx,
+                truncate_output=self.truncate_outputs)
             gene_model_counter = create_gene_counter(
                 gene_model_out_file,
                 self.args.gene_quantification,
                 string_pools=self.string_pools,
-                group_index=group_idx)
+                group_index=group_idx,
+                truncate_output=self.truncate_outputs)
 
             self.transcript_model_global_counter.add_counter(transcript_model_counter)
             self.gene_model_global_counter.add_counter(gene_model_counter)

@@ -18,7 +18,7 @@ from isoquant_lib.barcode_calling.umi_filtering import UMIFilter
 from isoquant_lib.assignment.isoform_assignment import ReadAssignment, ReadAssignmentType, IsoformMatch, MatchClassification
 from isoquant_lib.common import junctions_from_blocks
 from isoquant_lib.utils.string_pools import StringPoolManager
-from isoquant_lib.utils.file_naming import umi_barcode2barcode_prefix, umi_barcode2barcode_global_lock
+from isoquant_lib.utils.file_naming import umi_barcode2barcode_prefix
 
 
 # -- Helpers / Mocks --
@@ -64,10 +64,6 @@ class TestBarcode2BarcodeFileNaming:
 
     def test_prefix_multiple_columns(self):
         assert umi_barcode2barcode_prefix("/x", 2) == "/x.barcode_barcode_col2"
-
-    def test_lock_format(self):
-        result = umi_barcode2barcode_global_lock("/out/sample.umi_done", 1)
-        assert result == "/out/sample.umi_done.barcode_barcode_col1.lock"
 
 
 # -- load_barcode2barcode_mapping tests --

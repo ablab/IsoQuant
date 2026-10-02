@@ -283,7 +283,9 @@ Feeding you data as pseudo-bulk (`--mode bulk`) is recommended for full transcri
 `--resume`
     Resume a previously unfinished run. The output folder with the previous run must be specified.
     Allowed options are `--threads`, `--debug`, `--high_memory`; other options cannot be changed.
-    IsoQuant will run from the beginning if the output folder does not contain the previous run.
+    Every finished stage is skipped, including experiments that were fully processed.
+    Runs started by IsoQuant versions without checkpoints (no `checkpoints` folder in the output directory)
+    cannot be resumed; IsoQuant then exits with code 26 and the run has to be restarted without `--resume`.
 
 `--force`
     Force to overwrite the folder with previous run.

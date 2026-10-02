@@ -45,17 +45,14 @@ if self.args.mode.needs_pcr_deduplication():
     for chr_id in self.get_chr_list():
         split_barcodes_dict[chr_id] = sample.barcodes_split_reads + "_" + chr_id
 
-    barcode_split_done = split_barcodes_lock_filename(sample)
-    if self.args.resume and os.path.exists(barcode_split_done):
-        logger.info("Barcode table was split during the previous run")
-    else:
-        self.split_read_barcode_table(sample, split_barcodes_dict)
-        open(barcode_split_done, "w").close()
+    # now a resume stage, see .claude/RESUME_CHECKPOINTS.md
+    run_stage(store, "barcode_split", run=lambda: self.split_read_barcode_table(sample, split_barcodes_dict),
+              enabled=uses_barcode_table)
 ```
 
 This ensures split barcode files are available when `collect_reads_in_parallel()` runs.
 
-**Cleanup** happens after `load_read_info()` (lines 516-520) to ensure files are available throughout the pipeline.
+**Cleanup** happens once the experiment is marked complete (`remove_sample_intermediates`), so the split files are available throughout the pipeline and to any resumed stage.
 
 ## Implementation Details
 
