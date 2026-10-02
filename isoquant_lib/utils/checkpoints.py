@@ -21,12 +21,13 @@ Rules (see .claude/RESUME_CHECKPOINTS.md):
 from __future__ import annotations
 
 import datetime
+import functools
 import json
 import logging
 import os
 import shutil
 from enum import Enum
-from typing import Any, Callable, Dict, Iterable, Optional, Type
+from typing import Any, Callable, Dict, Optional, Type
 
 from isoquant_lib.utils.file_naming import convert_chr_id_to_file_name_str
 
@@ -48,7 +49,9 @@ def marker_name(*parts: str) -> str:
     return "/".join(convert_chr_id_to_file_name_str(str(p)) for p in parts)
 
 
+@functools.lru_cache(maxsize=None)
 def _isoquant_version() -> str:
+    # cached: every per-chromosome marker records it, and the lookup scans sys.path
     try:
         from importlib.metadata import version
         return version("isoquant")
@@ -75,9 +78,6 @@ class CheckpointStore:
         """Remove all markers; called once by the driver at the start of a fresh run."""
         shutil.rmtree(self.root, ignore_errors=True)
         os.makedirs(self.root, exist_ok=True)
-
-    def ensure_dir(self, name: str) -> None:
-        os.makedirs(os.path.join(self.root, name), exist_ok=True)
 
     def is_done(self, name: str) -> bool:
         return self.resume and os.path.exists(self.path(name))
@@ -139,12 +139,6 @@ def run_stage(store: CheckpointStore, name: str, run: Callable[[], Payload],
         mark_stage_done(store, name, payload)
     if cleanup is not None and not keep_tmp:
         cleanup()
-
-
-def remove_files(file_names: Iterable[str]) -> None:
-    for f in file_names:
-        if os.path.exists(f):
-            os.remove(f)
 
 
 def enum_stats_to_payload(stats_dict: Dict[Any, int]) -> Dict[str, int]:

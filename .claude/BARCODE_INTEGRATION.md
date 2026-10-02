@@ -35,7 +35,7 @@ Store barcode and UMI information as properties of ReadAssignment objects so the
 
 ### Barcode Table Splitting (Early in Pipeline)
 
-Barcode tables are split by chromosome **before** read collection begins, in `process_assigned_reads()`:
+Barcode tables are split by chromosome **before** read collection begins, in the `barcode_split` stage of `DatasetProcessor.process_sample()`:
 
 **File**: `src/dataset_processor.py` (lines 484-498)
 

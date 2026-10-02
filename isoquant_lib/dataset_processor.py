@@ -37,10 +37,10 @@ from isoquant_lib.utils.serialization import (
 from isoquant_lib.utils.stats import EnumStats
 from isoquant_lib.utils.file_utils import (merge_files, merge_counts, merge_file_list, gzip_file_in_place,
                                           load_usable_fragments, usable_fragment_list,
-                                          open_text_write, read_stats_tsv,
+                                          open_text_write, read_stats_tsv, remove_files,
                                           resolve_optionally_gzipped)
 from isoquant_lib.utils.checkpoints import (CheckpointStore, enum_stats_to_payload, mark_stage_done, marker_name,
-                                           payload_to_enum_stats, remove_files, run_checkpoint_dir, run_stage)
+                                           payload_to_enum_stats, run_checkpoint_dir, run_stage)
 from isoquant_lib.utils.bam_utils import (PLACEHOLDERS, collect_unmapped_read_ids,
                                          load_barcode_umi_tags, merge_bam_files,
                                          references_with_alignments, write_unmapped_bam)
@@ -658,8 +658,7 @@ class DatasetProcessor:
             for counter in aggregator.gene_model_global_counter.counters:
                 self.counter_units(store, counter, label, chr_ids, fragment_dir, 0, finalize=True)
 
-        if not keep_tmp:
-            self._cleanup_per_chr_temp_files(sample, chr_ids)
+        # fragments of disabled outputs, if any, go with aux/per_chr once the sample is complete
         mark_stage_done(store, "merge")
 
     def counter_units(self, store: CheckpointStore, counter, label: str, chr_ids: List[str],
@@ -701,19 +700,6 @@ class DatasetProcessor:
         run_stage(store, marker_name("merge", name), run=run,
                   cleanup=lambda: remove_files(merge_file_list(fragment_base, label, chr_ids, fragment_dir)),
                   enabled=bool(csv_path), keep_tmp=self.args.keep_tmp)
-
-    def _cleanup_per_chr_temp_files(self, sample, chr_ids: list):
-        """Remove any remaining per-chromosome temporary files after merging.
-
-        Each merge unit removes the fragments it consumed, but files from disabled output
-        types (e.g. corrected_bed, read2transcripts not in --large_output) or from
-        previous runs with different options may remain. This catch-all cleanup
-        removes them.
-        """
-        for chr_id in chr_ids:
-            chr_prefix = sample.get_chr_prefix(chr_id)
-            pattern = os.path.join(glob.escape(sample.chr_fragment_dir), glob.escape(chr_prefix) + ".*")
-            remove_files(glob.glob(pattern))
 
     def filter_umis(self, sample, store: CheckpointStore) -> None:
         """UMI deduplication: one stage per edit distance, then per barcode2barcode column."""

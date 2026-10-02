@@ -5,6 +5,9 @@
 ############################################################################
 
 
+from typing import Optional
+
+
 def convert_chr_id_to_file_name_str(chr_id: str):
     return chr_id.replace('/', '_')
 
@@ -18,7 +21,7 @@ def multimappers_file_name(out_raw_file: str, chr_id: str):
 
 
 def filtered_reads_file_name(out_raw_file: str, chr_id: str):
-    return out_raw_file + "_filtered_" + chr_id
+    return out_raw_file + "_filtered_" + convert_chr_id_to_file_name_str(chr_id)
 
 
 def dedup_bam_fragment_name(out_raw_file: str, chr_id: str):
@@ -31,7 +34,7 @@ def tagged_bam_fragment_name(out_raw_file: str, chr_id: str):
 
 
 def umi_filtered_reads_file_name(out_umi_filtered_tmp: str, chr_id: str, edit_distance: int):
-    return out_umi_filtered_tmp + ("_%s_ED%d" % (chr_id, edit_distance))
+    return out_umi_filtered_tmp + ("_%s_ED%d" % (convert_chr_id_to_file_name_str(chr_id), edit_distance))
 
 
 def allinfo_file_name(out_umi_filtered_tmp: str, chr_id: str, edit_distance: int):
@@ -45,6 +48,14 @@ def allinfo_stats_file_name(out_umi_filtered_tmp: str, chr_id: str, edit_distanc
 def umi_barcode2barcode_prefix(out_umi_filtered_tmp: str, col_index: int):
     """Get prefix for barcode2barcode UMI filtering output (per spot column)."""
     return out_umi_filtered_tmp + ".barcode_barcode_col%d" % col_index
+
+
+def read_group_split_file_name(read_group_file: str, chr_id: str, spec_index: Optional[int] = None) -> str:
+    """Per-chromosome piece of a --read_group file: table, like '<prefix>.read_group_spec0_chr1'."""
+    chr_str = convert_chr_id_to_file_name_str(chr_id)
+    if spec_index is not None:
+        return f"{read_group_file}_spec{spec_index}_{chr_str}"
+    return f"{read_group_file}_{chr_str}"
 
 
 def dynamic_pools_file_name(out_raw_file: str, chr_id: str):

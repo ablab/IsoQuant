@@ -38,6 +38,7 @@ import logging
 from typing import List, Dict
 
 from isoquant_lib.utils.file_utils import strip_compression_suffix
+from isoquant_lib.utils.file_naming import convert_chr_id_to_file_name_str
 from isoquant_lib.assignment.read_groups import AbstractReadGrouper, get_grouping_pool_types
 from isoquant_lib.assignment.assignment_loader import load_genedb
 from .serialization import write_int, write_string, read_int, read_string
@@ -697,7 +698,9 @@ def setup_string_pools(args, sample, chr_ids, chr_id=None, gffutils_db=None,
                             tsv_pool_info[tsv_spec_idx] = []
                         tsv_pool_info[tsv_spec_idx].append((col_idx, delimiter, pool_key))
 
-            base_pattern = read_group_file + "_spec*_" + chr_id
+            # chromosome part named like SampleData.get_read_group_split_file names it
+            base_pattern = (glob.escape(read_group_file) + "_spec*_" +
+                            glob.escape(convert_chr_id_to_file_name_str(chr_id)))
             spec_files = sorted(glob.glob(base_pattern))
             for spec_file in spec_files:
                 match = re.search(r'_spec(\d+)_', spec_file)

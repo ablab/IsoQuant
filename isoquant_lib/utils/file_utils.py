@@ -178,7 +178,7 @@ def merge_files(file_name, label, chr_ids, merged_file_handler, copy_header=True
                     f.readline()
             shutil.copyfileobj(f, merged_file_handler)
     if remove_inputs:
-        remove_existing(file_names)
+        remove_files(file_names)
     return file_names
 
 
@@ -204,7 +204,7 @@ def merge_counts(counter, label, chr_ids, unaligned_reads=0, remove_inputs: bool
                     stat_dict[v[0]] += int(v[1])
             consumed += stats_file_names
             if remove_inputs:
-                remove_existing(stats_file_names)
+                remove_files(stats_file_names)
 
             if unaligned_reads > 0:
                 stat_dict["__not_aligned"] = unaligned_reads
@@ -230,7 +230,7 @@ def load_usable_fragments(counter, label, chr_ids, fragment_dir: Optional[str] =
     return fragments
 
 
-def remove_existing(file_names) -> None:
+def remove_files(file_names) -> None:
     for f in file_names:
         if os.path.exists(f):
             os.remove(f)

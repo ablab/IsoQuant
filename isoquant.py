@@ -531,16 +531,23 @@ def run_fusion_detection_on_samples(fd, samples: list, store: Optional[Checkpoin
                 fd.detect_fusions()
             fd.report(output_path=out_fname)
             logger.info("Fusion candidates for sample %s written to %s" % (sample.prefix, out_fname))
-            summary["successful"] += 1
-            # only a success is marked: a failed sample stays retryable on resume
-            if store is not None:
-                mark_stage_done(store, fusion_marker)
         except Exception as e:
             logger.error("Fusion detection failed for sample %s: %s" % (sample.prefix, str(e)))
             logger.debug("Traceback:", exc_info=True)
             summary["failed"] += 1
             summary["skipped"].append(sample.prefix)
+            continue
+        summary["successful"] += 1
+        # only a success is marked, outside the try: a failed sample stays retryable on resume,
+        # and a failure to write the marker is not reported as a failed detection
+        if store is not None:
+            mark_stage_done(store, fusion_marker)
     return summary
+
+
+def fusion_pending(samples: list, store: CheckpointStore) -> bool:
+    """True if some sample still needs fusion detection (building the detector is expensive)."""
+    return any(not store.is_done(marker_name("fusion", sample.prefix)) for sample in samples)
 
 
 def check_and_load_args(args, parser):
@@ -1365,6 +1372,8 @@ def run_pipeline(args):
             logger.warning("Fusion detection requires --genedb; skipping")
         elif not bam_files:
             logger.warning("No BAM files available for fusion detection; skipping")
+        elif not fusion_pending(args.input_data.samples, run_store):
+            logger.info("Fusion detection was done for every sample during the previous run, skipping")
         else:
             try:
                 from isoquant_lib.fusion.fusion_detector import FusionDetector

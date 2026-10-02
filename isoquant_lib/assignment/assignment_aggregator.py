@@ -106,7 +106,6 @@ class ReadAssignmentAggregator:
         assigned_tsv_path = sample.get_assigned_tsv_file(chr_id) if chr_id else sample.out_assigned_tsv
         printer = BasicTSVAssignmentPrinter(assigned_tsv_path, self.args, self.io_support,
                                             additional_header=self.common_header, gzipped=gzipped)
-        sample.out_assigned_tsv_result = printer.output_file_name
         printer_list.append(printer)
         return printer
 

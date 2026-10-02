@@ -62,7 +62,6 @@ class SampleData:
         # per-chromosome fragments of the merged outputs, removed once each output is merged
         self.chr_fragment_dir = self._make_aux_path("per_chr")
         self.out_assigned_tsv = self._make_path(self.prefix + ".read_assignments.tsv")
-        self.out_assigned_tsv_result = self.out_assigned_tsv
         self.out_read_info_tsv = self._make_path(self.prefix + ".read_info.tsv")
         self.out_transcript_model_reads_tsv = self._make_path(self.prefix + ".transcript_model_reads.tsv")
         self.out_raw_file = self._make_aux_path(self.prefix + ".save")
@@ -147,11 +146,8 @@ class SampleData:
         Returns:
             Path like 'prefix.read_group_spec0_chr1' or 'prefix.read_group_chr1'
         """
-        from isoquant_lib.utils.file_naming import convert_chr_id_to_file_name_str
-        chr_str = convert_chr_id_to_file_name_str(chr_id)
-        if spec_index is not None:
-            return f"{self.read_group_file}_spec{spec_index}_{chr_str}"
-        return f"{self.read_group_file}_{chr_str}"
+        from isoquant_lib.utils.file_naming import read_group_split_file_name
+        return read_group_split_file_name(self.read_group_file, chr_id, spec_index)
 
     def get_barcodes_split_file(self, chr_id: str) -> str:
         """Get path to split barcodes file for a chromosome."""
