@@ -13,6 +13,7 @@ import sys
 import pysam
 
 from isoquant_lib.utils.file_utils import strip_compression_suffix
+from isoquant_lib.utils.file_naming import read_group_split_file_name
 from isoquant_lib.utils.error_codes import IsoQuantExitCode
 from isoquant_lib.utils.table_splitter import split_read_table_parallel
 
@@ -328,7 +329,7 @@ def prepare_read_groups(args, sample):
                         (table_filename, spec_index))
 
         # Build output file names for each chromosome with spec_index to avoid overwrites
-        split_reads_file_names = {chr_id: sample.read_group_file + "_spec" + str(spec_index) + "_" + chr_id
+        split_reads_file_names = {chr_id: read_group_split_file_name(sample.read_group_file, chr_id, spec_index)
                                   for chr_id in chromosomes}
 
         # Use improved parallel splitting with line-by-line streaming
@@ -385,7 +386,7 @@ def _make_file_groupers(values, spec_string, sample, chr_id, spec_index):
     read_id_column_index = int(values[2]) if len(values) > 2 else 0
     delim = values[4] if len(values) > 4 else '\t'
     group_col_spec = values[3] if len(values) > 3 else "1"
-    read_group_chr_filename = sample.read_group_file + "_spec" + str(spec_index) + "_" + chr_id
+    read_group_chr_filename = read_group_split_file_name(sample.read_group_file, chr_id, spec_index)
 
     if ',' in group_col_spec:
         # Multiple columns - create separate groupers sharing the same table data

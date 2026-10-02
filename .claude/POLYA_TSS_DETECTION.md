@@ -184,9 +184,9 @@ chromosome  transcript_id  gene_id  prediction  counts  flag  counts_byGroup  gr
 - `flag`: `Known` if `|prediction − annotated| ≤ ANNOTATION_TOLERANCE`,
   else `Novel`.
 
-Per-chr files (`SAMPLE_chrid.polyA_prediction.tsv` etc.) live alongside
-the merged ones during execution and are deleted by `merge_files` after
-concatenation.
+Per-chr files (`SAMPLE_chrid.polyA_prediction.tsv` etc.) live in
+`<sample>/aux/per_chr/` and are removed by the `merge/counter/<name>` unit's
+cleanup after its marker (kept with `--keep_tmp`; see `.claude/RESUME_CHECKPOINTS.md`).
 
 ## Counter / `AbstractCounter` integration contract
 
@@ -210,7 +210,7 @@ calls, but they have no meaning for terminal-position prediction.
 `XGBClassifier` initialises the OpenMP runtime when a model is loaded.
 If the parent process loads the model before forking workers, the
 inherited OpenMP semaphores can deadlock inside the workers and the
-pipeline hangs silently in `process_assigned_reads`. The counter
+pipeline hangs silently in the construct stage (`construct_models`). The counter
 defers model loading to a `model` property that triggers on first
 `predict()` call — i.e. only inside the per-chr worker, after fork.
 The parent's sample-level counter never reaches `dump()`, so its

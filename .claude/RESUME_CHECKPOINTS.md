@@ -44,9 +44,11 @@ Fresh vs resume (`isoquant.py`):
 3. `barcode_split` (PCR dedup, not `--barcoded_bam`)
 4. `tagged_bam`
 5. `collect` + per-chr `collect/<chr>`. A done chromosome is **reloaded**, not skipped (multimapper resolution
-   needs all). Payload: alignment stats + `covers_all_reads`, restored by `restore_collection_stats`. `_info` stays
-   the source of totals / `all_read_groups`. "To keep these intermediate files for" is logged after the marker
-   (CI resume3 kills on it).
+   needs all), and the reload calls `processed_reads_manager.finalize(chr_id)`: `ProcessedReadsManagerNoSecondary`
+   (the default) computes the per-chromosome totals there, so without it a resumed run reported 0 assignments for
+   every reloaded chromosome (and could flip `requires_polya_for_construction`). Payload: alignment stats +
+   `covers_all_reads`, restored by `restore_collection_stats`. `_info` stays the source of totals /
+   `all_read_groups`. "To keep these intermediate files for" is logged after the marker (CI resume3 kills on it).
 6. `umi/ED<d>` (+ per-chr), `umi_bc2bc/col<c>/ED<d>` (+ per-chr). Per-chr allinfo/stats under
    `out_umi_filtered_tmp` (aux), removed by the stage cleanup.
 7. `dedup_bam`
@@ -87,6 +89,10 @@ deletes them as before, D9).
 - State needed whether or not stages are skipped -> prologue / derive / post-construct.
 - Close every output before returning: the marker is written right after.
 
+Per-chromosome completion lines ("Finished processing chromosome", "PCR duplicates filtered for chromosome") are
+logged **after** the chromosome's marker, so a run killed on such a line has that chromosome marked; skipped
+chromosomes are logged too ("... detected", "... during the previous run").
+
 ## Debugging and testing resume
 
 `ISOQUANT_DEBUG_FAIL=<stage>[:before|:after]` (default `after`) raises `DebugFailure` at that marker, in
@@ -106,5 +112,6 @@ intermediate files for" (after collect).
 
 - D1: multi-sample runs no longer leak `require_mono*_polya` from one experiment to the next.
 - Developer training mode no longer leaves an empty `<p>.polyA_prediction.tsv.training.csv` in the output dir.
-- Per-chr fragments never appear in the output dir; chromosome ids containing `/` now merge correctly.
+- Per-chr fragments never appear in the output dir; chromosome ids containing `/` are now made file-name safe
+  everywhere (merges, UMI filtered reads / allinfo fragments, read-group splits).
 - Log order changes (summary stats are printed after construction, merge logs per unit).

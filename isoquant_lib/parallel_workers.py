@@ -17,7 +17,7 @@ from isoquant_lib.utils.stats import EnumStats
 from .alignment.alignment_processor import AlignmentCollector
 from .terminal_prediction.external_polya import ExternalPolyA
 from .terminal_prediction.external_polya import load_polya_read_dict as load_polya_table
-from .assignment.assignment_io import IOSupport, TmpFileAssignmentPrinter, SqantiTSVPrinter, ReadInfoPrinter, VoidPrinter
+from .assignment.assignment_io import IOSupport, TmpFileAssignmentPrinter, ReadInfoPrinter, VoidPrinter
 from .assignment.assignment_loader import create_assignment_loader, BasicReadAssignmentLoader
 from .barcode_calling.umi_filtering import create_transcript_info_dict, UMIFilter
 from isoquant_lib.utils.file_naming import (
@@ -162,6 +162,11 @@ def collect_reads_in_parallel(sample, chr_id, chr_ids, args, processed_read_mana
                 for read_assignment in loader.get_next():
                     if read_assignment is None: continue
                     processed_reads_manager.load_read(read_assignment)
+            # ProcessedReadsManagerNoSecondary (the default) counts assignments and resolves
+            # multimappers per chromosome in finalize(); without it a reloaded chromosome adds
+            # nothing to the _info totals. Redoing it is safe: it re-reads the unchanged save
+            # file and rewrites the same multimappers file. A no-op for the other managers.
+            processed_reads_manager.finalize(chr_id)
             logger.info("Loaded data for " + chr_id)
             return chr_id, read_grouper.read_groups, alignment_stat_counter, processed_reads_manager
         else:
@@ -212,8 +217,9 @@ def collect_reads_in_parallel(sample, chr_id, chr_ids, args, processed_read_mana
         string_pools.save_barcode_umi_pools(sample.get_barcode_pools_file(chr_id))
 
     processed_reads_manager.finalize(chr_id)
-    logger.info("Finished processing chromosome " + chr_id)
     mark_stage_done(checkpoint_store, chr_marker)
+    # logged after the marker: the resume tests stop on this line
+    logger.info("Finished processing chromosome " + chr_id)
 
     return chr_id, read_grouper.read_groups, alignment_collector.alignment_stat_counter, processed_reads_manager
 
@@ -221,6 +227,11 @@ def collect_reads_in_parallel(sample, chr_id, chr_ids, args, processed_read_mana
 def construct_models_in_parallel(sample, chr_id, chr_ids, saves_prefix, args,
                                  checkpoint_store: CheckpointStore, stage_name: str):
     from .assignment.read_groups import get_grouping_pool_types
+    # checked before any setup: string pools, the genedb and the reference are expensive to load
+    chr_marker = stage_name + "/" + marker_name(chr_id)  # stage_name may already be nested
+    if checkpoint_store.is_done(chr_marker):
+        logger.info("Processed assignments from chromosome " + chr_id + " detected")
+        return
     logger.info("Processing chromosome " + chr_id)
     use_filtered_reads = args.mode.needs_pcr_deduplication()
 
@@ -251,14 +262,9 @@ def construct_models_in_parallel(sample, chr_id, chr_ids, saves_prefix, args,
     loader = create_assignment_loader(chr_id, saves_prefix, args.genedb, args.reference, args.fai_file_name, string_pools, use_filtered_reads)
 
     chr_dump_file = saves_file_name(saves_prefix, chr_id)
-    chr_marker = stage_name + "/" + marker_name(chr_id)  # stage_name may already be nested
     chr_read_stat_file = read_stat_file_name(chr_dump_file)
     chr_transcript_stat_file = transcript_stat_file_name(chr_dump_file)
     construct_models = not args.no_model_construction
-
-    if checkpoint_store.is_done(chr_marker):
-        logger.info("Processed assignments from chromosome " + chr_id + " detected")
-        return
 
     grouping_strategy_names = get_grouping_strategy_names(args)
     aggregator = ReadAssignmentAggregator(args, sample, string_pools, loader.genedb, chr_id,
@@ -295,8 +301,9 @@ def construct_models_in_parallel(sample, chr_id, chr_ids, saves_prefix, args,
     else:
         tmp_extended_gff_printer = VoidTranscriptPrinter()
 
-    sqanti_t2t_printer = SqantiTSVPrinter(sample.get_t2t_tsv_file(chr_id), args, IOSupport(args)) \
-        if args.sqanti_output else VoidTranscriptPrinter()
+    # the aggregator already opened this chromosome's t2t fragment; a second printer on the
+    # same path would truncate it and leave two handles writing to one file
+    sqanti_t2t_printer = aggregator.t2t_sqanti_printer
     novel_model_storage = []
 
     while loader.has_next():
@@ -364,8 +371,9 @@ def construct_models_in_parallel(sample, chr_id, chr_ids, saves_prefix, args,
     model_reads_printer.close()
     tmp_gff_printer.close()
     tmp_extended_gff_printer.close()
-    logger.info("Finished processing chromosome " + chr_id)
     mark_stage_done(checkpoint_store, chr_marker)
+    # logged after the marker: the resume tests stop on this line
+    logger.info("Finished processing chromosome " + chr_id)
 
 
 def filter_umis_in_parallel(sample, chr_id, chr_ids, args, edit_distance, checkpoint_store: CheckpointStore,
@@ -376,6 +384,7 @@ def filter_umis_in_parallel(sample, chr_id, chr_ids, args, edit_distance, checkp
     stats_output_file_name = allinfo_stats_file_name(out_prefix, chr_id, edit_distance)
     chr_marker = stage_name + "/" + marker_name(chr_id)  # stage_name may already be nested
     if checkpoint_store.is_done(chr_marker):
+        logger.info("PCR duplicates were filtered for chromosome %s during the previous run" % chr_id)
         return all_info_file_name, stats_output_file_name
 
     transcript_type_dict = create_transcript_info_dict(args.genedb, [chr_id])
@@ -422,8 +431,9 @@ def filter_umis_in_parallel(sample, chr_id, chr_ids, args, edit_distance, checkp
                                   filtered_reads,
                                   stats_output_file_name,
                                   string_pools)
-    logger.info("PCR duplicates filtered for chromosome " + chr_id)
     mark_stage_done(checkpoint_store, chr_marker)
+    # logged after the marker: the resume tests stop on this line
+    logger.info("PCR duplicates filtered for chromosome " + chr_id)
 
     return all_info_file_name, stats_output_file_name
 
