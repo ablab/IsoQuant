@@ -1,0 +1,24 @@
+# killed while writing the tagged BAM (see generate_resume_test.sh)
+name: RESUME_SC2.Mouse.10x
+label: Mouse.10x.4chr
+output: /abga/work/andreyp/ci_isoquant/output
+resume: /abga/work/andreyp/ci_isoquant/data/resume_checkpoints/Mouse.10x.4chr.resume_sc2
+run_type: allinfo
+edit_distance: '3'
+check_input_files: gene_counts.tsv transcript_counts.tsv gene_tpm.tsv gene_grouped_barcode_counts.linear.tsv transcript_grouped_barcode_counts.linear.tsv gene_grouped_barcode_counts.matrix.mtx transcript_grouped_barcode_tpm.matrix.mtx RNA_velocity_grouped_barcode.loom polyA_prediction.tsv polyA_prediction_grouped_barcode.tsv barcoded_reads_0.tsv.gz tagged.bam deduplicated.bam UMI_filtered.ED3.stats.tsv summary_stats.json summary.html
+baselines:
+  allinfo:
+    Unique gene-barcodes pairs: 55212.0
+    Total reads saved: 62224.0
+    Spliced reads saved: 56173.0
+    Total assignments processed: 99550.0
+    Assigned to any gene: 99437.0
+    Assigned to any gene and barcoded: 89286.0
+    Spliced: 89917.0
+    Spliced and barcoded: 80770.0
+    Uniquely assigned: 99422.0
+    Uniquely assigned and barcoded: 89286.0
+    Uniquely assigned and spliced: 89909.0
+    Uniquely assigned and spliced and barcoded: 80770.0
+    duplicate_triplets: 0.0
+    allinfo_stats_match: 1.0

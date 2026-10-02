@@ -169,14 +169,21 @@ def run_isoquant(args, config_dict):
     else:
         genedb = fix_path(config_file, config_dict["genedb"]) if "genedb" in config_dict else None
         genome = fix_path(config_file, config_dict["genome"])
-        config_dict["label"] = run_name
-
         log.info('== Running IsoQuant ==')
         isoquant_command_list = ["python3", os.path.join(isoquant_dir, "isoquant.py"), "-o", output_folder,
-                                 "-r", genome, "-d", config_dict["datatype"], "-p", run_name]
+                                 "-r", genome, "-d", config_dict["datatype"]]
+        if "yaml" in config_dict:
+            # experiment names come from the YAML file, so the checked one has to be given as label
+            assert "label" in config_dict, "a config with yaml input must set label"
+            isoquant_command_list += ["--yaml", fix_path(config_file, config_dict["yaml"])]
+        else:
+            config_dict["label"] = run_name
+            isoquant_command_list += ["-p", run_name]
         if genedb:
             isoquant_command_list += ["--genedb", genedb]
-        if "bam" in config_dict:
+        if "yaml" in config_dict:
+            pass
+        elif "bam" in config_dict:
             isoquant_command_list.append("--bam")
             bams = fix_paths(config_file, config_dict["bam"])
             for bam in bams:
@@ -848,10 +855,13 @@ def main():
         if "check_files" in config_dict:
             log.warning("Config key 'check_files' is deprecated; use 'check_input_files'. Honoring it identically.")
         files_list = collect_check_file_list(config_dict)
-        label = config_dict["label"]
         run_name = config_dict["name"]
         output_folder = os.path.join(args.output if args.output else config_dict["output"], run_name)
-        missing_files = check_output_files(output_folder, label, files_list)
+        # extra_labels: further experiments of a multi-experiment run, checked for the same files
+        labels = [config_dict["label"]] + config_dict.get("extra_labels", "").split()
+        missing_files = []
+        for label in labels:
+            missing_files += check_output_files(output_folder, label, files_list)
         if missing_files:
             log.error("The following files were not detected in the output folder: %s" % "  ".join(missing_files))
             err_codes.append(-5)

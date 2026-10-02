@@ -1,0 +1,29 @@
+name: SC.Mouse.10x.4chr.2samples.allinfo
+label: S2
+extra_labels: S1
+output: /abga/work/andreyp/ci_isoquant/output
+run_type: allinfo
+genome: /abga/work/andreyp/ci_isoquant/data/sc_resume/Mouse.10x.4chr.genome.fa
+genedb: /abga/work/andreyp/ci_isoquant/data/sc_resume/Mouse.10x.4chr.gtf
+yaml: /abga/work/andreyp/ci_isoquant/data/sc_resume/Mouse.10x.4chr.2samples.yaml
+datatype: ont
+isoquant_options: '"-m tenX_v3 --split_molecules false --complete_genedb --barcode_whitelist /abga/work/andreyp/ci_isoquant/data/barcodes/10xMultiome_5K.tsv
+  --large_output allinfo read2transcripts tagged_bam deduplicated_bam -t 4"'
+edit_distance: '3'
+check_input_files: gene_counts.tsv transcript_counts.tsv gene_tpm.tsv gene_grouped_barcode_counts.linear.tsv transcript_grouped_barcode_counts.linear.tsv gene_grouped_barcode_counts.matrix.mtx transcript_grouped_barcode_tpm.matrix.mtx RNA_velocity_grouped_barcode.loom polyA_prediction.tsv polyA_prediction_grouped_barcode.tsv barcoded_reads_0.tsv.gz tagged.bam deduplicated.bam UMI_filtered.ED3.stats.tsv summary_stats.json summary.html
+baselines:
+  allinfo:
+    Unique gene-barcodes pairs: 28931.0
+    Total reads saved: 31093.0
+    Spliced reads saved: 28160.0
+    Total assignments processed: 49807.0
+    Assigned to any gene: 49729.0
+    Assigned to any gene and barcoded: 44621.0
+    Spliced: 45098.0
+    Spliced and barcoded: 40495.0
+    Uniquely assigned: 49725.0
+    Uniquely assigned and barcoded: 44621.0
+    Uniquely assigned and spliced: 45097.0
+    Uniquely assigned and spliced and barcoded: 40495.0
+    duplicate_triplets: 0.0
+    allinfo_stats_match: 1.0
