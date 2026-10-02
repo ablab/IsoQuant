@@ -72,7 +72,7 @@ inference run.
 - Grouped counters are skipped entirely in collection mode (only the
   ungrouped counter contributes; grouped output is meaningless when
   the goal is feature collection).
-- `dataset_processor.merge_assignments` concatenates per-chr
+- `dataset_processor.training_unit` (merge stage) concatenates per-chr
   fragments into the user-supplied CSV path and removes the per-chr
   files (`merge_files` with `header_lines=1`).
 
@@ -215,7 +215,7 @@ the matching XGBoost release.
 | Warning block                   | `isoquant.py:main`                                    |
 | Training-dump branch in counter | `isoquant_lib/terminal_counter.py:_dump_training_features` |
 | Skipping grouped counters       | `isoquant_lib/assignment_aggregator.py`               |
-| Per-chr CSV merge               | `isoquant_lib/dataset_processor.py:merge_assignments` |
+| Per-chr CSV merge               | `isoquant_lib/dataset_processor.py:training_unit` |
 | Trainer                         | `misc/train_polya_tss_model.py`                       |
 | Per-chr fragment suffix         | `TRAINING_SUFFIX = ".training.csv"` in `terminal_counter.py` |
 | Training-CSV column list        | `TRAINING_COLUMNS` in `terminal_counter.py`           |

@@ -103,7 +103,7 @@ class RNAVelocityCounter(AbstractCounter):
     """Per-(cell, gene) spliced / unspliced / ambiguous read tallies with loom export."""
 
     def __init__(self, args, output_prefix: str,
-                 string_pools=None, group_index: int = 0) -> None:
+                 string_pools=None, group_index: int = 0, truncate_output: bool = True) -> None:
         # Skip AbstractCounter.__init__ -- we don't want counts_file_name's
         # suffix machinery; the velocity TSV path is already the full name.
         self.ignore_read_groups = string_pools is None
@@ -115,8 +115,10 @@ class RNAVelocityCounter(AbstractCounter):
         self.usable_file_name = None
         # Truncate any stale output from a previous run, like AbstractCounter.
         # Per-chr counters are only built when a chromosome is (re)processed, so
-        # this does not clobber finished chromosomes on --resume.
-        open(self.output_file, "w").close()
+        # this does not clobber finished chromosomes on --resume; the merge driver
+        # passes truncate_output=False so a resumed merge keeps finished outputs.
+        if truncate_output:
+            open(self.output_file, "w").close()
 
         self.args = args
         self.string_pools = string_pools

@@ -65,9 +65,9 @@ per read would cost ~126 bytes/read of intermediate — 12 GB on a 100M-read run
 re-read for nothing. Counting and selection run as one child process
 (`detect_cell_barcode_list`) so the count table never reaches the main process.
 
-Resume markers: `aux/<prefix>.raw_barcodes_done` for pass 1, the existing
-`aux/<prefix>.barcodes_done_<i>.tsv` for pass 2, so a re-run reuses a detected cell list
-without repeating the extraction.
+Resume markers (`<output>/checkpoints/`, see `.claude/RESUME_CHECKPOINTS.md`):
+`cell_barcodes/<prefix>` for pass 1, `barcodes/<prefix>` for pass 2, so a re-run reuses a
+detected cell list without repeating the extraction.
 
 ## Code map
 

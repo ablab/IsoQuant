@@ -81,6 +81,11 @@ class TextFileAssignmentPrinter(AbstractAssignmentPrinter):
         if not self.gzipped:
             self.output_file.flush()
 
+    def close(self):
+        # a checkpoint marker follows right after, so the (possibly gzipped) stream
+        # must be complete on disk; closing twice is harmless
+        self.output_file.close()
+
 
 class ReadAssignmentCompositePrinter:
     def __init__(self, printers):
@@ -94,12 +99,19 @@ class ReadAssignmentCompositePrinter:
         for p in self.printers:
             p.flush()
 
+    def close(self):
+        for p in self.printers:
+            p.close()
+
 
 class VoidPrinter:
     def add_read_info(self, _):
         pass
 
     def flush(self):
+        pass
+
+    def close(self):
         pass
 
 

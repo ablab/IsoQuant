@@ -13,10 +13,10 @@ barcode windows, the second matches reads against the barcodes that pass selecti
 
 import concurrent.futures
 import logging
-import os
 from concurrent.futures import ProcessPoolExecutor
 
 from ..common import setup_worker_logging, _get_log_params
+from ..utils.checkpoints import CheckpointStore, marker_name, run_checkpoint_dir, run_stage
 from .detect_barcodes import detect_cell_barcode_list, get_barcode_length, \
     process_in_parallel, process_single_thread
 
@@ -60,44 +60,39 @@ def run_barcode_calling(bc_args, threads):
         raise future_res.exception()
 
 
-def detect_cell_barcodes(args, sample, input_files, threads):
+def detect_cell_barcodes(args, sample, input_files, threads, store: CheckpointStore) -> str:
     """Pass 1: extract barcode windows verbatim, then derive the cell barcode list.
 
     Returns the path of that list, which pass 2 uses as its whitelist.
     """
-    if args.resume and os.path.exists(sample.raw_barcodes_done):
-        logger.info("Cell barcodes were detected during the previous run, skipping")
-        return sample.out_cell_barcodes_tsv
-    if os.path.exists(sample.raw_barcodes_done):
-        os.remove(sample.raw_barcodes_done)
+    def run() -> None:
+        logger.info("Extracting barcodes from %d file(s) to detect cell barcodes" % len(input_files))
+        # no FASTA and no barcode table: only the counts matter here, and in splitting modes it
+        # is pass 2 whose extraction is kept
+        raw_args = BarcodeCallingArgs(input_files, args.barcode_whitelist, args.mode,
+                                      None, None, sample.aux_dir, threads,
+                                      molecule=getattr(args, 'molecule', None),
+                                      whitelist_matching=False,
+                                      split_molecules=args.split_molecules)
 
-    logger.info("Extracting barcodes from %d file(s) to detect cell barcodes" % len(input_files))
-    # no FASTA and no barcode table: only the counts matter here, and in splitting modes it
-    # is pass 2 whose extraction is kept
-    raw_args = BarcodeCallingArgs(input_files, args.barcode_whitelist, args.mode,
-                                  None, None, sample.aux_dir, threads,
-                                  molecule=getattr(args, 'molecule', None),
-                                  whitelist_matching=False,
-                                  split_molecules=args.split_molecules)
+        # one child process, so the large count table never lives in the main one
+        log_file, log_level = _get_log_params()
+        with ProcessPoolExecutor(max_workers=1,
+                                 initializer=setup_worker_logging,
+                                 initargs=(log_file, log_level)) as proc:
+            future_res = proc.submit(detect_cell_barcode_list,
+                                     raw_args,
+                                     sample.out_cell_barcodes_tsv,
+                                     get_barcode_length(args.mode),
+                                     args.n_cells,
+                                     args.n_cells_interval,
+                                     sample.out_cell_barcodes_stats)
 
-    # one child process, so the large count table never lives in the main one
-    log_file, log_level = _get_log_params()
-    with ProcessPoolExecutor(max_workers=1,
-                             initializer=setup_worker_logging,
-                             initargs=(log_file, log_level)) as proc:
-        future_res = proc.submit(detect_cell_barcode_list,
-                                 raw_args,
-                                 sample.out_cell_barcodes_tsv,
-                                 get_barcode_length(args.mode),
-                                 args.n_cells,
-                                 args.n_cells_interval,
-                                 sample.out_cell_barcodes_stats)
+        concurrent.futures.wait([future_res], return_when=concurrent.futures.ALL_COMPLETED)
+        if future_res.exception() is not None:
+            raise future_res.exception()
 
-    concurrent.futures.wait([future_res], return_when=concurrent.futures.ALL_COMPLETED)
-    if future_res.exception() is not None:
-        raise future_res.exception()
-
-    open(sample.raw_barcodes_done, "w").close()
+    run_stage(store, marker_name("cell_barcodes", sample.prefix), run=run)
     return sample.out_cell_barcodes_tsv
 
 
@@ -109,11 +104,11 @@ def call_barcodes(args):
         # TODO barcoded files via YAML
         args.input_data.samples[0].barcoded_reads = args.barcoded_reads
         return
+    store = CheckpointStore(run_checkpoint_dir(args.output), args.resume)
     for sample in args.input_data.samples:
         # Collect all input files for this sample
         input_files = [files[0] for files in sample.file_list]
         output_barcodes_list = [sample.barcodes_tsv + "_%d.tsv" % i for i in range(len(input_files))]
-        barcodes_done_list = [sample.barcodes_done + "_%d.tsv" % i for i in range(len(input_files))]
 
         output_fasta_list = None
         new_reads = []
@@ -124,38 +119,26 @@ def call_barcodes(args):
                                  for i in range(len(input_files))]
             new_reads = [[fasta] for fasta in output_fasta_list]
 
-        # Check if all files were already processed during resume
-        all_done = all(os.path.exists(done) for done in barcodes_done_list)
-        if all_done and args.resume:
-            logger.info("Barcodes were called during the previous run, skipping")
-            sample.barcoded_reads.extend(output_barcodes_list)
-            if args.split_molecules:
-                sample.file_list = new_reads
-            continue
+        def run(sample=sample, input_files=input_files, output_barcodes_list=output_barcodes_list,
+                output_fasta_list=output_fasta_list) -> None:
+            bc_threads = 1 if args.mode.enforces_single_thread() else args.threads
+            barcode_files = args.barcode_whitelist
+            if args.detect_cell_barcodes:
+                barcode_files = [detect_cell_barcodes(args, sample, input_files, bc_threads, store)]
 
-        # Remove existing done markers
-        for barcodes_done in barcodes_done_list:
-            if os.path.exists(barcodes_done):
-                os.remove(barcodes_done)
+            bc_args = BarcodeCallingArgs(input_files, barcode_files, args.mode,
+                                         output_barcodes_list, output_fasta_list, sample.aux_dir, bc_threads,
+                                         molecule=getattr(args, 'molecule', None),
+                                         split_molecules=args.split_molecules)
+            logger.info("Detecting barcodes for %d file(s)" % len(input_files))
+            run_barcode_calling(bc_args, bc_threads)
+            for input_file, output_barcodes in zip(input_files, output_barcodes_list):
+                logger.info("Processed %s, barcodes are stored in %s" % (input_file, output_barcodes))
 
-        bc_threads = 1 if args.mode.enforces_single_thread() else args.threads
-        barcode_files = args.barcode_whitelist
-        if args.detect_cell_barcodes:
-            barcode_files = [detect_cell_barcodes(args, sample, input_files, bc_threads)]
+        run_stage(store, marker_name("barcodes", sample.prefix), run=run)
 
-        bc_args = BarcodeCallingArgs(input_files, barcode_files, args.mode,
-                                     output_barcodes_list, output_fasta_list, sample.aux_dir, bc_threads,
-                                     molecule=getattr(args, 'molecule', None),
-                                     split_molecules=args.split_molecules)
-        logger.info("Detecting barcodes for %d file(s)" % len(input_files))
-        run_barcode_calling(bc_args, bc_threads)
-
-        # Mark all files as done and add to barcoded_reads
-        for i, (input_file, output_barcodes, barcodes_done) in enumerate(zip(input_files, output_barcodes_list, barcodes_done_list)):
-            sample.barcoded_reads.append(output_barcodes)
-            open(barcodes_done, "w").close()
-            logger.info("Processed %s, barcodes are stored in %s" % (input_file, output_barcodes))
-
+        # whether called now or during the previous run, the sample reads these from now on
+        sample.barcoded_reads.extend(output_barcodes_list)
         if args.split_molecules:
             logger.info("Reads were split during barcode calling")
             logger.info("The following files will be used instead of original reads %s " % ", ".join(map(lambda x: x[0], new_reads)))

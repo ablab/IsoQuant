@@ -26,10 +26,8 @@ from isoquant_lib.utils.file_naming import (
     read_group_file_from_saves,
     dynamic_pools_file_name,
     saves_file_name,
-    reads_processed_lock_file_name,
     read_stat_file_name,
     transcript_stat_file_name,
-    umi_filtered_lock_file_name,
     dedup_bam_fragment_name,
     tagged_bam_fragment_name,
     allinfo_file_name,
@@ -42,6 +40,7 @@ from .assignment.read_groups import create_read_grouper, get_grouping_strategy_n
 from isoquant_lib.model_construction.transcript_printer import GFFPrinter, VoidTranscriptPrinter, create_extended_storage
 from .assignment.assignment_aggregator import ReadAssignmentAggregator
 from isoquant_lib.utils.string_pools import setup_string_pools
+from isoquant_lib.utils.checkpoints import CheckpointStore, mark_stage_done, marker_name
 from .common import large_output_enabled
 from isoquant_lib.utils.bam_utils import (load_barcode_umi_tags, load_survivor_tags,
                                          write_tagged_chromosome_bam)
@@ -131,18 +130,20 @@ def load_polya_read_dict(sample, chr_id: str, args) -> Dict[str, ExternalPolyA]:
     return polya_dict
 
 
-def collect_reads_in_parallel(sample, chr_id, chr_ids, args, processed_read_manager_type):
+def collect_reads_in_parallel(sample, chr_id, chr_ids, args, processed_read_manager_type,
+                              checkpoint_store: CheckpointStore, stage_name: str):
     current_chr_record = Fasta(args.reference, indexname=args.fai_file_name)[chr_id]
     if args.high_memory:
         current_chr_record = str(current_chr_record)
     read_grouper = create_read_grouper(args, sample, chr_id)
-    lock_file = sample.get_collected_lock_file(chr_id)
+    chr_marker = stage_name + "/" + marker_name(chr_id)  # stage_name may already be nested
     save_file = sample.get_save_file(chr_id)
     group_file = read_groups_file_name(save_file)
     bamstat_file = bamstat_file_name(save_file)
     processed_reads_manager = processed_read_manager_type(sample, args.multimap_strategy, chr_ids, args.genedb)
 
-    if os.path.exists(lock_file) and args.resume:
+    # a done chromosome is reloaded, not skipped: multimapper resolution needs every chromosome
+    if checkpoint_store.is_done(chr_marker):
         logger.info("Detected processed reads for " + chr_id)
         if os.path.exists(group_file) and os.path.exists(save_file):
             load_read_groups(group_file, read_grouper)
@@ -169,10 +170,6 @@ def collect_reads_in_parallel(sample, chr_id, chr_ids, args, processed_read_mana
                 logger.warning("%s does not exist" % group_file)
             if not os.path.exists(save_file):
                 logger.warning("%s does not exist" % save_file)
-            os.remove(lock_file)
-
-    if os.path.exists(lock_file):
-        os.remove(lock_file)
 
     tmp_printer = TmpFileAssignmentPrinter(save_file, args)
     bam_files = list(map(lambda x: x[0], sample.file_list))
@@ -216,12 +213,13 @@ def collect_reads_in_parallel(sample, chr_id, chr_ids, args, processed_read_mana
 
     processed_reads_manager.finalize(chr_id)
     logger.info("Finished processing chromosome " + chr_id)
-    open(lock_file, "w").close()
+    mark_stage_done(checkpoint_store, chr_marker)
 
     return chr_id, read_grouper.read_groups, alignment_collector.alignment_stat_counter, processed_reads_manager
 
 
-def construct_models_in_parallel(sample, chr_id, chr_ids, saves_prefix, args, read_groups):
+def construct_models_in_parallel(sample, chr_id, chr_ids, saves_prefix, args,
+                                 checkpoint_store: CheckpointStore, stage_name: str):
     from .assignment.read_groups import get_grouping_pool_types
     logger.info("Processing chromosome " + chr_id)
     use_filtered_reads = args.mode.needs_pcr_deduplication()
@@ -253,18 +251,14 @@ def construct_models_in_parallel(sample, chr_id, chr_ids, saves_prefix, args, re
     loader = create_assignment_loader(chr_id, saves_prefix, args.genedb, args.reference, args.fai_file_name, string_pools, use_filtered_reads)
 
     chr_dump_file = saves_file_name(saves_prefix, chr_id)
-    lock_file = reads_processed_lock_file_name(saves_prefix, chr_id)
+    chr_marker = stage_name + "/" + marker_name(chr_id)  # stage_name may already be nested
     chr_read_stat_file = read_stat_file_name(chr_dump_file)
     chr_transcript_stat_file = transcript_stat_file_name(chr_dump_file)
     construct_models = not args.no_model_construction
 
-    if os.path.exists(lock_file):
-        if args.resume:
-            logger.info("Processed assignments from chromosome " + chr_id + " detected")
-            read_stat = EnumStats(chr_read_stat_file)
-            transcript_stat = EnumStats(chr_transcript_stat_file) if construct_models else EnumStats()
-            return read_stat, transcript_stat
-        os.remove(lock_file)
+    if checkpoint_store.is_done(chr_marker):
+        logger.info("Processed assignments from chromosome " + chr_id + " detected")
+        return
 
     grouping_strategy_names = get_grouping_strategy_names(args)
     aggregator = ReadAssignmentAggregator(args, sample, string_pools, loader.genedb, chr_id,
@@ -279,7 +273,7 @@ def construct_models_in_parallel(sample, chr_id, chr_ids, saves_prefix, args, re
     chr_prefix = sample.get_chr_prefix(chr_id)
 
     if construct_models:
-        tmp_gff_printer = GFFPrinter(sample.out_dir, chr_prefix, exon_id_storage,
+        tmp_gff_printer = GFFPrinter(sample.chr_fragment_dir, chr_prefix, exon_id_storage,
                                      check_canonical=args.check_canonical)
     else:
         tmp_gff_printer = VoidTranscriptPrinter()
@@ -295,7 +289,7 @@ def construct_models_in_parallel(sample, chr_id, chr_ids, saves_prefix, args, re
     else:
         model_reads_printer = VoidPrinter()
     if construct_models and args.genedb:
-        tmp_extended_gff_printer = GFFPrinter(sample.out_dir, chr_prefix, exon_id_storage,
+        tmp_extended_gff_printer = GFFPrinter(sample.chr_fragment_dir, chr_prefix, exon_id_storage,
                                               gtf_suffix=".extended_annotation.gtf",
                                               check_canonical=args.check_canonical)
     else:
@@ -364,25 +358,27 @@ def construct_models_in_parallel(sample, chr_id, chr_ids, saves_prefix, args, re
         aggregator.transcript_model_global_counter.dump()
         aggregator.gene_model_global_counter.dump()
         transcript_stat_counter.dump(chr_transcript_stat_file)
-        model_reads_printer.flush()
+    # every per-chromosome fragment must be complete on disk before the marker
+    aggregator.global_printer.close()
+    sqanti_t2t_printer.close()
+    model_reads_printer.close()
+    tmp_gff_printer.close()
+    tmp_extended_gff_printer.close()
     logger.info("Finished processing chromosome " + chr_id)
-    open(lock_file, "w").close()
-
-    return aggregator.read_stat_counter, transcript_stat_counter
+    mark_stage_done(checkpoint_store, chr_marker)
 
 
-def filter_umis_in_parallel(sample, chr_id, chr_ids, args, edit_distance, output_filtered_reads=False,
+def filter_umis_in_parallel(sample, chr_id, chr_ids, args, edit_distance, checkpoint_store: CheckpointStore,
+                            stage_name: str, output_filtered_reads=False,
                             barcode_remap=None, output_prefix_override=None):
-    transcript_type_dict = create_transcript_info_dict(args.genedb, [chr_id])
-    out_prefix = output_prefix_override if output_prefix_override else sample.out_umi_filtered_done
-    umi_filtered_done = umi_filtered_lock_file_name(out_prefix, chr_id, edit_distance)
+    out_prefix = output_prefix_override if output_prefix_override else sample.out_umi_filtered_tmp
     all_info_file_name = allinfo_file_name(out_prefix, chr_id, edit_distance)
     stats_output_file_name = allinfo_stats_file_name(out_prefix, chr_id, edit_distance)
+    chr_marker = stage_name + "/" + marker_name(chr_id)  # stage_name may already be nested
+    if checkpoint_store.is_done(chr_marker):
+        return all_info_file_name, stats_output_file_name
 
-    if os.path.exists(umi_filtered_done):
-        if args.resume:
-            return all_info_file_name, stats_output_file_name, umi_filtered_done
-        os.remove(umi_filtered_done)
+    transcript_type_dict = create_transcript_info_dict(args.genedb, [chr_id])
 
     logger.info("Filtering PCR duplicates for chromosome " + chr_id)
     barcode_feature_table = {}
@@ -426,10 +422,10 @@ def filter_umis_in_parallel(sample, chr_id, chr_ids, args, edit_distance, output
                                   filtered_reads,
                                   stats_output_file_name,
                                   string_pools)
-    open(umi_filtered_done, "w").close()
     logger.info("PCR duplicates filtered for chromosome " + chr_id)
+    mark_stage_done(checkpoint_store, chr_marker)
 
-    return all_info_file_name, stats_output_file_name, umi_filtered_done
+    return all_info_file_name, stats_output_file_name
 
 
 def write_deduplicated_bam_in_parallel(sample, chr_id, args):

@@ -86,7 +86,7 @@ partial/duplicate rows; the grouped path predicts the whole chromosome from
    own per-chr file). The sample-level counter never calls `dump()`;
    it only provides `output_counts_file_name` for the
    `merge_counts → merge_files` concatenation in
-   `dataset_processor.merge_assignments`.
+   `dataset_processor.merge_outputs`.
 
 ## Tunable constants (must match training)
 
@@ -274,7 +274,7 @@ inference to training-feature emission. In that mode `dump()` runs
 the same peak-detection + feature-extraction pipeline but skips the
 XGBoost `predict()` call and appends per-peak rows
 (`FEATURE_COLUMNS + ['chromosome', 'true_peak']`) to a per-chr CSV
-next to the per-chr prediction TSV. `dataset_processor.merge_assignments`
+next to the per-chr prediction TSV. `dataset_processor.training_unit`
 concatenates fragments into the user-supplied PATH and removes the
 per-chr files. Grouped counters are skipped entirely in training
 mode. Predictions emit a header-only TSV.

@@ -305,7 +305,7 @@ TTTTAAAA    spot_B    region_1
 - `isoquant_lib/barcode_calling/umi_filtering.py`: `UMIFilter` accepts optional `barcode_remap: Dict[str, str]`. When set, `process_single_chr()` uses remapped key instead of barcode for grouping in `gene_barcode_dict`
 - `isoquant_lib/parallel_workers.py`: `filter_umis_in_parallel()` accepts `barcode_remap` and `output_prefix_override` params. Forces `output_filtered_reads=False` when remap is active
 - `isoquant_lib/dataset_processor.py`: After standard dedup loop, iterates spot columns calling `filter_umis_in_parallel()` with column-specific `barcode_remap` and prefix
-- `isoquant_lib/utils/file_naming.py`: `umi_barcode2barcode_prefix()`, `umi_barcode2barcode_global_lock()` helpers
+- `isoquant_lib/utils/file_naming.py`: `umi_barcode2barcode_prefix()` helper (resume markers: `umi_bc2bc/col<c>/ED<d>`, see `.claude/RESUME_CHECKPOINTS.md`)
 
 **Read grouping**: `--read_group barcode_barcode` works identically to `barcode_spot` but reads from `--barcode2barcode`. Auto-added when `--barcode2barcode` is set (same pattern as `--barcode2spot` auto-adds `barcode_spot`).
 

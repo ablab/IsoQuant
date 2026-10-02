@@ -343,9 +343,9 @@ Caveats:
   ./isoquant.py --reference <fa> --genedb <gtf> --bam <bam> \
                 --data_type nanopore --dump_intron_graphs -o <out>
   ```
-- When running with `--resume`, the `reads_processed_lock_file` short-
-  circuits model construction and no new dumps are produced — delete
-  the lock (or rerun with `--clean_start`) to regenerate.
+- When running with `--resume`, the `construct/<chr>` markers in
+  `<sample>/aux/checkpoints/` short-circuit model construction and no new
+  dumps are produced — delete them (or rerun without `--resume`) to regenerate.
 
 ## 7. Smoke verification
 
