@@ -53,9 +53,15 @@ class SampleData:
     def _make_aux_path(self, name):
         return os.path.join(self.aux_dir, name)
 
+    def _make_fragment_path(self, name):
+        return os.path.join(self.chr_fragment_dir, name)
+
     def _init_paths(self):
+        # resume markers of this experiment's stages (see isoquant_lib/utils/checkpoints.py)
+        self.checkpoint_dir = self._make_aux_path("checkpoints")
+        # per-chromosome fragments of the merged outputs, removed once each output is merged
+        self.chr_fragment_dir = self._make_aux_path("per_chr")
         self.out_assigned_tsv = self._make_path(self.prefix + ".read_assignments.tsv")
-        self.out_assigned_tsv_result = self.out_assigned_tsv
         self.out_read_info_tsv = self._make_path(self.prefix + ".read_info.tsv")
         self.out_transcript_model_reads_tsv = self._make_path(self.prefix + ".transcript_model_reads.tsv")
         self.out_raw_file = self._make_aux_path(self.prefix + ".save")
@@ -88,14 +94,10 @@ class SampleData:
         self.out_polya_prediction_grouped_tsv = self._make_path(self.prefix + ".polyA_prediction_grouped")
         self.out_tss_prediction_grouped_tsv = self._make_path(self.prefix + ".TSS_prediction_grouped")
         self.barcodes_tsv = self._make_path(self.prefix + ".barcoded_reads")
-        self.barcodes_done = self._make_aux_path(self.prefix + ".barcodes_done")
         self.barcodes_split_reads = self._make_aux_path(self.prefix + ".split_barcodes")
         # --polya_trimmed list:/flnc:, normalized to read_id<TAB>{+,-,.,0} and split per chromosome
         self.polya_reads_normalized = self._make_aux_path(self.prefix + ".external_polya.tsv")
         self.polya_split_reads = self._make_aux_path(self.prefix + ".split_external_polya")
-        # cell barcode detection: the first pass only counts barcodes (nothing is written),
-        # the second pass fills barcodes_tsv as usual
-        self.raw_barcodes_done = self._make_aux_path(self.prefix + ".raw_barcodes_done")
         self.out_cell_barcodes_tsv = self._make_path(self.prefix + ".cell_barcodes.tsv")
         self.out_cell_barcodes_stats = self._make_path(self.prefix + ".cell_barcodes.stats")
         self.out_umi_filtered = self._make_path(self.prefix + ".UMI_filtered")
@@ -104,7 +106,6 @@ class SampleData:
         self.out_tagged_bam = self._make_path(self.prefix + ".tagged.bam")
         self.out_deduplicated_bam = self._make_path(self.prefix + ".deduplicated.bam")
         self.out_umi_filtered_tmp = self._make_aux_path(self.prefix + ".UMI_filtered")
-        self.out_umi_filtered_done = self._make_aux_path(self.prefix + ".UMI_filtered.done")
         self.split_reads_fasta = self._make_path(self.prefix + ".split_reads")
         self.out_rna_velocity_grouped = self._make_path(self.prefix + ".RNA_velocity_grouped")
 
@@ -135,16 +136,6 @@ class SampleData:
         from isoquant_lib.utils.file_naming import barcode_pools_file_name
         return barcode_pools_file_name(self.out_raw_file, chr_id)
 
-    def get_collected_lock_file(self, chr_id: str) -> str:
-        """Get path to lock file indicating reads collected for a chromosome."""
-        from isoquant_lib.utils.file_naming import reads_collected_lock_file_name
-        return reads_collected_lock_file_name(self.out_raw_file, chr_id)
-
-    def get_processed_lock_file(self, chr_id: str) -> str:
-        """Get path to lock file indicating reads processed for a chromosome."""
-        from isoquant_lib.utils.file_naming import reads_processed_lock_file_name
-        return reads_processed_lock_file_name(self.out_raw_file, chr_id)
-
     def get_read_group_split_file(self, chr_id: str, spec_index: int = None) -> str:
         """Get path to split read group file for a chromosome.
 
@@ -155,11 +146,8 @@ class SampleData:
         Returns:
             Path like 'prefix.read_group_spec0_chr1' or 'prefix.read_group_chr1'
         """
-        from isoquant_lib.utils.file_naming import convert_chr_id_to_file_name_str
-        chr_str = convert_chr_id_to_file_name_str(chr_id)
-        if spec_index is not None:
-            return f"{self.read_group_file}_spec{spec_index}_{chr_str}"
-        return f"{self.read_group_file}_{chr_str}"
+        from isoquant_lib.utils.file_naming import read_group_split_file_name
+        return read_group_split_file_name(self.read_group_file, chr_id, spec_index)
 
     def get_barcodes_split_file(self, chr_id: str) -> str:
         """Get path to split barcodes file for a chromosome."""
@@ -180,67 +168,67 @@ class SampleData:
 
     def get_corrected_bed_file(self, chr_id: str) -> str:
         """Get path to corrected reads BED file for a chromosome."""
-        return self._make_path(self.get_chr_prefix(chr_id) + ".corrected_reads.bed")
+        return self._make_fragment_path(self.get_chr_prefix(chr_id) + ".corrected_reads.bed")
 
     def get_assigned_tsv_file(self, chr_id: str) -> str:
         """Get path to read assignments TSV for a chromosome."""
-        return self._make_path(self.get_chr_prefix(chr_id) + ".read_assignments.tsv")
+        return self._make_fragment_path(self.get_chr_prefix(chr_id) + ".read_assignments.tsv")
 
     def get_read_info_tsv_file(self, chr_id: str) -> str:
         """Get path to read_info TSV for a chromosome."""
-        return self._make_path(self.get_chr_prefix(chr_id) + ".read_info.tsv")
+        return self._make_fragment_path(self.get_chr_prefix(chr_id) + ".read_info.tsv")
 
     def get_transcript_model_reads_file(self, chr_id: str) -> str:
         """Get path to transcript-model read_info TSV for a chromosome."""
-        return self._make_path(self.get_chr_prefix(chr_id) + ".transcript_model_reads.tsv")
+        return self._make_fragment_path(self.get_chr_prefix(chr_id) + ".transcript_model_reads.tsv")
 
     def get_gene_counts_file(self, chr_id: str) -> str:
         """Get path to gene counts file for a chromosome."""
-        return self._make_path(self.get_chr_prefix(chr_id) + ".gene")
+        return self._make_fragment_path(self.get_chr_prefix(chr_id) + ".gene")
 
     def get_transcript_counts_file(self, chr_id: str) -> str:
         """Get path to transcript counts file for a chromosome."""
-        return self._make_path(self.get_chr_prefix(chr_id) + ".transcript")
+        return self._make_fragment_path(self.get_chr_prefix(chr_id) + ".transcript")
 
     def get_exon_counts_file(self, chr_id: str) -> str:
         """Get path to exon counts file for a chromosome."""
-        return self._make_path(self.get_chr_prefix(chr_id) + ".exon")
+        return self._make_fragment_path(self.get_chr_prefix(chr_id) + ".exon")
 
     def get_old_exon_counts_file(self, chr_id: str) -> str:
         """Get path to legacy per-exon counts file for a chromosome (--old_exon_count_format)."""
-        return self._make_path(self.get_chr_prefix(chr_id) + ".old_exon")
+        return self._make_fragment_path(self.get_chr_prefix(chr_id) + ".old_exon")
 
     def get_exon_splice_site_counts_file(self, chr_id: str) -> str:
         """Get path to exon splice-site counts file for a chromosome."""
-        return self._make_path(self.get_chr_prefix(chr_id) + ".exon_splice_site")
+        return self._make_fragment_path(self.get_chr_prefix(chr_id) + ".exon_splice_site")
 
     def get_intron_counts_file(self, chr_id: str) -> str:
         """Get path to intron counts file for a chromosome."""
-        return self._make_path(self.get_chr_prefix(chr_id) + ".splice_junction")
+        return self._make_fragment_path(self.get_chr_prefix(chr_id) + ".splice_junction")
 
     def get_intron_retention_counts_file(self, chr_id: str) -> str:
         """Get path to intron retention counts file for a chromosome."""
-        return self._make_path(self.get_chr_prefix(chr_id) + ".intron_retention")
+        return self._make_fragment_path(self.get_chr_prefix(chr_id) + ".intron_retention")
 
     def get_transcript_model_counts_file(self, chr_id: str) -> str:
         """Get path to discovered transcript counts file for a chromosome."""
-        return self._make_path(self.get_chr_prefix(chr_id) + ".discovered_transcript")
+        return self._make_fragment_path(self.get_chr_prefix(chr_id) + ".discovered_transcript")
 
     def get_gene_model_counts_file(self, chr_id: str) -> str:
         """Get path to discovered gene counts file for a chromosome."""
-        return self._make_path(self.get_chr_prefix(chr_id) + ".discovered_gene")
+        return self._make_fragment_path(self.get_chr_prefix(chr_id) + ".discovered_gene")
 
     def get_t2t_tsv_file(self, chr_id: str) -> str:
         """Get path to SQANTI-like TSV for a chromosome."""
-        return self._make_path(self.get_chr_prefix(chr_id) + ".novel_vs_known.SQANTI-like.tsv")
+        return self._make_fragment_path(self.get_chr_prefix(chr_id) + ".novel_vs_known.SQANTI-like.tsv")
 
     def get_polya_prediction_file(self, chr_id: str) -> str:
         """Get path to polyA prediction TSV for a chromosome."""
-        return self._make_path(self.get_chr_prefix(chr_id) + ".polyA_prediction.tsv")
+        return self._make_fragment_path(self.get_chr_prefix(chr_id) + ".polyA_prediction.tsv")
 
     def get_tss_prediction_file(self, chr_id: str) -> str:
         """Get path to TSS prediction TSV for a chromosome."""
-        return self._make_path(self.get_chr_prefix(chr_id) + ".TSS_prediction.tsv")
+        return self._make_fragment_path(self.get_chr_prefix(chr_id) + ".TSS_prediction.tsv")
 
     def get_grouped_counts_file(self, chr_id: str, feature: str, strategy_name: str) -> str:
         """Get path to grouped counts file for a chromosome.
@@ -250,7 +238,7 @@ class SampleData:
             feature: Feature type (gene, transcript, exon, intron, discovered_transcript, discovered_gene)
             strategy_name: Grouping strategy name
         """
-        return self._make_path(f"{self.get_chr_prefix(chr_id)}.{feature}_grouped_{strategy_name}")
+        return self._make_fragment_path(f"{self.get_chr_prefix(chr_id)}.{feature}_grouped_{strategy_name}")
 
     # Sample-level auxiliary files (for resume functionality)
 
@@ -258,11 +246,6 @@ class SampleData:
         """Get path to sample collection info file."""
         from isoquant_lib.utils.file_naming import info_file_name
         return info_file_name(self.out_raw_file)
-
-    def get_collection_lock_file(self) -> str:
-        """Get path to sample collection lock file."""
-        from isoquant_lib.utils.file_naming import collection_lock_file_name
-        return collection_lock_file_name(self.out_raw_file)
 
 
 class InputDataStorage:
