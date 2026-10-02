@@ -14,6 +14,7 @@ import shutil
 import sys
 import argparse
 import glob
+import json
 from traceback import print_exc
 import subprocess
 import logging
@@ -41,6 +42,7 @@ RT_ALLINFO = "allinfo"
 RT_POLYA_PREDICTION = "polya_prediction"
 RT_TSS_PREDICTION = "tss_prediction"
 RT_FUSION = "fusion"
+RT_SUMMARY = "summary"
 
 
 log = logging.getLogger('GitHubRunner')
@@ -679,6 +681,56 @@ def run_allinfo_quality(args, config_dict, baselines=None):
     return exit_code
 
 
+def flatten_summary(summary: dict, prefix: str = "") -> dict:
+    """Numeric leaves of SAMPLE.summary_stats.json as {"section/key": value}."""
+    flat = {}
+    for key, value in summary.items():
+        name = prefix + key
+        if isinstance(value, dict):
+            flat.update(flatten_summary(value, name + "/"))
+        elif isinstance(value, (int, float)) and not isinstance(value, bool):
+            flat[name] = float(value)
+    return flat
+
+
+def run_summary_quality(args, config_dict, baselines=None):
+    """Compare numbers of the run summary (SAMPLE.summary_stats.json) with baselines["summary"].
+
+    The summary aggregates every stage (alignment, assignment, polyA, quantification, barcodes,
+    UMI filtering, groups), so a stage that restores or recomputes something wrongly on
+    --resume shows up here even when its output files exist. Only metrics listed in the
+    baselines are checked; all numeric ones are written to new_summary_etalon.tsv.
+    """
+    log.info('== Running run summary assessment ==')
+    run_name = config_dict["name"]
+    label = config_dict["label"]
+    output_folder = os.path.join(args.output if args.output else config_dict["output"], run_name)
+    summary_file = os.path.join(output_folder, label, "%s.summary_stats.json" % label)
+    if not os.path.exists(summary_file):
+        log.error("Run summary not found: %s" % summary_file)
+        return -5
+    with open(summary_file) as inf:
+        summary = flatten_summary(json.load(inf))
+
+    with open(os.path.join(output_folder, "new_summary_etalon.tsv"), "w") as outf:
+        for metric_name, value in summary.items():
+            outf.write("%s\t%s\n" % (metric_name, value))
+
+    if not baselines or "summary" not in baselines:
+        return 0
+    exit_code = 0
+    tolerance = float(config_dict.get("tolerance", "0.01"))
+    for metric_name, etalon_val in baselines["summary"].items():
+        if metric_name not in summary:
+            log.error("Metric %s not found in the run summary" % metric_name)
+            exit_code = -36
+            continue
+        err = check_value(float(etalon_val), summary[metric_name], metric_name, tolerance)
+        if err != 0:
+            exit_code = err
+    return exit_code
+
+
 def run_fusion_quality(args, config_dict, baselines=None):
     log.info('== Running fusion detection quality assessment ==')
     config_file = args.config_file
@@ -844,6 +896,8 @@ def main():
         err_codes.append(run_allinfo_quality(args, config_dict, baselines))
     if RT_FUSION in run_types:
         err_codes.append(run_fusion_quality(args, config_dict, baselines))
+    if RT_SUMMARY in run_types:
+        err_codes.append(run_summary_quality(args, config_dict, baselines))
     if RT_POLYA_PREDICTION in run_types:
         err_codes.append(run_polya_prediction(args, config_dict, baselines))
     if RT_TSS_PREDICTION in run_types:

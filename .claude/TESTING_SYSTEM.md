@@ -125,6 +125,7 @@ Old `.cfg` files and their associated `.etl`/`.qnt`/`.prf` files are preserved i
 - `performance` - Track computational performance (memory, CPU, time)
 - `allinfo` - Evaluate UMI filtering quality (single-cell/spatial modes)
 - `polya_prediction` - Evaluate polyA-site prediction accuracy against a ground-truth GTF (requires `reference_polya_gtf` config key)
+- `summary` - Compare numbers of `{label}.summary_stats.json` (flattened as `section/key`, e.g. `assignment/total_assignments`) with `baselines.summary`; only listed metrics are checked, all numeric ones are written to `new_summary_etalon.tsv`. Used by the resume tests: the summary aggregates every stage, so state restored wrongly on `--resume` shows up even when all files exist
 
 Multiple run types can be combined: `run_type	transcripts,quantification_known,performance`
 
@@ -441,7 +442,10 @@ Data and configs are shared via `/abga/work/andreyp/ci_isoquant/`
 
 **Purpose**: Test checkpoint/resume functionality (`.claude/RESUME_CHECKPOINTS.md`): a partial run,
 killed at a chosen point, is copied into the output folder and finished with `--resume`; the
-result is checked with the usual baselines plus `check_input_files`.
+result is checked with the usual baselines (`transcripts` / `allinfo`), `summary` baselines and
+`check_input_files`. The `summary` check is what catches a resumed stage restoring wrong in-memory
+state (e.g. the read totals of reloaded chromosomes) -- `allinfo` alone is copied from the partial run
+once UMI filtering is done.
 
 **Special config keys**: `resume` points to the partial run (copied, then `isoquant.py -o <out> --resume`),
 `label` names the checked experiment, `extra_labels` (space-separated) are further experiments whose
@@ -456,6 +460,8 @@ Each run is stopped by `run_until.py`:
 - `--after` lines (in order) arm the stop, `--occurrence N` picks the N-th match after that -- needed
   because e.g. "Finished processing chromosome" is printed by both read collection and construction;
 - exit code 3 when the run ends before the stop point, so a finished run is never stored as partial;
+- per-chromosome completion lines are logged after the chromosome's marker, so "killed after the 2nd
+  `Finished processing chromosome`" means 2 chromosomes are marked;
 - `--log` keeps the output (`<name>.run_until.log` next to the partial run).
 
 **SIRV configs** (bulk, `transcripts` baselines): `RESUME1` in read collection, `RESUME2` in model

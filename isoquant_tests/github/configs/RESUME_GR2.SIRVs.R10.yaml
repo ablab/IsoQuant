@@ -2,7 +2,7 @@ name: RESUME_GR2.SIRVs.R10
 label: SRIV.Set4.ONT_R10
 output: /abga/work/andreyp/ci_isoquant/output
 resume: /abga/work/andreyp/ci_isoquant/data/resume_checkpoints/SRIV.Set4.ONT_R10.resume_group2
-run_type: transcripts
+run_type: transcripts,summary
 reduced_db: /abga/work/andreyp/ci_isoquant/data/ref/SIRV4/SIRV_isoforms_multi-fasta-annotation
 baselines:
   transcripts:
@@ -12,3 +12,20 @@ baselines:
     known_precision: 100.0
     novel_recall: 42.3
     novel_precision: 100.0
+  summary:
+    alignment/primary: 240149.0
+    alignment/secondary: 5.0
+    alignment/supplementary: 4954.0
+    alignment/unaligned: 0.0
+    assignment/total: 240149.0
+    assignment/unique: 147138.0
+    assignment/ambiguous: 2493.0
+    assignment/inconsistent: 87481.0
+    assignment/unassigned: 3037.0
+    assignment/total_assignments: 240149.0
+    assignment/polya_reads: 222878.0
+    quantification/gene/counted: 156592.0
+    quantification/transcript/counted: 147138.0
+    transcript_models/known: 42.0
+    transcript_models/novel_in_catalog: 1.0
+    transcript_models/novel_not_in_catalog: 10.0

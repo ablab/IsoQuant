@@ -2,7 +2,7 @@ name: SC.Mouse.10x.4chr.2samples.allinfo
 label: S2
 extra_labels: S1
 output: /abga/work/andreyp/ci_isoquant/output
-run_type: allinfo
+run_type: allinfo,summary
 genome: /abga/work/andreyp/ci_isoquant/data/sc_resume/Mouse.10x.4chr.genome.fa
 genedb: /abga/work/andreyp/ci_isoquant/data/sc_resume/Mouse.10x.4chr.gtf
 yaml: /abga/work/andreyp/ci_isoquant/data/sc_resume/Mouse.10x.4chr.2samples.yaml
@@ -27,3 +27,22 @@ baselines:
     Uniquely assigned and spliced and barcoded: 40495.0
     duplicate_triplets: 0.0
     allinfo_stats_match: 1.0
+  summary:
+    alignment/primary: 50000.0
+    alignment/secondary: 3646.0
+    alignment/supplementary: 19.0
+    alignment/unaligned: 0.0
+    assignment/total: 31093.0
+    assignment/unique: 30246.0
+    assignment/ambiguous: 139.0
+    assignment/inconsistent: 705.0
+    assignment/unassigned: 3.0
+    assignment/total_assignments: 49817.0
+    assignment/polya_reads: 49660.0
+    quantification/gene/counted: 30419.0
+    quantification/transcript/counted: 30199.0
+    barcodes/by_stage/Barcode detected: 44865.0
+    umi_filtering/molecules: 31093.0
+    groups/barcode/gene/groups: 4989.0
+    groups/barcode/gene/reads: 30419.0
+    groups/barcode/transcript/reads: 30199.0
