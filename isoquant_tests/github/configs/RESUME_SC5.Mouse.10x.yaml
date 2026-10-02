@@ -3,7 +3,7 @@ name: RESUME_SC5.Mouse.10x
 label: Mouse.10x.4chr
 output: /abga/work/andreyp/ci_isoquant/output
 resume: /abga/work/andreyp/ci_isoquant/data/resume_checkpoints/Mouse.10x.4chr.resume_sc5
-run_type: allinfo
+run_type: allinfo,summary
 edit_distance: '3'
 check_input_files: gene_counts.tsv transcript_counts.tsv gene_tpm.tsv gene_grouped_barcode_counts.linear.tsv transcript_grouped_barcode_counts.linear.tsv gene_grouped_barcode_counts.matrix.mtx transcript_grouped_barcode_tpm.matrix.mtx RNA_velocity_grouped_barcode.loom polyA_prediction.tsv polyA_prediction_grouped_barcode.tsv barcoded_reads_0.tsv.gz tagged.bam deduplicated.bam UMI_filtered.ED3.stats.tsv summary_stats.json summary.html
 baselines:
@@ -22,3 +22,22 @@ baselines:
     Uniquely assigned and spliced and barcoded: 80770.0
     duplicate_triplets: 0.0
     allinfo_stats_match: 1.0
+  summary:
+    alignment/primary: 100000.0
+    alignment/secondary: 9461.0
+    alignment/supplementary: 54.0
+    alignment/unaligned: 0.0
+    assignment/total: 62224.0
+    assignment/unique: 60018.0
+    assignment/ambiguous: 263.0
+    assignment/inconsistent: 1938.0
+    assignment/unassigned: 5.0
+    assignment/total_assignments: 99581.0
+    assignment/polya_reads: 99277.0
+    quantification/gene/counted: 60364.0
+    quantification/transcript/counted: 59928.0
+    barcodes/by_stage/Barcode detected: 89788.0
+    umi_filtering/molecules: 62224.0
+    groups/barcode/gene/groups: 5000.0
+    groups/barcode/gene/reads: 60364.0
+    groups/barcode/transcript/reads: 59928.0
