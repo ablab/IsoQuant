@@ -33,7 +33,7 @@ from collections import namedtuple
 from io import StringIO
 from traceback import print_exc
 from concurrent.futures import ProcessPoolExecutor
-from typing import Optional, Tuple
+from typing import Dict, Optional, Tuple
 import concurrent.futures
 
 import pysam
@@ -268,6 +268,19 @@ def parse_args(cmd_args=None, namespace=None):
                                    help="add read id columns to exon splice-site counts output")
     add_additional_option_to_group(output_setup_args_group, "--old_exon_count_format", action='store_true', default=False,
                                    help="output old exon inclusion/exclusion counts (deprecated)")
+    add_additional_option_to_group(output_setup_args_group, "--dump_intron_graphs", action="store_true", default=False,
+                                   help="dump per-gene intron graphs as integer-labelled flow networks "
+                                        "(vertices.tsv + edges.tsv) into <output>/intron_graphs/")
+    add_additional_option_to_group(output_setup_args_group, "--ground_truth_counts", type=str, default=None,
+                                   help="TSV with ground-truth transcript counts (col1: transcript_id matching "
+                                        "--genedb, col2: count); when combined with --dump_intron_graphs, "
+                                        "each gene's dump also gets a paths.tsv mapping transcripts onto "
+                                        "integer vertex paths with weights")
+    add_additional_option_to_group(output_setup_args_group, "--dump_ref_data", action="store_true", default=False,
+                                   help="when combined with --dump_intron_graphs, also emit per-gene "
+                                        "ref_vertices.tsv / ref_edges.tsv listing every annotated intron "
+                                        "and every consecutive intron pair with its graph status "
+                                        "(in_graph / discarded / unmapped / missing_edge / missing_vertex)")
 
     # ALIGNER
     add_additional_option_to_group(align_args_group, "--aligner", choices=SUPPORTED_ALIGNERS,
@@ -1247,6 +1260,47 @@ def set_additional_params(args):
     else:
         args.bam_tags = []
     args.original_annotation = None
+    set_intron_graph_dump_params(args)
+
+
+def load_ground_truth_counts(counts_file: str) -> Dict[str, float]:
+    counts_map: Dict[str, float] = {}
+    with open(counts_file) as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            parts = line.split("\t")
+            if len(parts) < 2:
+                continue
+            try:
+                counts_map[parts[0]] = float(parts[1])
+            except ValueError:
+                logger.warning("Skipping malformed line in --ground_truth_counts: %s" % line)
+    return counts_map
+
+
+def set_intron_graph_dump_params(args) -> None:
+    args.dump_intron_graphs_dir = None
+    args.ground_truth_counts_map = None
+    # getattr: .params of runs started before these options were added lack them
+    if not getattr(args, "dump_intron_graphs", False):
+        if getattr(args, "ground_truth_counts", None):
+            logger.warning("--ground_truth_counts is only used together with --dump_intron_graphs; ignoring")
+        if getattr(args, "dump_ref_data", False):
+            logger.warning("--dump_ref_data is only used together with --dump_intron_graphs; ignoring")
+            args.dump_ref_data = False
+        return
+
+    args.dump_intron_graphs_dir = os.path.join(args.output, "intron_graphs")
+    os.makedirs(args.dump_intron_graphs_dir, exist_ok=True)
+    if args.ground_truth_counts:
+        if not os.path.exists(args.ground_truth_counts):
+            logger.error("--ground_truth_counts file not found: %s" % args.ground_truth_counts)
+            sys.exit(IsoQuantExitCode.INPUT_FILE_NOT_FOUND)
+        args.ground_truth_counts_map = load_ground_truth_counts(args.ground_truth_counts)
+        logger.info("Loaded %d ground-truth transcript counts from %s"
+                    % (len(args.ground_truth_counts_map), args.ground_truth_counts))
 
 
 def prepare_reference_genome(args):

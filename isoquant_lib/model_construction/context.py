@@ -23,6 +23,7 @@ from ..assignment.isoform_assignment import ReadAssignment
 from ..assignment.long_read_assigner import LongReadAssigner
 from ..assignment.long_read_profiles import CombinedProfileConstructor
 from .intron_path import IntronPathProcessor, IntronPathStorage
+from .intron_graph_flow import dump_flow_graph
 
 
 @unique
@@ -218,6 +219,15 @@ class ModelConstructionContext:
         self.path_processor = IntronPathProcessor(self.args, self.intron_graph)
         self.path_storage = IntronPathStorage(self.args, self.path_processor)
         self.path_storage.fill(read_assignment_storage)
+        dump_dir = getattr(self.args, "dump_intron_graphs_dir", None)
+        if dump_dir:
+            gene_ids = [g.id for g in self.gene_info.gene_db_list]
+            gene_tag = "_".join(gene_ids) if gene_ids else "region_%d_%d" % (self.gene_info.start, self.gene_info.end)
+            dump_flow_graph(self.intron_graph, self.gene_info.chr_id, gene_tag, dump_dir,
+                            gene_info=self.gene_info,
+                            ground_truth_counts=getattr(self.args, "ground_truth_counts_map", None),
+                            dump_ref_data=getattr(self.args, "dump_ref_data", False),
+                            path_storage=self.path_storage)
         self.known_isoforms_in_graph = self.get_known_spliced_isoforms(self.gene_info)
         self.known_introns = set(self.gene_info.intron_profiles.features)
         for intron_path, isoform_id in self.known_isoforms_in_graph.items():

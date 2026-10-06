@@ -598,12 +598,15 @@ class IntronGraph:
         tss_vertex = TerminalVertex.tss_right if read_end else TerminalVertex.tss_left
         edges = self.outgoing_edges if read_end else self.incoming_edges
         for intron in introns:
-            for pos in polya_positions[intron].keys():
-                edges[intron].add((polya_vertex, pos))
-            for pos in tss_positions[intron].keys():
-                edges[intron].add((tss_vertex, pos))
-            for pos in terminal_positions[intron].keys():
-                edges[intron].add((read_vertex, pos))
+            for vertex_type, positions in ((polya_vertex, polya_positions[intron]),
+                                           (tss_vertex, tss_positions[intron]),
+                                           (read_vertex, terminal_positions[intron])):
+                for pos, count in positions.items():
+                    terminal_vertex = (vertex_type, pos)
+                    edges[intron].add(terminal_vertex)
+                    # read counts on terminal edges, used by intron graph dumps (--dump_intron_graphs)
+                    edge = (intron, terminal_vertex) if read_end else (terminal_vertex, intron)
+                    self.edge_weights[edge] = count
 
     def _refine_positions(self, clustered: Dict[int, int],
                           predicted_positions: Optional[List[int]]) -> Dict[int, int]:

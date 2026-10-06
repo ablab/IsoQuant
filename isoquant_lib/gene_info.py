@@ -237,6 +237,10 @@ class GeneInfo:
         # half-built, e.g. without reference_region (see #425 and #427)
         assert db is not None
         assert gene_db_list
+        # 1 == no downsampling; AlignmentCollector overwrites it when max_coverage_small_chr /
+        # max_coverage_normal_chr makes it process 1 out of every N reads, so that observed
+        # counts can be multiplied back to the original load
+        self.coverage_scale_factor: int = 1
         # gffutils main structure
         self.db = db
         # list of genes in cluster
@@ -284,6 +288,7 @@ class GeneInfo:
         gene_info = cls.__new__(cls)
         gene_info.db = None
         gene_info.gene_db_list = []
+        gene_info.coverage_scale_factor = 1
 
         # gene region; an empty model storage (a gene block where no model survived
         # filtering) still yields a fully initialized, empty GeneInfo - it is set as
@@ -358,6 +363,7 @@ class GeneInfo:
         gene_info = cls.__new__(cls)
         gene_info.db = None
         gene_info.gene_db_list = []
+        gene_info.coverage_scale_factor = 1
         # gene region
         gene_info.chr_id = transcript_model.chr_id
         gene_info.start = transcript_model.get_start()
@@ -412,6 +418,7 @@ class GeneInfo:
         gene_info = cls.__new__(cls)
         gene_info.db = None
         gene_info.gene_db_list = []
+        gene_info.coverage_scale_factor = 1
         # gene region
         gene_info.chr_id = chr_id
         gene_info.start = start
@@ -462,6 +469,7 @@ class GeneInfo:
         gene_info.chr_id = read_string(infile)
         gene_info.start = read_int(infile)
         gene_info.end = read_int(infile)
+        gene_info.coverage_scale_factor = read_int(infile)
 
         gene_info.all_read_region_start = gene_info.start
         gene_info.all_read_region_end = gene_info.end
@@ -503,6 +511,7 @@ class GeneInfo:
         write_string(self.chr_id, outfile)
         write_int(self.start, outfile)
         write_int(self.end, outfile)
+        write_int(self.coverage_scale_factor, outfile)
 
     def empty(self):
         return not self.exon_profiles.features
