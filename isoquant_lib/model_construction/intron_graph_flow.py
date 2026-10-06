@@ -337,6 +337,33 @@ def _thread_transcript(
     return _render_path(flow, intron_graph, mapped)
 
 
+def _read_span(intron_graph) -> Optional[Tuple[int, int]]:
+    """Genomic span of the reads processed in this region (``None`` if none)."""
+    start: Optional[int] = None
+    end: Optional[int] = None
+    for assignment in intron_graph.read_assignments:
+        exons = assignment.corrected_exons
+        if not exons:
+            continue
+        start = exons[0][0] if start is None else min(start, exons[0][0])
+        end = exons[-1][1] if end is None else max(end, exons[-1][1])
+    return None if start is None else (start, end)
+
+
+def _in_read_span(gene_info, t_id: str, read_span: Optional[Tuple[int, int]]) -> bool:
+    """True iff transcript ``t_id`` overlaps the region's read span.
+
+    A gene cluster is split into sub-regions at coverage gaps, and each
+    sub-region's ``GeneInfo`` carries every gene overlapping it, so without
+    this filter a transcript is also dumped (as an all-``*`` row) in
+    sub-regions that hold none of its reads.
+    """
+    if read_span is None:
+        return True
+    exons = gene_info.all_isoforms_exons[t_id]
+    return exons[0][0] <= read_span[1] and exons[-1][1] >= read_span[0]
+
+
 def _dump_paths(
     flow: "Intron2Graph",
     intron_graph,
@@ -345,6 +372,7 @@ def _dump_paths(
     chr_id: str,
     paths_path: str,
     coverage_scale_factor: int = 1,
+    read_span: Optional[Tuple[int, int]] = None,
 ) -> None:
     """Write per-gene ground-truth paths TSV.
 
@@ -365,7 +393,7 @@ def _dump_paths(
 
     rows = []
     for t_id, introns in gene_info.all_isoforms_introns.items():
-        if t_id not in counts_map:
+        if t_id not in counts_map or not _in_read_span(gene_info, t_id, read_span):
             continue
         count = counts_map[t_id]
         scaled_count = int(round(count / scale)) if scale > 1 else count
@@ -426,6 +454,7 @@ def _dump_ref_data(
     gene_info,
     ref_vertices_path: str,
     ref_edges_path: str,
+    read_span: Optional[Tuple[int, int]] = None,
 ) -> None:
     """Emit per-gene reference-vs-graph diff TSVs.
 
@@ -508,7 +537,7 @@ def _dump_ref_data(
         return u_vid, v_vid, "missing_edge"
 
     for t_id, introns in gene_info.all_isoforms_introns.items():
-        if not introns:
+        if not introns or not _in_read_span(gene_info, t_id, read_span):
             continue
         mapped = [resolve_intron(intron) for intron in introns]
         for i in range(len(introns) - 1):
@@ -609,6 +638,7 @@ def dump_flow_graph(
         return
 
     flow = Intron2Graph(intron_graph, add_super_source_target=add_super_source_target)
+    read_span = _read_span(intron_graph)
     clustered_introns = intron_graph.intron_collector.clustered_introns
 
     gene_count = gene_id.count("_") + 1
@@ -664,12 +694,13 @@ def dump_flow_graph(
         paths_path = os.path.join(gene_dir, "paths.tsv")
         scale = getattr(gene_info, "coverage_scale_factor", 1)
         _dump_paths(flow, intron_graph, gene_info, ground_truth_counts, chr_id, paths_path,
-                    coverage_scale_factor=scale)
+                    coverage_scale_factor=scale, read_span=read_span)
 
     if dump_ref_data and gene_info is not None and gene_info.all_isoforms_introns:
         ref_vertices_path = os.path.join(gene_dir, "ref_vertices.tsv")
         ref_edges_path = os.path.join(gene_dir, "ref_edges.tsv")
-        _dump_ref_data(flow, intron_graph, gene_info, ref_vertices_path, ref_edges_path)
+        _dump_ref_data(flow, intron_graph, gene_info, ref_vertices_path, ref_edges_path,
+                       read_span=read_span)
 
     if path_storage is not None and getattr(path_storage, "paths", None):
         read_subpaths_path = os.path.join(gene_dir, "read_subpaths.tsv")

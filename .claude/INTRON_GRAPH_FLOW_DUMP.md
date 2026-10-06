@@ -273,6 +273,15 @@ with its graph status:
 Independent of `--ground_truth_counts`: a gene is written iff it has
 annotated introns, regardless of whether it appears in the counts TSV.
 
+Both `paths.tsv` and `ref_*.tsv` only list transcripts overlapping the
+span of the reads processed in the region (`_read_span` /
+`_in_read_span`). Gene clusters are split into sub-regions at coverage
+gaps (`AlignmentCollector.split_coverage_regions`), and each
+sub-region's `GeneInfo` carries every gene overlapping it, so without
+the filter a transcript was also dumped as an all-`*` row in sub-regions
+holding none of its reads (~8% duplicate rows on Mouse ONT sims). A
+transcript straddling a coverage gap still appears in both sub-regions.
+
 The `chr` column uses `self.gene_info.chr_id`; for intergenic / novel
 gene regions without a `gene_db_list`, the per-gene directory falls back
 to `<chr>.region_<start>_<end>/`.
