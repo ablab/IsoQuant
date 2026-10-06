@@ -1,7 +1,8 @@
 # Intron Graph Flow-Network Dump
 
-Dev notes on `isoquant_lib/intron_graph_flow.py` and the
-`--dump_intron_graphs` flag. The feature converts IsoQuant's
+Dev notes on `isoquant_lib/model_construction/intron_graph_flow.py` and the
+`--dump_intron_graphs` flag (branch `ilp_conversion_4.1`, ported onto 4.1 master
+from `ilp_conversion`; see §9). The feature converts IsoQuant's
 `IntronGraph` into a plain integer-labelled flow network and dumps it to
 disk so external flow-decomposition / ILP tooling can consume it without
 needing to re-implement IsoQuant's coordinate-tuple vertex representation.
@@ -11,10 +12,12 @@ needing to re-implement IsoQuant's coordinate-tuple vertex representation.
 IsoQuant's `IntronGraph` identifies vertices by coordinate tuples:
 
 - `(start, end)` for real introns (both positive ints)
-- `(VERTEX_polya, pos)` / `(VERTEX_read_end, pos)` for terminal vertices
-- `(VERTEX_polyt, pos)` / `(VERTEX_read_start, pos)` for starting vertices
+- `(TerminalVertex.polya | read_end | tss_right, pos)` for terminal (genomic-right) vertices
+- `(TerminalVertex.polyt | read_start | tss_left, pos)` for starting (genomic-left) vertices
 
-where `VERTEX_*` are sentinel negatives (`-10`, `-11`, `-20`, `-21`).
+where the `TerminalVertex` codes are sentinel negatives (`-10`, `-11`, `-12`,
+`-20`, `-21`, `-22`; `isoquant_lib/model_construction/intron_graph.py`).
+`tss_*` vertices only exist when TSS predictions are available (`--fl_data`).
 
 External flow-decomposition libraries (e.g. `flowpaths`,
 `networkx.max_flow`, Gurobi encoders) typically expect:
@@ -41,7 +44,7 @@ ILP lines.
 ## 3. Conversion (`Intron2Graph`)
 
 ```python
-from isoquant_lib.intron_graph_flow import Intron2Graph
+from isoquant_lib.model_construction.intron_graph_flow import Intron2Graph
 flow = Intron2Graph(intron_graph)                              # default
 flow = Intron2Graph(intron_graph, add_super_source_target=True) # opt-in
 ```
@@ -84,16 +87,18 @@ flow.path_to_transcript(int_path)           # -> list[intron tuple]
 
 ### 3.1 Terminal edge weights
 
-Master's `IntronGraph.edge_weights` was historically populated only in
+On master `IntronGraph.edge_weights` is populated only in
 `add_edge(v1, v2)` (intron → intron edges from `construct()`); the
-terminal / starting edges added later in `attach_terminal_positions()`
-were left at their `defaultdict(int)` zero. This branch backports the
-`origin/ilp_models` patch into `attach_transcpt_ends`, so
-`edge_weights` now carries the per-position cluster counts for:
+terminal / starting edges were left at their `defaultdict(int)` zero.
+This branch records the per-position cluster counts in step 4 of
+`IntronGraph._attach_side` (the only other `edge_weights` reader is a
+debug print, so model construction is unaffected):
 
-- `starting_vertex → intron` (counts from `cluster_polya_positions` /
-  `cluster_terminal_positions` on the polyT / read_start side)
-- `intron → terminal_vertex` (same, on the polyA / read_end side)
+- `starting_vertex → intron` (polyT / TSS-left / read_start side)
+- `intron → terminal_vertex` (polyA / TSS-right / read_end side)
+
+Counts are taken after polyA/TSS snapping (`_refine_positions`), i.e. at
+the vertex's final position.
 
 The implicit `source → starting` / `terminal → target` super edges
 (only added when `add_super_source_target=True`) are still computed as
@@ -130,11 +135,13 @@ Writes two TSVs per gene:
 | read-end sink | `read_end` | `(pos, pos)` | Σ incoming edge weights |
 | polyT source | `polyt` | `(pos, pos)` | Σ outgoing edge weights |
 | read-start source | `read_start` | `(pos, pos)` | Σ outgoing edge weights |
+| TSS sink (`-` strand 5') | `tss_right` | `(pos, pos)` | Σ incoming edge weights |
+| TSS source (`+` strand 5') | `tss_left` | `(pos, pos)` | Σ outgoing edge weights |
 | super-target (opt-in) | `target` | `*`, `*` | `*` |
 
 `weight` is the cluster count for the vertex. Intron rows pull from
 `intron_graph.intron_collector.clustered_introns`; terminal / starting
-rows aggregate the per-edge counts that `attach_transcpt_ends` writes
+rows aggregate the per-edge counts that `_attach_side` writes
 into `intron_graph.edge_weights` (see §3.1) — equivalently, the sum of
 incoming (terminal) or outgoing (starting) weights in `flow.flow_dict`.
 
@@ -241,8 +248,8 @@ with its graph status:
 
 - `ref_vertices.tsv` — `kind  ref_start  ref_end  status  vertex_id  graph_start  graph_end`
   - `kind` ∈ `intron` / `starting` / `terminal` (`starting` = low-coord
-    boundary matched against polyT / read_start; `terminal` =
-    high-coord boundary matched against polyA / read_end)
+    boundary matched against polyT / read_start / tss_left; `terminal` =
+    high-coord boundary matched against polyA / read_end / tss_right)
   - `status` for introns ∈ `in_graph` / `discarded` / `unmapped`; for
     boundaries ∈ `in_graph` / `unmapped`
   - terminal `unmapped` means no graph vertex sits within
@@ -267,18 +274,19 @@ to `<chr>.region_<start>_<end>/`.
 ## 5. Pipeline integration
 
 The only call site is in
-`isoquant_lib/graph_based_model_construction.py::GraphBasedModelConstructor.process`,
+`isoquant_lib/model_construction/context.py::ModelConstructionContext.build_graph`,
 right after `IntronPathStorage.fill()` so the dump can include the
 read-threaded paths:
 
 ```python
-self.intron_graph = IntronGraph(self.args, self.gene_info, read_assignment_storage)
+self.intron_graph = IntronGraph(self.args, self.gene_info, read_assignment_storage,
+                                polya_predictions=..., tss_predictions=...)
 self.path_processor = IntronPathProcessor(self.args, self.intron_graph)
 self.path_storage = IntronPathStorage(self.args, self.path_processor)
 self.path_storage.fill(read_assignment_storage)
 dump_dir = getattr(self.args, "dump_intron_graphs_dir", None)
 if dump_dir:
-    gene_ids = [g.id for g in self.gene_info.gene_db_list] if self.gene_info.gene_db_list else []
+    gene_ids = [g.id for g in self.gene_info.gene_db_list]
     gene_tag = "_".join(gene_ids) if gene_ids else "region_%d_%d" % (self.gene_info.start, self.gene_info.end)
     dump_flow_graph(self.intron_graph, self.gene_info.chr_id, gene_tag,
                     dump_dir, ...,
@@ -325,6 +333,7 @@ path on `args.dump_intron_graphs_dir` (so downstream code doesn't have
 to recompute it).
 
 Loader behaviour for `--ground_truth_counts` (in
+`set_intron_graph_dump_params` / `load_ground_truth_counts`, called from
 `set_additional_params`):
 
 - A warning is logged and the flag is ignored if
@@ -376,12 +385,40 @@ weight column. Pass `add_super_source_target=True` to wrap the graph
 
 ## 8. Future work / gaps
 
-- Populate terminal-edge weights from `clustered_polyas` /
-  `terminal_positions` so downstream flow decomposition has a sensible
-  source/sink load.
 - Optionally emit a companion JSON per gene with the intron-correction
   map, path constraints, and `known_isoforms_in_graph` so external
   ILP tooling can replicate IsoQuant's preprocessing.
 - If we ever want cross-gene dumps (e.g. one NetworkX pickle per
   chromosome), collapse the per-gene directories into a single indexed
   file — the current layout is one subdirectory of TSVs per gene region.
+- Ground-truth paths are threaded through `--genedb` transcripts, so with
+  a reduced annotation the removed (novel) transcripts never get a
+  `paths.tsv` row. Complete GT on reduced-db graphs would need threading
+  against the full annotation.
+
+## 9. Downsampling and `coverage_scale_factor`
+
+There is no separate downsampling option: downsampling is the coverage
+cut-off. `--max_coverage_small_chr` (default 1000000; applies to `MT`,
+`chrM`, `chrMT` and chromosomes < 500 kb, so all SIRV contigs) and
+`--max_coverage_normal_chr` (default -1 = off) set a per-region maximum
+coverage; `AlignmentCollector.process_alignments_in_region` turns an
+exceeded cut-off into "process 1 read out of every
+N = ceil(max_coverage / cutoff)". A value <= 0 disables it.
+
+`GeneInfo.coverage_scale_factor` stores that N (1 = no downsampling). It
+is set in `process_alignments_in_region`, initialised to 1 in every
+`GeneInfo` constructor, and serialized right after `end` in
+`GeneInfo.serialize` / `deserialize`, so it survives the hand-off to model
+construction. That changes the GeneInfo binary layout: resuming from
+intermediates written before this commit is not supported.
+
+## 10. Port to 4.1 (ilp_conversion → ilp_conversion_4.1)
+
+Rebasing the 11 `ilp_conversion` commits failed on every commit, because
+master split and moved the touched modules into `alignment/` and
+`model_construction/`. The final diff was ported as one commit instead.
+Behavioural differences against dumps made from the old branch (SIRV
+R10, same BAM): same row counts in all six files; terminal vertex
+coordinates move by a few bp because master snaps them to predicted
+polyA/TSS sites; GT path threading slightly improved (`ok` 23 → 24).
