@@ -19,7 +19,7 @@ Ported from the ``src/encode_ilp_gurobi.py::Intron2Graph`` prototype on the
 import logging
 import os
 from collections import defaultdict
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 
 from isoquant_lib.model_construction.intron_graph import (
     TerminalVertex,
@@ -64,6 +64,8 @@ class Intron2Graph:
         self.target: Optional[int] = None
         self.edge_list: List[Tuple[int, int]] = []
         self.flow_dict: Dict[Tuple[int, int], int] = defaultdict(int)
+        self.predecessors: Dict[int, Set[int]] = defaultdict(set)
+        self.successors: Dict[int, Set[int]] = defaultdict(set)
 
         next_id = 0
         if add_super_source_target:
@@ -123,6 +125,10 @@ class Intron2Graph:
                     edge_set.add((u, v))
                 self.flow_dict[(u, v)] = intron_graph.edge_weights[(intron, subsequent)]
                 terminal_totals[subsequent] += intron_graph.edge_weights[(intron, subsequent)]
+
+        for u, v in self.edge_list:
+            self.predecessors[v].add(u)
+            self.successors[u].add(v)
 
         if add_super_source_target:
             # 5. super-source -> each starting vertex, weight = sum of outgoing flow
@@ -185,12 +191,14 @@ def _terminal_candidates(
     return low, high
 
 
-def _match_terminal(
+def _closest_terminal(
     candidates: List[Tuple[int, int]],
     position: int,
     apa_delta: int,
+    allowed: Optional[Set[int]] = None,
 ) -> Optional[int]:
-    """Return the closest candidate vertex id within ``apa_delta`` of ``position``.
+    """Return the closest candidate vertex id within ``apa_delta`` of ``position``,
+    optionally restricted to vertex ids in ``allowed``.
 
     Linear scan; graph-local terminal lists are short. Ties broken by first
     occurrence in the sorted list (lowest position wins).
@@ -198,11 +206,35 @@ def _match_terminal(
     best_vid: Optional[int] = None
     best_diff = apa_delta + 1
     for cand_pos, vid in candidates:
+        if allowed is not None and vid not in allowed:
+            continue
         diff = abs(cand_pos - position)
         if diff <= apa_delta and diff < best_diff:
             best_diff = diff
             best_vid = vid
     return best_vid
+
+
+def _match_terminal(
+    candidates: List[Tuple[int, int]],
+    position: int,
+    apa_delta: int,
+    adjacent: Optional[Set[int]] = None,
+) -> Optional[int]:
+    """Match an annotated transcript end to a starting / terminal vertex.
+
+    Vertices in ``adjacent`` (those connected to the transcript's first /
+    last intron) are preferred; only if none lies within ``apa_delta`` does
+    the closest vertex anywhere in the gene win. Without the preference, deep
+    graphs carry many low-weight end vertices hanging off spurious introns,
+    and the globally closest one is frequently not the one attached to the
+    transcript's own intron, reporting a false ``disconnected`` path.
+    """
+    if adjacent:
+        vid = _closest_terminal(candidates, position, apa_delta, adjacent)
+        if vid is not None:
+            return vid
+    return _closest_terminal(candidates, position, apa_delta)
 
 
 def _render_path(
@@ -271,8 +303,9 @@ def _thread_transcript(
 
     Each annotated intron runs through ``intron_collector.substitute`` and
     maps to a graph vertex; the transcript's 5'/3' exon boundaries (low/high
-    genomic ends) are matched to the closest starting / terminal vertex in
-    the graph within ``apa_delta``. Anything that doesn't resolve becomes a
+    genomic ends) are matched to the closest starting / terminal vertex
+    within ``apa_delta``, preferring those adjacent to the first / last
+    intron (:func:`_match_terminal`). Anything that doesn't resolve becomes a
     ``*`` slot — no synthetic vertices are introduced.
 
     Returns ``(status, path_str, simple_path_str, missing_vertices,
@@ -294,8 +327,11 @@ def _thread_transcript(
         intron_mapped.append(flow.intron2vertex.get(substituted))
 
     exons = gene_info.all_isoforms_exons[t_id]
-    low_vid = _match_terminal(low_candidates, exons[0][0], apa_delta)
-    high_vid = _match_terminal(high_candidates, exons[-1][1], apa_delta)
+    first_vid, last_vid = intron_mapped[0], intron_mapped[-1]
+    low_vid = _match_terminal(low_candidates, exons[0][0], apa_delta,
+                              flow.predecessors.get(first_vid) if first_vid is not None else None)
+    high_vid = _match_terminal(high_candidates, exons[-1][1], apa_delta,
+                               flow.successors.get(last_vid) if last_vid is not None else None)
 
     mapped: List[Optional[int]] = [low_vid] + intron_mapped + [high_vid]
     return _render_path(flow, intron_graph, mapped)
@@ -397,8 +433,9 @@ def _dump_ref_data(
     across all transcripts in this gene:
     ``kind  ref_start  ref_end  status  vertex_id  graph_start  graph_end``
     - ``kind`` ∈ {``intron``, ``starting``, ``terminal``} — ``starting`` is
-      the low-coord exon boundary (matched against polyT / read_start),
-      ``terminal`` is the high-coord boundary (polyA / read_end)
+      the low-coord exon boundary (matched against polyT / read_start /
+      tss_left), ``terminal`` is the high-coord boundary (polyA / read_end /
+      tss_right)
     - ``status`` for introns ∈ {``in_graph``, ``discarded``, ``unmapped``};
       for terminal slots ∈ {``in_graph``, ``unmapped``}
     - ``vertex_id`` is the integer graph id (``*`` when unresolved)
@@ -406,8 +443,10 @@ def _dump_ref_data(
       the matched terminal position; ``*`` when no graph counterpart
 
     Terminal slots are matched by position within
-    ``intron_graph.params.apa_delta``; if no graph terminal sits inside the
-    radius the slot is recorded as ``unmapped`` rather than synthesized.
+    ``intron_graph.params.apa_delta``, preferring vertices adjacent to the
+    transcripts' first / last intron (see :func:`_match_terminal`); if no
+    graph terminal sits inside the radius the slot is recorded as
+    ``unmapped`` rather than synthesized.
 
     ``<chr>.<gene>.ref_edges.tsv`` — one row per unique consecutive pair
     appearing in at least one transcript (intron→intron, plus
@@ -445,19 +484,17 @@ def _dump_ref_data(
         vertex_info[key] = (vid, "in_graph", substituted)
         return vid
 
-    def resolve_terminal(position: int, side: str) -> Optional[int]:
+    # terminal slot -> vertices adjacent to the first / last intron of every
+    # transcript ending there; ref_vertices rows are resolved against the union
+    terminal_adjacent: Dict[Tuple[str, int, int], Set[int]] = defaultdict(set)
+
+    def resolve_terminal(position: int, side: str, intron_vid: Optional[int]) -> Optional[int]:
         kind = "starting" if side == "low" else "terminal"
-        key = (kind, position, position)
-        if key in vertex_info:
-            return vertex_info[key][0]
+        neighbours = flow.predecessors if side == "low" else flow.successors
+        adjacent = neighbours.get(intron_vid, set()) if intron_vid is not None else set()
+        terminal_adjacent[(kind, position, position)].update(adjacent)
         candidates = low_candidates if side == "low" else high_candidates
-        vid = _match_terminal(candidates, position, apa_delta)
-        if vid is None:
-            vertex_info[key] = (None, "unmapped", None)
-            return None
-        graph_tuple = flow.vertex2intron[vid]
-        vertex_info[key] = (vid, "in_graph", (graph_tuple[1], graph_tuple[1]))
-        return vid
+        return _match_terminal(candidates, position, apa_delta, adjacent)
 
     def classify_edge(
         u_vid: Optional[int], v_vid: Optional[int]
@@ -485,8 +522,8 @@ def _dump_ref_data(
         exons = gene_info.all_isoforms_exons[t_id]
         low_pos = exons[0][0]
         high_pos = exons[-1][1]
-        low_vid = resolve_terminal(low_pos, "low")
-        high_vid = resolve_terminal(high_pos, "high")
+        low_vid = resolve_terminal(low_pos, "low", mapped[0])
+        high_vid = resolve_terminal(high_pos, "high", mapped[-1])
 
         first_intron = introns[0]
         last_intron = introns[-1]
@@ -498,6 +535,15 @@ def _dump_ref_data(
                    high_pos, high_pos)
         if end_key not in edge_info:
             edge_info[end_key] = classify_edge(mapped[-1], high_vid)
+
+    for key, adjacent in terminal_adjacent.items():
+        candidates = low_candidates if key[0] == "starting" else high_candidates
+        vid = _match_terminal(candidates, key[1], apa_delta, adjacent)
+        if vid is None:
+            vertex_info[key] = (None, "unmapped", None)
+        else:
+            graph_tuple = flow.vertex2intron[vid]
+            vertex_info[key] = (vid, "in_graph", (graph_tuple[1], graph_tuple[1]))
 
     with open(ref_vertices_path, "w") as vf:
         vf.write("kind\tref_start\tref_end\tstatus\tvertex_id\tgraph_start\tgraph_end\n")

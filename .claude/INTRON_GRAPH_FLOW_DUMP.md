@@ -181,7 +181,13 @@ high_terminal]`. Each annotated intron runs through
 `flow.intron2vertex`. Each transcript's exon-boundary positions
 (`gene_info.all_isoforms_exons[t_id][0][0]` for the low side,
 `[-1][1]` for the high side) are matched to the closest graph
-starting / terminal vertex within `intron_graph.params.apa_delta`. No
+starting / terminal vertex within `intron_graph.params.apa_delta`,
+preferring vertices adjacent to the transcript's first / last intron and
+falling back to any vertex in the gene (`_match_terminal`). Without the
+preference, deep graphs (e.g. SIRV R9 at full coverage) carry many
+weight-1 end vertices on spurious introns, the globally closest one is
+often not attached to the transcript's intron, and 20 of 42 SIRV GT
+paths were falsely `disconnected` (5 after the fix, all genuine). No
 synthetic vertices are introduced — if no graph vertex sits in the
 radius the slot becomes `*` and bumps `missing_vertices`.
 
