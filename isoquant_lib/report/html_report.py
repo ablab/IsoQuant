@@ -264,10 +264,10 @@ def _umi_section(summary: RunSummary) -> str:
     if not summary.umi_filtering:
         return ""
     rows = [(name, _format_number(count)) for name, count in summary.umi_filtering.items()]
-    saved = summary.umi_filtering.get("Total reads saved")
-    processed = summary.umi_filtering.get("Total assignments processed")
-    if saved is not None and processed:
-        rows.append(("Duplication rate", _format_percent((processed - saved) / processed)))
+    if summary.umi_duplication_rate is not None:
+        # Over barcoded gene-assigned reads, the only ones deduplicated.
+        rows.append(("Duplication rate (of barcoded assigned reads)",
+                     _format_percent(summary.umi_duplication_rate)))
     title = "UMI deduplication"
     if summary.umi_edit_distance is not None:
         title += " (edit distance %d)" % summary.umi_edit_distance
