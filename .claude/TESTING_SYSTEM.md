@@ -453,7 +453,8 @@ once UMI filtering is done.
 
 **Partial runs** live in `/abga/work/andreyp/ci_isoquant/data/resume_checkpoints/` and are produced by
 `isoquant_tests/github/generate_resume_test.sh <isoquant_dir> [sirv|sc|all]` on the CI host. Regenerate
-them whenever the checkpoint layout changes: runs of other versions are refused with exit code 26.
+them whenever `CHECKPOINT_FORMAT` (`isoquant_lib/utils/checkpoints.py`) is bumped: stores of another format, or
+without a checkpoint record tied to `.params`, are refused with exit code 26.
 Each run is stopped by `run_until.py`:
 - the command runs in its own process group; on the stop line the whole group is frozen (SIGSTOP)
   and killed (SIGKILL), so no worker keeps writing into the test data;
@@ -463,6 +464,12 @@ Each run is stopped by `run_until.py`:
 - per-chromosome completion lines are logged after the chromosome's marker, so "killed after the 2nd
   `Finished processing chromosome`" means 2 chromosomes are marked;
 - `--log` keeps the output (`<name>.run_until.log` next to the partial run).
+
+Killing on a log line is not exact (other workers keep running while the line travels through the pipe),
+so after every partial run `generate_resume_test.sh` checks the expected checkpoint markers (`expect`,
+`expect_count`) and exits with 4 if a scenario drifted, e.g. SC4 ("all chromosomes collected, `collect` not
+marked") getting `collect.done` would otherwise silently duplicate SC5's starting state.
+`generate_resume_test.sh <isoquant_dir> check` only runs these checks against the stored data.
 
 **SIRV configs** (bulk, `transcripts` baselines): `RESUME1` in read collection, `RESUME2` in model
 construction, `RESUME3` after read collection, `RESUME4` in construction with `--count_exons
