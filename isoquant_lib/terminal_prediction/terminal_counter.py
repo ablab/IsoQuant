@@ -88,8 +88,7 @@ class TerminalCounter(AbstractCounter):
         self.output_tpm_file_name = None
         self.output_stats_file_name = None
         self.usable_file_name = None
-        # Clear any stale per-chr file before we start appending in dump().
-        open(self.output_file, "w").close()
+        # nothing is written here: the owner empties output_paths() before counting
 
         self.args = args
         self.string_pools = string_pools
@@ -109,8 +108,6 @@ class TerminalCounter(AbstractCounter):
         # requested CSV path.
         self._training_csv_path = (output_prefix + TRAINING_SUFFIX
                                    if self._collecting_training else None)
-        if self._training_csv_path:
-            open(self._training_csv_path, "w").close()
 
         # transcript_id -> {'chr', 'gene_id', 'data', 'annotated',
         #                   int_group_id -> list[int]}
@@ -154,6 +151,12 @@ class TerminalCounter(AbstractCounter):
 
     def get_output_file_handler(self):
         return open(self.output_file, "a")
+
+    def output_paths(self) -> list:
+        # the per-chr training fragment is appended to as well
+        if self._training_csv_path:
+            return [self.output_file, self._training_csv_path]
+        return [self.output_file]
 
     # -- subclass hooks -------------------------------------------------------
 

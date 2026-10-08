@@ -30,13 +30,14 @@ Two things the extension change touched, both fixed:
 
 `<prefix>.barcoded_reads_<i>.tsv` (`sample.barcodes_tsv`) stays **plain for the whole run** —
 `split_read_barcode_table` reads it, and so does the tagged-BAM build. `compress_barcode_tables`
-runs in `process_all_samples` after every sample is done and before `clean_up()`.
+runs at the end of each `process_sample`, before the experiment is marked complete (see
+`.claude/RESUME_CHECKPOINTS.md`).
 
 The per-worker split tables under `aux/` (`sample.barcodes_split_reads + "_<chr>"`) are
 deliberately **left uncompressed**: short-lived temporaries read back by Python, so compressing
 them would cost CPU in every chromosome worker for a transient saving.
 
-Resume hazard, handled: `call_barcodes` short-circuits on the `barcodes_done` markers and
+Resume hazard, handled: `call_barcodes` skips on the `barcodes/<prefix>` marker and
 re-populates `sample.barcoded_reads` with the *uncompressed* names, which no longer exist after
 compression. Readers go through `resolve_optionally_gzipped()`, which returns whichever of
 `<path>` / `<path>.gz` exists.
@@ -126,12 +127,10 @@ Built in `DatasetProcessor.write_tagged_bam`, right after the split-table block 
 `process_sample` while the tables still exist. One fragment per chromosome via
 `map_over_chromosomes(write_tagged_bam_in_parallel, ...)`, then merged and indexed.
 
-Guarded by its own resume marker, `tagged_bam_lock_filename(sample)` (in `aux/`, so it outlives
-`clean_up`) plus an existence check on the BAM itself. This output is a full copy of the input,
-the most expensive thing on the branch, and it is written *before* read collection — without
-the marker every `--resume` after a crash in the long stages re-copied the whole BAM. The
-marker follows the `barcodes_done` precedent and is deliberately not deleted at the end of
-`process_sample`.
+Guarded by its own resume stage, `tagged_bam` in `<sample>/aux/checkpoints/` (see
+`.claude/RESUME_CHECKPOINTS.md`). This output is a full copy of the input, the most expensive
+thing on the branch, and it is written *before* read collection — without the marker every
+`--resume` after a crash in the long stages re-copied the whole BAM.
 
 The reference list is computed **once** in `process_sample` and passed into `write_tagged_bam`.
 It has to be the same list that drove the barcode-table split, or a fragment finds no table and
@@ -195,8 +194,9 @@ Its one other consumer, `prepare_read_filter` (`assignment_loader.py`), now take
 
 Two ordering constraints, both respected in `process_sample`:
 
-- built **after** `filter_umis` and **before** `clean_up`, which deletes `out_raw_file + "_*"`
-  including the survivors files;
+- built **after** `filter_umis` (the `dedup_bam` stage) and **before** the experiment's
+  intermediates are deleted (`remove_sample_intermediates`, after the `sample/<prefix>` marker),
+  which removes `out_raw_file + "_*"` including the survivors files;
 - only the first edit distance writes those files, and the `barcode2barcode` rounds never do,
   so the subset is defined by the primary dedup round.
 
@@ -333,15 +333,8 @@ the command line), so the survivors-file format is always consistent within a ru
 Resuming an **interrupted** run works, and the tagged BAM is now skipped rather than rebuilt
 (verified: the skip is logged and the file's mtime does not move).
 
-Resuming a **completed** run does not, and did not
-before this branch either: `clean_up()` deletes `out_raw_file + "_*"`, which includes the
-survivors files, and `prepare_read_filter` opens them without an existence guard. Verified on
-the branch base (b59bfbcc), where the same scenario fails even earlier. `clean_up` and that
-guard are untouched here.
-
-The mechanism, for whoever fixes it: `clean_up` removes the *global* UMI lock but not the
-per-edit-distance one (`umi_filtered_lock_file_name`, in `aux/`), so a resumed `filter_umis`
-returns early without rewriting the survivors files it just deleted. `write_deduplicated_bam`
-then finds nothing and warns "No reads survived UMI filtering", which is a misdiagnosis — but
-the run dies seconds later in `prepare_read_filter` for the same underlying reason, so nothing
-was added here to paper over it.
+Resuming a **completed** run used to fail: `clean_up()` deleted `out_raw_file + "_*"` (incl.
+the survivors files) but left the per-edit-distance UMI lock behind, so a resumed `filter_umis`
+returned early and `prepare_read_filter` then died on the missing survivors. Fixed on branch
+`resume_checkpoints` (`.claude/RESUME_CHECKPOINTS.md`): a completed experiment is marked
+`sample/<prefix>` before its intermediates are deleted, and a resumed run skips it entirely.

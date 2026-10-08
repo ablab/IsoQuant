@@ -113,10 +113,7 @@ class RNAVelocityCounter(AbstractCounter):
         self.output_tpm_file_name = None
         self.output_stats_file_name = None
         self.usable_file_name = None
-        # Truncate any stale output from a previous run, like AbstractCounter.
-        # Per-chr counters are only built when a chromosome is (re)processed, so
-        # this does not clobber finished chromosomes on --resume.
-        open(self.output_file, "w").close()
+        # nothing is written here: the owner empties output_paths() before counting
 
         self.args = args
         self.string_pools = string_pools

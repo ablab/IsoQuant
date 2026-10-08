@@ -38,8 +38,13 @@ logger = logging.getLogger('IsoQuant')
 
 
 class ReadAssignmentAggregator:
-    def __init__(self, args, sample, string_pools, gffutils_db=None, chr_id=None, gzipped=False, grouping_strategy_names=None):
+    def __init__(self, args, sample, string_pools, gffutils_db=None, chr_id=None, gzipped=False, grouping_strategy_names=None,
+                 truncate_outputs: bool = True):
+        # truncate_outputs=False is the merge driver's mode: no printer is opened and no
+        # counter output is emptied, so building the aggregator has no filesystem side
+        # effects and a resumed merge cannot empty an output that was already finished
         self.args = args
+        self.truncate_outputs = truncate_outputs
         self.string_pools = string_pools
         self.grouping_strategy_names = grouping_strategy_names if grouping_strategy_names else ["default"]
         self.common_header = "# Command line: " + args._cmd_line + "\n# IsoQuant version: " + args._version + "\n"
@@ -57,11 +62,35 @@ class ReadAssignmentAggregator:
         self._init_ungrouped_counters(sample, chr_id)
         self._init_grouped_counters(sample, chr_id)
         self._init_grouped_model_counters(sample, chr_id)
+        if self.truncate_outputs:
+            self.empty_counter_outputs()
+
+    def all_counters(self) -> CompositeCounter:
+        return CompositeCounter(self.global_counter.counters + self.transcript_model_global_counter.counters +
+                                self.gene_model_global_counter.counters)
+
+    def empty_counter_outputs(self) -> None:
+        """Empty every file the counters append to, once, before counting.
+
+        Done here and not in the counter constructors, so that a new counter is safe by
+        default: the merge builds the same counters for outputs that may be finished
+        already (see .claude/RESUME_CHECKPOINTS.md) and must not touch them.
+        """
+        for path in self.all_counters().output_paths():
+            open(path, "w").close()
 
     # ------------------------------------------------------------------ printers
 
     def _init_printers(self, sample, chr_id, gzipped):
         printer_list = []
+        if not self.truncate_outputs:
+            # printers open (and empty) their file when built, so the merge builds its own
+            self.corrected_bed_printer = None
+            self.read_info_printer = None
+            self.basic_printer = None
+            self.t2t_sqanti_printer = VoidTranscriptPrinter()
+            self.global_printer = ReadAssignmentCompositePrinter(printer_list)
+            return
         self.corrected_bed_printer = self._make_corrected_bed_printer(sample, chr_id, gzipped, printer_list)
         self.read_info_printer = self._make_read_info_printer(sample, chr_id, gzipped, printer_list)
         self.basic_printer = self._make_basic_printer(sample, chr_id, gzipped, printer_list)
@@ -94,7 +123,6 @@ class ReadAssignmentAggregator:
         assigned_tsv_path = sample.get_assigned_tsv_file(chr_id) if chr_id else sample.out_assigned_tsv
         printer = BasicTSVAssignmentPrinter(assigned_tsv_path, self.args, self.io_support,
                                             additional_header=self.common_header, gzipped=gzipped)
-        sample.out_assigned_tsv_result = printer.output_file_name
         printer_list.append(printer)
         return printer
 

@@ -32,6 +32,7 @@ class IsoQuantExitCode(IntEnum):
     RESUME_CONFIG_NOT_FOUND = 23
     CORRUPTED_GTF = 24
     INVALID_CONVERSION_MODE = 25
+    RESUME_INCOMPATIBLE = 26
 
     # Data Validation Errors (40-59)
     LABEL_COUNT_MISMATCH = 40

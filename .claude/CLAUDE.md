@@ -122,7 +122,8 @@ The main processing happens in `DatasetProcessor` (`isoquant_lib/dataset_process
 
 3. **File organization**:
    - `InputDataStorage` (`isoquant_lib/utils/input_data_storage.py`) - Manages input files and metadata
-   - `file_naming.py` - Systematic naming for per-chromosome intermediates, lock files for crash recovery
+   - `file_naming.py` - Systematic naming for per-chromosome intermediates
+   - `checkpoints.py` - Resume checkpoints: `CheckpointStore` + `run_stage` (see `.claude/RESUME_CHECKPOINTS.md`)
 
 ### Key Enums and Modes
 
@@ -166,7 +167,7 @@ Chromosome-level parallelization using `ProcessPoolExecutor`:
 - `construct_models_in_parallel()`
 - `filter_umis_in_parallel()`
 
-Lock file mechanism prevents race conditions and enables crash recovery/resume.
+Stage markers (`isoquant_lib/utils/checkpoints.py`) enable crash recovery/resume: a linear sequence of stages, each skipped on `--resume` when its marker exists. See `.claude/RESUME_CHECKPOINTS.md`.
 
 ### Output Formats
 
@@ -341,6 +342,8 @@ CI/CD workflows in `.github/workflows/`:
 - `isoquant_lib/utils/serialization.py` - Binary serialization
 
 ## Recent Implementation Changes
+
+See `.claude/RESUME_CHECKPOINTS.md` for `--resume` (branch `resume_checkpoints`) — one in-house framework replacing ~15 ad-hoc lock files: `CheckpointStore` (a dir of atomically written JSON markers, picklable for workers) + `run_stage(store, name, run, restore, cleanup, enabled, keep_tmp)`. Linear stages, skip-if-marker, plain markers with an optional small JSON payload re-applied by `restore`. Stores: `<output>/checkpoints/` (barcode calling, `sample/<prefix>`, `combine_counts`, fusion) and `<sample>/aux/checkpoints/` (read-group/polyA/barcode splits, tagged BAM, `collect`+per-chr, `umi/ED<d>`+per-chr, dedup BAM, `construct`+per-chr, `merge` with one unit per output and two per counter: `counter/` merge then `counter_finalize/` conversion). Prologue / derive / post-construct steps always run to rebuild in-memory state. Counter constructors never write; the counting aggregator empties every counter's `output_paths()` once, while the merge aggregator (`truncate_outputs=False`) touches nothing, so a rerun never empties a finished output and new counters are safe by default; per-chr fragments live in `<sample>/aux/per_chr/`; shared intermediates are deleted only after `sample/<prefix>` is marked; completed samples are skipped. Fresh runs reset the stores and write `checkpoints/run.json` (`CHECKPOINT_FORMAT`, run id, version) before `.params` (which also stores the run id) is saved; `--resume` exits 26 (`RESUME_INCOMPATIBLE`) when the record is missing, of another format, or of another run — bump `CHECKPOINT_FORMAT` when stage names/payloads/left-behind files change. Crash emulation: `ISOQUANT_DEBUG_FAIL=<stage>[:before|:after]`.
 
 See `.claude/BARCODE_CALLING.md` for barcode calling architecture (pipeline integration, barcode-spot grouping, barcode2barcode spot-level UMI dedup, barcoded_bam on-the-fly tag reading, universal barcode calling, MDF format, linked elements, result class hierarchy).
 

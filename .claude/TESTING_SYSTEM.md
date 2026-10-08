@@ -125,6 +125,7 @@ Old `.cfg` files and their associated `.etl`/`.qnt`/`.prf` files are preserved i
 - `performance` - Track computational performance (memory, CPU, time)
 - `allinfo` - Evaluate UMI filtering quality (single-cell/spatial modes)
 - `polya_prediction` - Evaluate polyA-site prediction accuracy against a ground-truth GTF (requires `reference_polya_gtf` config key)
+- `summary` - Compare numbers of `{label}.summary_stats.json` (flattened as `section/key`, e.g. `assignment/total_assignments`) with `baselines.summary`; only listed metrics are checked, all numeric ones are written to `new_summary_etalon.tsv`. Used by the resume tests: the summary aggregates every stage, so state restored wrongly on `--resume` shows up even when all files exist
 
 Multiple run types can be combined: `run_type	transcripts,quantification_known,performance`
 
@@ -159,6 +160,9 @@ CI configs had to be corrected so enforcement wouldn't fail on wrong names:
 - **Retired the dead key** (removed, no replacement) — RESUME1-4 and RESUME_GR1-2, because
   they resume from **old-format checkpoints** (strategy-less names), so their outputs can't be
   re-pointed to current names without regenerating the checkpoints on the runner.
+  Since branch `resume_checkpoints` the checkpoints **must** be regenerated anyway
+  (`generate_resume_test.sh` on the CI host): a run without `<output>/checkpoints/` exits with 26
+  on `--resume` (see `.claude/RESUME_CHECKPOINTS.md`).
 
 Validated on `doc_update_4.0` via `gh workflow run` of `Group_tests` / `Resume_tests` /
 `Stereo_toy` — all green (a wrong name now fails with `-5`).
@@ -436,15 +440,62 @@ Data and configs are shared via `/abga/work/andreyp/ci_isoquant/`
 
 ### 4. Resume Tests
 
-**Purpose**: Test checkpoint/resume functionality
+**Purpose**: Test checkpoint/resume functionality (`.claude/RESUME_CHECKPOINTS.md`): a partial run,
+killed at a chosen point, is copied into the output folder and finished with `--resume`; the
+result is checked with the usual baselines (`transcripts` / `allinfo`), `summary` baselines and
+`check_input_files`. The `summary` check is what catches a resumed stage restoring wrong in-memory
+state (e.g. the read totals of reloaded chromosomes) -- `allinfo` alone is copied from the partial run
+once UMI filtering is done.
 
-**Examples**:
-- `RESUME1.SIRVs.R10.yaml` - Resume from assignment step
-- `RESUME2.SIRVs.R10.yaml` - Resume from construction step
-- `RESUME3.SIRVs.R10.yaml` - Resume from multimapper step
-- `RESUME_GR1.SIRVs.R10.yaml` - Resume with read groups
+**Special config keys**: `resume` points to the partial run (copied, then `isoquant.py -o <out> --resume`),
+`label` names the checked experiment, `extra_labels` (space-separated) are further experiments whose
+`check_input_files` are checked too.
 
-**Special config key**: `resume` points to directory with previous run
+**Partial runs** live in `/abga/work/andreyp/ci_isoquant/data/resume_checkpoints/` and are produced by
+`isoquant_tests/github/generate_resume_test.sh <isoquant_dir> [sirv|sc|all]` on the CI host. Regenerate
+them whenever `CHECKPOINT_FORMAT` (`isoquant_lib/utils/checkpoints.py`) is bumped: stores of another format, or
+without a checkpoint record tied to `.params`, are refused with exit code 26.
+Each run is stopped by `run_until.py`:
+- the command runs in its own process group; on the stop line the whole group is frozen (SIGSTOP)
+  and killed (SIGKILL), so no worker keeps writing into the test data;
+- `--after` lines (in order) arm the stop, `--occurrence N` picks the N-th match after that -- needed
+  because e.g. "Finished processing chromosome" is printed by both read collection and construction;
+- exit code 3 when the run ends before the stop point, so a finished run is never stored as partial;
+- per-chromosome completion lines are logged after the chromosome's marker, so "killed after the 2nd
+  `Finished processing chromosome`" means 2 chromosomes are marked;
+- `--log` keeps the output (`<name>.run_until.log` next to the partial run).
+
+Killing on a log line is not exact (other workers keep running while the line travels through the pipe),
+so after every partial run `generate_resume_test.sh` checks the expected checkpoint markers (`expect`,
+`expect_count`) and exits with 4 if a scenario drifted, e.g. SC4 ("all chromosomes collected, `collect` not
+marked") getting `collect.done` would otherwise silently duplicate SC5's starting state.
+`generate_resume_test.sh <isoquant_dir> check` only runs these checks against the stored data.
+
+**SIRV configs** (bulk, `transcripts` baselines): `RESUME1` in read collection, `RESUME2` in model
+construction, `RESUME3` after read collection, `RESUME4` in construction with `--count_exons
+--sqanti_output --check_canonical`, `RESUME_GR1` in read collection with 2 BAMs, `RESUME_GR2` with TSV read groups.
+
+**Single-cell configs** (`allinfo` baselines + `check_input_files`): data from
+`prepare_sc_resume_data.sh` -- 100k reads of `Mouse.10x.5k.ONT_cDNA.R10.4.no_trunc.bam` on chr14/16/18/19
+(genome and GTF cut to them, `data/sc_resume/`), `-m tenX_v3 --large_output allinfo read2transcripts
+tagged_bam deduplicated_bam -t 4`. Baselines come from the reference runs `SC.Mouse.10x.4chr.allinfo`
+and `SC.Mouse.10x.4chr.2samples.allinfo` (YAML input, experiments S1/S2), which run in the same workflow.
+
+| Config | Killed at |
+|---|---|
+| `RESUME_SC1` | barcode calling (nothing marked) |
+| `RESUME_SC2` | tagged BAM, 2 of 4 fragments |
+| `RESUME_SC3` | read collection, 2 of 4 chromosomes |
+| `RESUME_SC4` | before multimapper resolution (`collect` not marked) |
+| `RESUME_SC5` | UMI filtering, 2 of 4 chromosomes |
+| `RESUME_SC6` | deduplicated BAM, 2 of 4 fragments |
+| `RESUME_SC7` | assignment processing, 2 of 4 chromosomes |
+| `RESUME_SC8` | merge: gene counts converted, transcript counts not |
+| `RESUME_SC9` | after the run summary, before the sample marker and cleanup |
+| `RESUME_SC10` | not killed: resuming a finished run |
+| `RESUME_SC_2S` | 2 experiments: S1 complete (must be skipped), S2 in read collection |
+
+`run_pipeline.py` accepts `yaml:` input for fresh runs (then `label` must be set).
 
 ### 5. Performance Tests
 

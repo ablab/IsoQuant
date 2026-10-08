@@ -74,6 +74,8 @@ from isoquant_lib.barcode_calling.options import (
 from isoquant_lib.barcode_calling.pipeline import call_barcodes
 from isoquant_lib.utils.file_utils import check_file_exists
 from isoquant_lib.common import setup_worker_logging, _get_log_params
+from isoquant_lib.utils.checkpoints import (CheckpointStore, check_resumable, mark_stage_done, marker_name,
+                                           run_checkpoint_dir, run_stage, write_run_record)
 
 
 logger = logging.getLogger('IsoQuant')
@@ -465,7 +467,7 @@ def parse_args(cmd_args=None, namespace=None):
 
         args, unknown_args = resume_parser.parse_known_args(cmd_args)
         if unknown_args:
-            logger.error("You cannot specify options other than --output/--threads/--debug/--high_memory "
+            logger.error("You cannot specify options other than --output/--threads/--debug/--high_memory/--keep_tmp "
                          "with --resume option")
             parser.print_usage()
             sys.exit(IsoQuantExitCode.INCOMPATIBLE_OPTIONS)
@@ -495,7 +497,7 @@ def get_bam_files_from_samples(input_data) -> list:
     return [f for f in bam_files if os.path.isfile(f)]
 
 
-def run_fusion_detection_on_samples(fd, samples: list) -> dict:
+def run_fusion_detection_on_samples(fd, samples: list, store: Optional[CheckpointStore] = None) -> dict:
     """Run fusion detection per sample using a shared FusionDetector.
 
     The report is written alongside the other per-sample outputs as
@@ -510,8 +512,14 @@ def run_fusion_detection_on_samples(fd, samples: list) -> dict:
     """
     summary = {"total": 0, "successful": 0, "failed": 0, "skipped": []}
     for sample in samples:
-        sample_bams = [f for lib in sample.file_list for f in lib if os.path.isfile(f)]
+        sample_bams = fusion_input_bams(sample)
         if not sample_bams:
+            continue
+        fusion_marker = marker_name("fusion", sample.prefix)
+        if store is not None and store.is_done(fusion_marker):
+            logger.info("Fusion detection for sample %s was done during the previous run, skipping" % sample.prefix)
+            summary["total"] += 1
+            summary["successful"] += 1
             continue
         summary["total"] += 1
         out_fname = os.path.join(sample.out_dir, sample.prefix + ".fusions.tsv")
@@ -523,13 +531,32 @@ def run_fusion_detection_on_samples(fd, samples: list) -> dict:
                 fd.detect_fusions()
             fd.report(output_path=out_fname)
             logger.info("Fusion candidates for sample %s written to %s" % (sample.prefix, out_fname))
-            summary["successful"] += 1
         except Exception as e:
             logger.error("Fusion detection failed for sample %s: %s" % (sample.prefix, str(e)))
             logger.debug("Traceback:", exc_info=True)
             summary["failed"] += 1
             summary["skipped"].append(sample.prefix)
+            continue
+        summary["successful"] += 1
+        # only a success is marked, outside the try: a failed sample stays retryable on resume,
+        # and a failure to write the marker is not reported as a failed detection
+        if store is not None:
+            mark_stage_done(store, fusion_marker)
     return summary
+
+
+def fusion_input_bams(sample) -> list:
+    """The sample's alignment files fusion detection reads; a sample without any is not processed."""
+    return [f for lib in sample.file_list for f in lib if os.path.isfile(f)]
+
+
+def fusion_pending(samples: list, store: CheckpointStore) -> bool:
+    """True if some sample still needs fusion detection (building the detector is expensive).
+
+    Samples without BAMs are never processed nor marked, so they must not count as pending.
+    """
+    return any(fusion_input_bams(sample) and not store.is_done(marker_name("fusion", sample.prefix))
+               for sample in samples)
 
 
 def check_and_load_args(args, parser):
@@ -541,6 +568,12 @@ def check_and_load_args(args, parser):
                          "Check that output folder is correctly specified.")
             sys.exit(IsoQuantExitCode.RESUME_CONFIG_NOT_FOUND)
         args = load_previous_run(args)
+        # every run of this version writes a checkpoint record and saves its id in .params
+        reason = check_resumable(run_checkpoint_dir(args.output), getattr(args, "checkpoint_run_id", None),
+                                 args._version)
+        if reason:
+            logger.error("The run in %s cannot be resumed: %s. Restart it without --resume." % (args.output, reason))
+            sys.exit(IsoQuantExitCode.RESUME_INCOMPATIBLE)
     elif args.output_exists:
         if os.path.exists(args.param_file):
             if args.force:
@@ -591,8 +624,24 @@ def check_and_load_args(args, parser):
                 sys.exit(IsoQuantExitCode.INVALID_PARAMETER)
         _warn_about_unusable_bam_outputs(args)
 
+    if not args.resume:
+        reset_checkpoints(args)
     save_params(args)
     return args
+
+
+def reset_checkpoints(args):
+    """Start a fresh run: drop every resume marker a previous run left in this output folder.
+
+    Done before .params is saved, so a .params written by this version always comes with
+    an (empty) checkpoint store, and no old sample marker can outlive it.
+    """
+    for sample in args.input_data.samples:
+        shutil.rmtree(sample.checkpoint_dir, ignore_errors=True)
+    run_dir = run_checkpoint_dir(args.output)
+    CheckpointStore(run_dir, resume=False).reset()
+    # saved in .params below; --resume checks it against the record
+    args.checkpoint_run_id = write_run_record(run_dir, args._version)
 
 
 def _warn_about_unusable_bam_outputs(args):
@@ -609,7 +658,7 @@ def _warn_about_unusable_bam_outputs(args):
 
 def load_previous_run(args):
     logger.info("Loading parameters from the previous run")
-    logger.error("Only --output/--threads/--debug/--high_memory are compatible with --resume option")
+    logger.info("Only --output/--threads/--debug/--high_memory/--keep_tmp are compatible with --resume option")
     unpickler = pickle.Unpickler(open(args.param_file, "rb"), fix_imports=False)
     loaded_args = unpickler.load()
 
@@ -738,6 +787,17 @@ def _validate_data_type_and_input(args):
     return True
 
 
+def _check_sample_dirs_avoid_checkpoints(args) -> bool:
+    # the run-level checkpoint store is <output>/checkpoints and is wiped on a fresh run
+    run_store_dir = os.path.normpath(run_checkpoint_dir(args.output))
+    for sample in args.input_data.samples:
+        if os.path.normpath(sample.out_dir) == run_store_dir:
+            logger.error("Experiment name '%s' is reserved, please choose a different prefix or name"
+                         % os.path.basename(run_store_dir))
+            return False
+    return True
+
+
 def _validate_alignment_options(args):
     if args.aligner is not None and args.aligner not in SUPPORTED_ALIGNERS:
         logger.error(" Unsupported aligner " + args.aligner + ", choose one of: " + " ".join(SUPPORTED_ALIGNERS))
@@ -799,6 +859,8 @@ def _reject_splitting_aligned_input(args):
 
 def check_input_params(args):
     if not _validate_data_type_and_input(args):
+        return False
+    if not _check_sample_dirs_avoid_checkpoints(args):
         return False
     if not _validate_alignment_options(args):
         return False
@@ -937,6 +999,8 @@ def create_output_dirs(args):
                 logger.warning(sample_aux_dir + " folder already exists, some files may be overwritten")
         else:
             os.makedirs(sample_aux_dir)
+        os.makedirs(sample.checkpoint_dir, exist_ok=True)
+        os.makedirs(sample.chr_fragment_dir, exist_ok=True)
 
 
 def set_logger(args):
@@ -1308,9 +1372,10 @@ def run_pipeline(args):
     dataset_processor = DatasetProcessor(args)
     dataset_processor.process_all_samples(args.input_data)
 
+    run_store = CheckpointStore(run_checkpoint_dir(args.output), args.resume)
     # aggregate counts for all samples
-    if len(args.input_data.samples) > 1 and args.genedb and args.run_quantification:
-        combine_counts(args.input_data, args.output)
+    run_stage(run_store, "combine_counts", run=lambda: combine_counts(args.input_data, args.output),
+              enabled=len(args.input_data.samples) > 1 and bool(args.genedb) and args.run_quantification)
 
     # Run fusion detection after isoform detection when fusion is enabled
     if getattr(args, "fusion", False):
@@ -1320,17 +1385,22 @@ def run_pipeline(args):
             logger.warning("Fusion detection requires --genedb; skipping")
         elif not bam_files:
             logger.warning("No BAM files available for fusion detection; skipping")
+        elif not fusion_pending(args.input_data.samples, run_store):
+            logger.info("Fusion detection was done for every sample during the previous run, skipping")
         else:
             try:
                 from isoquant_lib.fusion.fusion_detector import FusionDetector
                 fd = FusionDetector(bam_files[0], args.genedb, reference_fasta=args.reference)
-                summary = run_fusion_detection_on_samples(fd, args.input_data.samples)
+            except Exception as e:
+                logger.warning("Fusion detection could not be initialised and was skipped: %s" % str(e))
+                logger.debug("Traceback:", exc_info=True)
+            else:
+                # detection failures are handled per sample inside (best effort, the sample stays
+                # retryable); a failure to write a checkpoint marker is not, and aborts the run
+                summary = run_fusion_detection_on_samples(fd, args.input_data.samples, run_store)
                 logger.info("Fusion detection summary: %d total, %d successful, %d failed" %
                             (summary["total"], summary["successful"], summary["failed"]))
                 logger.info(" === Fusion detection finished === ")
-            except Exception as e:
-                logger.warning("Fusion detection encountered an error and was skipped: %s" % str(e))
-                logger.debug("Traceback:", exc_info=True)
 
     logger.info(" === IsoQuant pipeline finished === ")
 

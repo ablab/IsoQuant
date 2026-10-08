@@ -34,7 +34,7 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: 'Resume from assignment step'
+      - name: 'Resume in read collection'
         if: always()
         shell: bash
         env:
@@ -43,7 +43,7 @@ jobs:
           export PATH=$PATH:${{env.BIN_PATH}}
           python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.yaml -o ${{env.OUTPUT_BASE}}
 
-      - name: 'Resume from construction step'
+      - name: 'Resume in model construction'
         if: always()
         shell: bash
         env:
@@ -52,7 +52,7 @@ jobs:
           export PATH=$PATH:${{env.BIN_PATH}}
           python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.yaml -o ${{env.OUTPUT_BASE}}
 
-      - name: 'Resume from multimapper step'
+      - name: 'Resume after read collection'
         if: always()
         shell: bash
         env:
@@ -61,7 +61,7 @@ jobs:
           export PATH=$PATH:${{env.BIN_PATH}}
           python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.yaml -o ${{env.OUTPUT_BASE}}
 
-      - name: 'Resume from assignment step with additional options'
+      - name: 'Resume in model construction with additional options'
         if: always()
         shell: bash
         env:
@@ -70,7 +70,7 @@ jobs:
           export PATH=$PATH:${{env.BIN_PATH}}
           python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.yaml -o ${{env.OUTPUT_BASE}}
 
-      - name: 'Resume from assignment step with 2 files'
+      - name: 'Resume in read collection with 2 files'
         if: always()
         shell: bash
         env:
@@ -79,7 +79,7 @@ jobs:
           export PATH=$PATH:${{env.BIN_PATH}}
           python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.yaml -o ${{env.OUTPUT_BASE}}
 
-      - name: 'Resume from assignment step with TSV groups'
+      - name: 'Resume in read collection with TSV groups'
         if: always()
         shell: bash
         env:
@@ -88,3 +88,119 @@ jobs:
           export PATH=$PATH:${{env.BIN_PATH}}
           python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.yaml -o ${{env.OUTPUT_BASE}}
 
+      - name: 'Single-cell reference run (no resume)'
+        if: always()
+        shell: bash
+        env:
+          STEP_NAME: SC.Mouse.10x.4chr.allinfo
+        run: |
+          export PATH=$PATH:${{env.BIN_PATH}}
+          python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.yaml -o ${{env.OUTPUT_BASE}}
+
+      - name: 'Single-cell 2-experiment reference run (no resume)'
+        if: always()
+        shell: bash
+        env:
+          STEP_NAME: SC.Mouse.10x.4chr.2samples.allinfo
+        run: |
+          export PATH=$PATH:${{env.BIN_PATH}}
+          python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.yaml -o ${{env.OUTPUT_BASE}}
+
+      - name: 'SC: resume in barcode calling'
+        if: always()
+        shell: bash
+        env:
+          STEP_NAME: RESUME_SC1.Mouse.10x
+        run: |
+          export PATH=$PATH:${{env.BIN_PATH}}
+          python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.yaml -o ${{env.OUTPUT_BASE}}
+
+      - name: 'SC: resume while writing the tagged BAM'
+        if: always()
+        shell: bash
+        env:
+          STEP_NAME: RESUME_SC2.Mouse.10x
+        run: |
+          export PATH=$PATH:${{env.BIN_PATH}}
+          python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.yaml -o ${{env.OUTPUT_BASE}}
+
+      - name: 'SC: resume in read collection'
+        if: always()
+        shell: bash
+        env:
+          STEP_NAME: RESUME_SC3.Mouse.10x
+        run: |
+          export PATH=$PATH:${{env.BIN_PATH}}
+          python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.yaml -o ${{env.OUTPUT_BASE}}
+
+      - name: 'SC: resume before multimapper resolution'
+        if: always()
+        shell: bash
+        env:
+          STEP_NAME: RESUME_SC4.Mouse.10x
+        run: |
+          export PATH=$PATH:${{env.BIN_PATH}}
+          python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.yaml -o ${{env.OUTPUT_BASE}}
+
+      - name: 'SC: resume in UMI filtering'
+        if: always()
+        shell: bash
+        env:
+          STEP_NAME: RESUME_SC5.Mouse.10x
+        run: |
+          export PATH=$PATH:${{env.BIN_PATH}}
+          python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.yaml -o ${{env.OUTPUT_BASE}}
+
+      - name: 'SC: resume while writing the deduplicated BAM'
+        if: always()
+        shell: bash
+        env:
+          STEP_NAME: RESUME_SC6.Mouse.10x
+        run: |
+          export PATH=$PATH:${{env.BIN_PATH}}
+          python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.yaml -o ${{env.OUTPUT_BASE}}
+
+      - name: 'SC: resume in assignment processing'
+        if: always()
+        shell: bash
+        env:
+          STEP_NAME: RESUME_SC7.Mouse.10x
+        run: |
+          export PATH=$PATH:${{env.BIN_PATH}}
+          python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.yaml -o ${{env.OUTPUT_BASE}}
+
+      - name: 'SC: resume in the merge'
+        if: always()
+        shell: bash
+        env:
+          STEP_NAME: RESUME_SC8.Mouse.10x
+        run: |
+          export PATH=$PATH:${{env.BIN_PATH}}
+          python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.yaml -o ${{env.OUTPUT_BASE}}
+
+      - name: 'SC: resume before cleanup'
+        if: always()
+        shell: bash
+        env:
+          STEP_NAME: RESUME_SC9.Mouse.10x
+        run: |
+          export PATH=$PATH:${{env.BIN_PATH}}
+          python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.yaml -o ${{env.OUTPUT_BASE}}
+
+      - name: 'SC: resume a finished run'
+        if: always()
+        shell: bash
+        env:
+          STEP_NAME: RESUME_SC10.Mouse.10x
+        run: |
+          export PATH=$PATH:${{env.BIN_PATH}}
+          python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.yaml -o ${{env.OUTPUT_BASE}}
+
+      - name: 'SC: resume the second of two experiments'
+        if: always()
+        shell: bash
+        env:
+          STEP_NAME: RESUME_SC_2S.Mouse.10x
+        run: |
+          export PATH=$PATH:${{env.BIN_PATH}}
+          python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.yaml -o ${{env.OUTPUT_BASE}}
