@@ -140,18 +140,32 @@ def _bar_chart_svg(title: str, labels: List[str], values: List[float]) -> str:
 
 
 def _input_reads_label(summary: RunSummary) -> str:
-    """Label of the primary + unaligned total: it is the input read count only when
-    every reference carrying alignments was processed."""
+    """Label of the primary + unaligned total. It counts molecules when reads were split
+    into molecules before mapping, and it is the whole input only when every reference
+    carrying alignments was processed."""
+    unit = "molecules" if summary.molecules_split else "reads"
     if summary.alignment_covers_all_reads:
-        return "Input reads"
-    return "Reads on processed references"
+        return "Input %s" % unit
+    return "%s on processed references" % unit.capitalize()
+
+
+def _share_label(summary: RunSummary) -> str:
+    """Label of a count taken as a share of the primary + unaligned total."""
+    label = _input_reads_label(summary)
+    return "share of " + label[0].lower() + label[1:]
+
+
+def _mapping_rate_label(summary: RunSummary) -> str:
+    if summary.alignment_covers_all_reads:
+        return "Mapping rate"
+    return "Mapping rate (processed references)"
 
 
 def _kpi_tiles(summary: RunSummary) -> str:
     tiles: List[str] = []
     if summary.total_reads is not None:
         tiles.append(_tile(_input_reads_label(summary), _format_number(summary.total_reads)))
-        tiles.append(_tile("Mapping rate", _format_percent(summary.mapping_rate)))
+        tiles.append(_tile(_mapping_rate_label(summary), _format_percent(summary.mapping_rate)))
     rollup = summary.assignment_rollup()
     if rollup:
         tiles.append(_tile("Uniquely assigned",
@@ -188,7 +202,7 @@ def _alignment_section(summary: RunSummary) -> str:
             for name, count in summary.alignment.items()]
     rows.append(("%s (primary + unaligned)" % _input_reads_label(summary),
                  _format_number(summary.total_reads)))
-    rows.append(("Mapping rate", _format_percent(summary.mapping_rate)))
+    rows.append((_mapping_rate_label(summary), _format_percent(summary.mapping_rate)))
     note = ""
     if not summary.alignment_covers_all_reads:
         note = ('<p class="subtitle">Some references carrying alignments were not processed '
@@ -230,8 +244,11 @@ def _quantification_section(summary: RunSummary) -> str:
     for feature, stats in summary.quantification.items():
         name = feature.capitalize()
         counted = stats.get("counted")
-        rows.append(("%s: counted reads" % name, _format_number(counted)))
-        rows.append(("%s: share of input reads" % name,
+        # In UMI modes the counts only hold the reads that survived deduplication.
+        counted_label = ("counted reads (after UMI deduplication)" if summary.umi_deduplicated
+                         else "counted reads")
+        rows.append(("%s: %s" % (name, counted_label), _format_number(counted)))
+        rows.append(("%s: %s" % (name, _share_label(summary)),
                      _format_percent(_safe_rate(counted, summary.total_reads))))
         rows.append(("%s: ambiguous" % name, _format_number(stats.get("ambiguous"))))
         rows.append(("%s: no feature" % name, _format_number(stats.get("no_feature"))))
@@ -264,10 +281,10 @@ def _umi_section(summary: RunSummary) -> str:
     if not summary.umi_filtering:
         return ""
     rows = [(name, _format_number(count)) for name, count in summary.umi_filtering.items()]
-    saved = summary.umi_filtering.get("Total reads saved")
-    processed = summary.umi_filtering.get("Total assignments processed")
-    if saved is not None and processed:
-        rows.append(("Duplication rate", _format_percent((processed - saved) / processed)))
+    if summary.umi_duplication_rate is not None:
+        # Over barcoded gene-assigned reads, the only ones deduplicated.
+        rows.append(("Duplication rate (of barcoded assigned reads)",
+                     _format_percent(summary.umi_duplication_rate)))
     title = "UMI deduplication"
     if summary.umi_edit_distance is not None:
         title += " (edit distance %d)" % summary.umi_edit_distance
@@ -286,8 +303,12 @@ def _rank_plot_points(ranked_reads: List[float]) -> Tuple[List[int], List[float]
     if total <= RANK_PLOT_POINTS:
         return list(range(1, total + 1)), list(ranked_reads)
     last = math.log10(total)
-    indices = sorted({min(total - 1, int(10 ** (last * step / (RANK_PLOT_POINTS - 1))) - 1)
-                      for step in range(RANK_PLOT_POINTS)})
+    # The last rank is added explicitly: 10 ** log10(total) rounds below total for many
+    # sizes, which would end the curve one rank short.
+    indices = {min(total - 1, int(10 ** (last * step / (RANK_PLOT_POINTS - 1))) - 1)
+               for step in range(RANK_PLOT_POINTS - 1)}
+    indices.add(total - 1)
+    indices = sorted(indices)
     return [index + 1 for index in indices], [ranked_reads[index] for index in indices]
 
 
@@ -336,7 +357,7 @@ def _groups_section(summary: RunSummary) -> str:
             name = feature.capitalize()
             rows.append(("%s: groups with counts" % name, _format_number(stats.get("groups"))))
             rows.append(("%s: reads in groups" % name, _format_number(stats.get("reads"))))
-            rows.append(("%s: share of input reads" % name,
+            rows.append(("%s: %s" % (name, _share_label(summary)),
                          _format_percent(stats.get("share_of_reads"))))
             rows.append(("%s: median reads per group" % name,
                          _format_number(stats.get("median_reads_per_group"))))

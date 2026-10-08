@@ -99,7 +99,7 @@ class TestReadFileDiscovery:
         assert config.read_assignments is None
 
     def test_per_chromosome_files_are_not_used(self, tmp_path):
-        # --keep_tmp (or a crashed run) leaves SAMPLE_chr1.read_info.tsv next to the
+        # A run that crashed before merging leaves SAMPLE_chr1.read_info.tsv next to the
         # merged file; counting one chromosome only would go unnoticed.
         out_dir, sample_dir = _make_output(tmp_path, [PREFIX + "_chr1.read_info.tsv",
                                                       PREFIX + ".read_info.tsv"])
