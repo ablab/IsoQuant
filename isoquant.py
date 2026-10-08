@@ -74,8 +74,8 @@ from isoquant_lib.barcode_calling.options import (
 from isoquant_lib.barcode_calling.pipeline import call_barcodes
 from isoquant_lib.utils.file_utils import check_file_exists
 from isoquant_lib.common import setup_worker_logging, _get_log_params
-from isoquant_lib.utils.checkpoints import (CheckpointStore, mark_stage_done, marker_name, run_checkpoint_dir,
-                                           run_stage)
+from isoquant_lib.utils.checkpoints import (CheckpointStore, check_resumable, mark_stage_done, marker_name,
+                                           run_checkpoint_dir, run_stage, write_run_record)
 
 
 logger = logging.getLogger('IsoQuant')
@@ -467,7 +467,7 @@ def parse_args(cmd_args=None, namespace=None):
 
         args, unknown_args = resume_parser.parse_known_args(cmd_args)
         if unknown_args:
-            logger.error("You cannot specify options other than --output/--threads/--debug/--high_memory "
+            logger.error("You cannot specify options other than --output/--threads/--debug/--high_memory/--keep_tmp "
                          "with --resume option")
             parser.print_usage()
             sys.exit(IsoQuantExitCode.INCOMPATIBLE_OPTIONS)
@@ -512,7 +512,7 @@ def run_fusion_detection_on_samples(fd, samples: list, store: Optional[Checkpoin
     """
     summary = {"total": 0, "successful": 0, "failed": 0, "skipped": []}
     for sample in samples:
-        sample_bams = [f for lib in sample.file_list for f in lib if os.path.isfile(f)]
+        sample_bams = fusion_input_bams(sample)
         if not sample_bams:
             continue
         fusion_marker = marker_name("fusion", sample.prefix)
@@ -545,9 +545,18 @@ def run_fusion_detection_on_samples(fd, samples: list, store: Optional[Checkpoin
     return summary
 
 
+def fusion_input_bams(sample) -> list:
+    """The sample's alignment files fusion detection reads; a sample without any is not processed."""
+    return [f for lib in sample.file_list for f in lib if os.path.isfile(f)]
+
+
 def fusion_pending(samples: list, store: CheckpointStore) -> bool:
-    """True if some sample still needs fusion detection (building the detector is expensive)."""
-    return any(not store.is_done(marker_name("fusion", sample.prefix)) for sample in samples)
+    """True if some sample still needs fusion detection (building the detector is expensive).
+
+    Samples without BAMs are never processed nor marked, so they must not count as pending.
+    """
+    return any(fusion_input_bams(sample) and not store.is_done(marker_name("fusion", sample.prefix))
+               for sample in samples)
 
 
 def check_and_load_args(args, parser):
@@ -558,12 +567,13 @@ def check_and_load_args(args, parser):
             logger.error("Previous run config was not detected, cannot resume. "
                          "Check that output folder is correctly specified.")
             sys.exit(IsoQuantExitCode.RESUME_CONFIG_NOT_FOUND)
-        if not os.path.isdir(run_checkpoint_dir(args.output)):
-            # every run of this version creates it before saving .params
-            logger.error("The run in %s was started by an older IsoQuant version and cannot be resumed. "
-                         "Restart it without --resume." % args.output)
-            sys.exit(IsoQuantExitCode.RESUME_INCOMPATIBLE)
         args = load_previous_run(args)
+        # every run of this version writes a checkpoint record and saves its id in .params
+        reason = check_resumable(run_checkpoint_dir(args.output), getattr(args, "checkpoint_run_id", None),
+                                 args._version)
+        if reason:
+            logger.error("The run in %s cannot be resumed: %s. Restart it without --resume." % (args.output, reason))
+            sys.exit(IsoQuantExitCode.RESUME_INCOMPATIBLE)
     elif args.output_exists:
         if os.path.exists(args.param_file):
             if args.force:
@@ -628,7 +638,10 @@ def reset_checkpoints(args):
     """
     for sample in args.input_data.samples:
         shutil.rmtree(sample.checkpoint_dir, ignore_errors=True)
-    CheckpointStore(run_checkpoint_dir(args.output), resume=False).reset()
+    run_dir = run_checkpoint_dir(args.output)
+    CheckpointStore(run_dir, resume=False).reset()
+    # saved in .params below; --resume checks it against the record
+    args.checkpoint_run_id = write_run_record(run_dir, args._version)
 
 
 def _warn_about_unusable_bam_outputs(args):
@@ -645,7 +658,7 @@ def _warn_about_unusable_bam_outputs(args):
 
 def load_previous_run(args):
     logger.info("Loading parameters from the previous run")
-    logger.error("Only --output/--threads/--debug/--high_memory are compatible with --resume option")
+    logger.info("Only --output/--threads/--debug/--high_memory/--keep_tmp are compatible with --resume option")
     unpickler = pickle.Unpickler(open(args.param_file, "rb"), fix_imports=False)
     loaded_args = unpickler.load()
 
@@ -1378,13 +1391,16 @@ def run_pipeline(args):
             try:
                 from isoquant_lib.fusion.fusion_detector import FusionDetector
                 fd = FusionDetector(bam_files[0], args.genedb, reference_fasta=args.reference)
+            except Exception as e:
+                logger.warning("Fusion detection could not be initialised and was skipped: %s" % str(e))
+                logger.debug("Traceback:", exc_info=True)
+            else:
+                # detection failures are handled per sample inside (best effort, the sample stays
+                # retryable); a failure to write a checkpoint marker is not, and aborts the run
                 summary = run_fusion_detection_on_samples(fd, args.input_data.samples, run_store)
                 logger.info("Fusion detection summary: %d total, %d successful, %d failed" %
                             (summary["total"], summary["successful"], summary["failed"]))
                 logger.info(" === Fusion detection finished === ")
-            except Exception as e:
-                logger.warning("Fusion detection encountered an error and was skipped: %s" % str(e))
-                logger.debug("Traceback:", exc_info=True)
 
     logger.info(" === IsoQuant pipeline finished === ")
 

@@ -408,8 +408,11 @@ def test_no_op_methods_do_not_raise(stub_model, tmp_path):
     assert counter.transcripts == {}
 
 
-def test_init_truncates_existing_output_file(stub_model, tmp_path):
+def test_init_leaves_output_file_to_its_owner(stub_model, tmp_path):
+    # constructors never write: the merge builds counters for finished outputs; the
+    # per-chromosome aggregator empties output_paths() before counting
     path = tmp_path / "stale.tsv"
     path.write_text("garbage from a previous run\n")
-    tc.PolyACounter(_make_args(), str(path))
-    assert path.read_text() == ""
+    counter = tc.PolyACounter(_make_args(), str(path))
+    assert path.read_text() == "garbage from a previous run\n"
+    assert counter.output_paths() == [str(path)]

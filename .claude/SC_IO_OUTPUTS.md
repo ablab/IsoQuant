@@ -194,8 +194,9 @@ Its one other consumer, `prepare_read_filter` (`assignment_loader.py`), now take
 
 Two ordering constraints, both respected in `process_sample`:
 
-- built **after** `filter_umis` and **before** `clean_up`, which deletes `out_raw_file + "_*"`
-  including the survivors files;
+- built **after** `filter_umis` (the `dedup_bam` stage) and **before** the experiment's
+  intermediates are deleted (`remove_sample_intermediates`, after the `sample/<prefix>` marker),
+  which removes `out_raw_file + "_*"` including the survivors files;
 - only the first edit distance writes those files, and the `barcode2barcode` rounds never do,
   so the subset is defined by the primary dedup round.
 
