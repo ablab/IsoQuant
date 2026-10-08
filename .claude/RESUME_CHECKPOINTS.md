@@ -12,8 +12,9 @@ stage whose marker exists. Plain markers: no fingerprints (`--resume` forbids ch
 
 - `CheckpointStore(root, resume)`: a directory of markers. Holds only a path + flag, so it is picklable and
   passed to `ProcessPoolExecutor` workers. Each marker is its own JSON file
-  (`{"isoquant_version", "finished_at", "payload"}`), written to `<name>.done.tmp.<pid>` and `os.replace`d, so
-  per-chromosome workers mark concurrently and a marker is never half-written.
+  (`{"finished_at", "payload"}`), written to `<name>.done.tmp.<pid>` and `os.replace`d, so per-chromosome
+  workers mark concurrently and a killed process never leaves a half-written marker. A missing or unreadable
+  marker (e.g. damaged by a power loss -- nothing is fsynced) means "not done": the stage just runs again.
 - `run_stage(store, name, run, restore=None, cleanup=None, enabled=True, keep_tmp=False)`:
   disabled -> nothing; done -> log `"<name>: done in the previous run, skipping"`, `restore(payload)`;
   otherwise `payload = run()`, then the marker. `cleanup` runs after the marker **and again on skip**
@@ -29,10 +30,16 @@ Stores:
 - sample store `<sample>/aux/checkpoints/` (`SampleData.checkpoint_dir`): every stage below.
 
 Fresh vs resume (`isoquant.py`):
-- fresh run: `reset_checkpoints` in `check_and_load_args`, **before `save_params`** -- removes every sample store
-  and resets the run store, so a `.params` written by this version always comes with an (empty) run store and no
-  old sample marker survives;
-- `--resume` without `<output>/checkpoints/` -> exit `RESUME_INCOMPATIBLE` (26): the run predates checkpoints;
+- fresh run: `reset_checkpoints` in `check_and_load_args`, **before `save_params`** -- removes every sample store,
+  resets the run store and writes the run record `<output>/checkpoints/run.json`
+  (`{"checkpoint_format", "run_id", "isoquant_version", "started_at"}`); the run id is also saved in `.params`
+  (`args.checkpoint_run_id`). So no old sample marker survives a fresh run, and markers can be tied to `.params`;
+- `--resume` checks the record (`check_resumable`) and exits `RESUME_INCOMPATIBLE` (26) when it is missing or
+  unreadable (a run of a version without checkpoints), has another `CHECKPOINT_FORMAT`, or its run id differs
+  from `.params` (e.g. an older IsoQuant version reused the folder after a newer one: its `.params` has no run id,
+  while the newer run's markers are still there). Another IsoQuant version with the same format only warns;
+- **bump `CHECKPOINT_FORMAT`** whenever stage names, marker payloads or the files a stage leaves for later stages
+  change, and regenerate the CI resume data;
 - a sample whose directory would be `<output>/checkpoints` is rejected (`_check_sample_dirs_avoid_checkpoints`).
 
 ## Stages of one experiment (`DatasetProcessor.process_sample`)
@@ -64,9 +71,13 @@ Fresh vs resume (`isoquant.py`):
    and stats rows; cleanup keeps `.usable`) and `merge/counter_finalize/<basename>` (`load_usable_fragments` +
    `finalize`: TPM/matrix/MTX/loom; cleanup removes `.usable`). Merging is mechanical; conversion depends on
    options and group count.
-   - The merge aggregator is built with `truncate_outputs=False`: no printers, no counter truncates
-     (`truncate_output` threaded through every counter class incl. `TerminalCounter`, `RNAVelocityCounter`,
-     grouped model counters). Each unit opens/truncates only its own output, so a rerun cannot empty a finished one.
+   - **Counter constructors never write anything.** Each counter lists the files it appends to in
+     `output_paths()` (default `[output_file]`; `TerminalCounter` adds its training CSV), and the counting
+     (per-chromosome) aggregator empties them all once at the end of its `__init__` (`empty_counter_outputs`).
+     The merge aggregator is built with `truncate_outputs=False`: no printers, nothing emptied. Each merge unit
+     empties only its own final output, so a rerun cannot empty a finished one -- and a new counter is safe by
+     default (forgetting an extra file in `output_paths()` can only leave stale rows in a chromosome piece rerun
+     after a crash, never empty a finished output).
    - Units close outputs before their marker (`close()` on printers, `with` in `merge_counts`).
    - `merge_files` / `merge_counts` take `remove_inputs` (units pass False) and `fragment_dir`.
    - Unit names come from counter file names, which depend on the string pools, hence the parent marker.
@@ -88,6 +99,10 @@ deletes them as before, D9).
 - Intermediates shared with later stages -> `remove_sample_intermediates` glob list.
 - State needed whether or not stages are skipped -> prologue / derive / post-construct.
 - Close every output before returning: the marker is written right after.
+- New counter: write nothing in `__init__`; if it appends to more files than `output_file`, list them in
+  `output_paths()`. New printer in `ReadAssignmentAggregator._init_printers`: None/Void when
+  `truncate_outputs=False` (printers open their file when built), plus a merge unit that opens, merges and
+  closes only its own final file.
 
 Per-chromosome completion lines ("Finished processing chromosome", "PCR duplicates filtered for chromosome") are
 logged **after** the chromosome's marker, so a run killed on such a line has that chromosome marked; skipped

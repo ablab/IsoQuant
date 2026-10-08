@@ -78,7 +78,7 @@ class TerminalCounter(AbstractCounter):
     TRAINING_ARG: str = ""
 
     def __init__(self, args, output_prefix: str, model_path: Path,
-                 string_pools=None, group_index: int = 0, truncate_output: bool = True) -> None:
+                 string_pools=None, group_index: int = 0) -> None:
         # Skip AbstractCounter.__init__ -- we don't want counts_file_name's
         # suffix machinery; the prediction TSV path is already the full name.
         self.ignore_read_groups = string_pools is None
@@ -88,10 +88,7 @@ class TerminalCounter(AbstractCounter):
         self.output_tpm_file_name = None
         self.output_stats_file_name = None
         self.usable_file_name = None
-        # Clear any stale per-chr file before we start appending in dump(); the merge
-        # driver passes truncate_output=False so a resumed merge keeps finished outputs.
-        if truncate_output:
-            open(self.output_file, "w").close()
+        # nothing is written here: the owner empties output_paths() before counting
 
         self.args = args
         self.string_pools = string_pools
@@ -111,8 +108,6 @@ class TerminalCounter(AbstractCounter):
         # requested CSV path.
         self._training_csv_path = (output_prefix + TRAINING_SUFFIX
                                    if self._collecting_training else None)
-        if self._training_csv_path and truncate_output:
-            open(self._training_csv_path, "w").close()
 
         # transcript_id -> {'chr', 'gene_id', 'data', 'annotated',
         #                   int_group_id -> list[int]}
@@ -156,6 +151,12 @@ class TerminalCounter(AbstractCounter):
 
     def get_output_file_handler(self):
         return open(self.output_file, "a")
+
+    def output_paths(self) -> list:
+        # the per-chr training fragment is appended to as well
+        if self._training_csv_path:
+            return [self.output_file, self._training_csv_path]
+        return [self.output_file]
 
     # -- subclass hooks -------------------------------------------------------
 
@@ -499,10 +500,9 @@ class PolyACounter(TerminalCounter):
     TRAINING_ARG = "collect_polya_training"
 
     def __init__(self, args, output_prefix: str,
-                 string_pools=None, group_index: int = 0, truncate_output: bool = True) -> None:
+                 string_pools=None, group_index: int = 0) -> None:
         super().__init__(args, output_prefix, POLYA_MODEL_PATH,
-                         string_pools=string_pools, group_index=group_index,
-                         truncate_output=truncate_output)
+                         string_pools=string_pools, group_index=group_index)
 
     def _passes_filter(self, read_assignment: ReadAssignment) -> bool:
         return bool(read_assignment.polyA_found and read_assignment.polya_info)
@@ -529,10 +529,9 @@ class TSSCounter(TerminalCounter):
     TRAINING_ARG = "collect_tss_training"
 
     def __init__(self, args, output_prefix: str,
-                 string_pools=None, group_index: int = 0, truncate_output: bool = True) -> None:
+                 string_pools=None, group_index: int = 0) -> None:
         super().__init__(args, output_prefix, TSS_MODEL_PATH,
-                         string_pools=string_pools, group_index=group_index,
-                         truncate_output=truncate_output)
+                         string_pools=string_pools, group_index=group_index)
 
     def _passes_filter(self, read_assignment: ReadAssignment) -> bool:
         return read_assignment.strand in ('+', '-')

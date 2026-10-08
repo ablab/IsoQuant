@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import pickle
 from enum import Enum, unique
@@ -13,15 +14,19 @@ from enum import Enum, unique
 import pytest
 
 from isoquant_lib.utils.checkpoints import (
+    CHECKPOINT_FORMAT,
     CheckpointStore,
     DebugFailure,
     DEBUG_FAIL_ENV,
     Payload,
+    RUN_RECORD,
     check_debug_failure,
+    check_resumable,
     enum_stats_to_payload,
     marker_name,
     payload_to_enum_stats,
     run_stage,
+    write_run_record,
 )
 
 
@@ -71,6 +76,16 @@ class TestCheckpointStore:
         store = CheckpointStore(str(tmp_path), resume=True)
         clone = pickle.loads(pickle.dumps(store))
         assert clone.root == store.root and clone.resume
+
+    def test_unreadable_marker_is_not_done(self, tmp_path):
+        fresh, resumed = fresh_and_resumed(str(tmp_path / "cp"))
+        fresh.mark_done("collect", {"n": 1})
+        with open(fresh.path("collect"), "w") as f:
+            f.write('{"payl')  # e.g. truncated by a power loss
+        assert not resumed.is_done("collect")
+        assert resumed.load("collect") is None
+        open(fresh.path("collect"), "w").close()
+        assert not resumed.is_done("collect")
 
     def test_marker_name_sanitises_every_part(self):
         assert marker_name("collect", "chrUn/random") == "collect/chrUn_random"
@@ -151,3 +166,36 @@ class TestDebugHook:
 def test_enum_payload_round_trip():
     stats = {Colour.red: 5, Colour.blue: 0}
     assert payload_to_enum_stats(enum_stats_to_payload(stats), Colour) == stats
+
+
+class TestRunRecord:
+    def test_own_record_is_resumable(self, tmp_path):
+        run_id = write_run_record(str(tmp_path), "4.1.0")
+        assert check_resumable(str(tmp_path), run_id, "4.1.0") is None
+
+    def test_other_version_only_warns(self, tmp_path, caplog):
+        run_id = write_run_record(str(tmp_path), "4.1.0")
+        assert check_resumable(str(tmp_path), run_id, "4.2.0") is None
+
+    def test_missing_record(self, tmp_path):
+        assert "no readable checkpoint record" in check_resumable(str(tmp_path), "abc", "4.1.0")
+
+    def test_params_of_another_run(self, tmp_path):
+        write_run_record(str(tmp_path), "4.1.0")
+        assert "do not belong" in check_resumable(str(tmp_path), "another-run", "4.1.0")
+        # .params written by a version without checkpoints has no run id at all
+        assert "do not belong" in check_resumable(str(tmp_path), None, "4.1.0")
+
+    def test_other_checkpoint_format(self, tmp_path):
+        run_id = write_run_record(str(tmp_path), "4.1.0")
+        path = tmp_path / RUN_RECORD
+        record = json.loads(path.read_text())
+        record["checkpoint_format"] = CHECKPOINT_FORMAT + 1
+        path.write_text(json.dumps(record))
+        assert "format" in check_resumable(str(tmp_path), run_id, "4.1.0")
+
+    def test_reset_store_keeps_no_record(self, tmp_path):
+        run_dir = str(tmp_path / "checkpoints")
+        write_run_record(run_dir, "4.1.0")
+        CheckpointStore(run_dir, resume=False).reset()
+        assert not os.path.exists(os.path.join(run_dir, RUN_RECORD))

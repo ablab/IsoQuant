@@ -6,7 +6,8 @@
 
 """Pieces the resumable merge relies on (see .claude/RESUME_CHECKPOINTS.md).
 
-- the merge aggregator (truncate_outputs=False) must not touch any finished output;
+- the merge aggregator (truncate_outputs=False) must not touch any finished output, and no
+  counter constructor writes anything (the counting aggregator empties output_paths() itself);
 - per-chromosome fragments live in a separate directory, named like the writers name them;
 - fragments survive a merge with remove_inputs=False, so a rerun can merge them again;
 - .usable fragments are loaded once, by the finalize step only.
@@ -88,13 +89,33 @@ class TestMergeAggregatorHasNoSideEffects:
         finally:
             os.chdir(old_cwd)
 
-    def test_velocity_counter_keeps_output(self, tmp_path):
+    def test_counter_constructors_write_nothing(self, tmp_path):
+        # a new counter is safe by default: constructing one never touches its files
         path = str(tmp_path / "velocity")
         with open(path, "w") as outf:
             outf.write("finished\n")
-        RNAVelocityCounter(make_args(), path, string_pools=make_pools(), group_index=1, truncate_output=False)
+        RNAVelocityCounter(make_args(), path, string_pools=make_pools(), group_index=1)
         with open(path) as inf:
             assert inf.read() == "finished\n"
+        gene = create_gene_counter(str(tmp_path / "s.gene"), "with_ambiguous")
+        assert not os.path.exists(gene.output_file)
+
+    def test_counting_aggregator_empties_every_counter_output(self, tmp_path):
+        # the per-chromosome aggregator empties stale pieces (e.g. of a chromosome rerun after a crash)
+        out_dir = str(tmp_path / "sample")
+        os.makedirs(out_dir)
+        sample = SampleData([], "sample", out_dir, {}, None)
+        args = make_args()
+        strategies = ["file_name", "barcode"]
+        aggregator = ReadAssignmentAggregator(args, sample, make_pools(), grouping_strategy_names=strategies,
+                                              truncate_outputs=False)
+        paths = aggregator.all_counters().output_paths()
+        assert any(p.endswith(".training.csv") for p in paths)
+        for path in paths:
+            with open(path, "w") as outf:
+                outf.write("stale\n")
+        aggregator.empty_counter_outputs()
+        assert all(os.path.getsize(p) == 0 for p in paths)
 
 
 class TestFragmentDir:
@@ -129,7 +150,7 @@ class TestUsableLoadedOnce:
         frag = str(tmp_path / "per_chr")
         os.makedirs(frag)
         final_prefix = str(tmp_path / "s.gene")
-        counter = create_gene_counter(final_prefix, "with_ambiguous", truncate_output=True)
+        counter = create_gene_counter(final_prefix, "with_ambiguous")
         for chr_id in ("chr1", "chr2"):
             chr_counter = create_gene_counter(os.path.join(frag, "s_%s.gene" % chr_id), "with_ambiguous")
             with open(chr_counter.output_counts_file_name, "w") as outf:
