@@ -309,6 +309,14 @@ class TestHtml:
         assert (ranks[0], ranks[-1]) == (1, 100000)
         assert depths[0] == 100000.0
 
+    def test_rank_curve_always_ends_at_the_last_group(self):
+        # 10 ** log10(n) rounds below n for many sizes (401 among them), which used to
+        # end the curve one rank short.
+        for total in range(RANK_PLOT_POINTS + 1, 5000):
+            ranks, _ = _rank_plot_points([1.0] * total)
+            assert ranks[0] == 1 and ranks[-1] == total, total
+            assert len(ranks) <= RANK_PLOT_POINTS
+
     def test_sections_are_skipped_when_empty(self, tmp_path):
         summary = RunSummary("S", isoquant_version="4.0.0")
         summary.set_alignment_stats(_enum_stats(primary=10, unaligned=0))
