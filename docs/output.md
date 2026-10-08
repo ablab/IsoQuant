@@ -235,6 +235,22 @@ Produced for every experiment unless `--no_report` is set:
   UMI deduplication and per-barcode statistics;
 * `SAMPLE_ID.summary_stats.json` - the same numbers in machine-readable form.
 
+How the main numbers are defined:
+
+* **Input reads** are primary alignments plus unaligned reads (secondary and supplementary
+  alignments are extra records of the same reads); the mapping rate is primary alignments over that total.
+  When reads are split into cDNA molecules before mapping (`--split_molecules`), these are
+  **input molecules**.
+* When some references carrying alignments are not processed (`--process_only_chr`, `--discard_chr`,
+  or an annotation that does not cover the whole genome), primary alignments are only counted
+  on the processed references while unaligned reads are counted for the whole input.
+  The total is then reported as **reads on processed references**, and `covers_all_input_reads`
+  is `false` in the JSON file.
+* In single-cell and spatial modes the counts hold only the reads that survived UMI deduplication,
+  so counted reads are reported **after UMI deduplication**.
+* The **UMI duplication rate** is the share of deduplicated reads removed as duplicates.
+  Only reads assigned to a gene and carrying a barcode are deduplicated, so the rate is computed over them.
+
 ## Other files
 
 Additionally, an `isoquant.log` log file will be saved to the output directory.  

@@ -244,6 +244,10 @@ python -m isoquant_lib.scripts.convert_read_info --read_info SAMPLE.read_info.ts
 
 Note that large output files are gzipped by default unless `--no_gzip` is specified.
 
+`--no_report`
+    Do not write the per-experiment run summary (`SAMPLE_ID.summary.html` and `SAMPLE_ID.summary_stats.json`),
+    which is produced by default. See [output](output.md) for its contents.
+
 ## Pipeline options
 
 `--analysis`

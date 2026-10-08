@@ -316,7 +316,8 @@ class OutputConfig:
         """True when a file with this stem is the merged output of the experiment rather
         than one of the per-chromosome intermediates (SAMPLE_chr1.read_info.tsv,
         SAMPLE_chr1.gene_grouped_barcode_counts.linear.tsv), which live in the same
-        directory and are kept by --keep_tmp or left behind by a crashed run.
+        directory until merged: merging removes them, so they are only left behind by
+        a run that crashed or was interrupted before the merge.
         With an unknown sample prefix every file is accepted, as before."""
         return not self.sample_prefix or stem == self.sample_prefix
 

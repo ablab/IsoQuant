@@ -3,6 +3,7 @@
 from isoquant_lib.visualizer.post_process import OutputConfig, DictionaryBuilder
 from isoquant_lib.visualizer.plot_output import PlotOutput
 import argparse
+import sys
 from isoquant_lib.visualizer.process_dict import simplify_and_sum_transcripts
 from isoquant_lib.visualizer.gene_model import rank_and_visualize_genes
 
@@ -42,9 +43,10 @@ def parse_arguments():
     parser.add_argument(
         "--read_group_strategy",
         type=str,
-        help="Grouping strategy (--read_group value, e.g. file_name or barcode) whose grouped "
-        "counts are visualized. Defaults to the first --read_group value of the original run "
-        "that has grouped counts in the output directory.",
+        help="Grouping strategy whose grouped counts are visualized, named as in the grouped "
+        "counts file names (e.g. file_name, barcode, tag_CB, file0_col1). Defaults to the first "
+        "strategy given with --read_group in the original run that has grouped counts, "
+        "otherwise the alphabetically first one found.",
         default=None,
     )
     parser.add_argument(
@@ -77,13 +79,18 @@ def parse_arguments():
 
 def main():
     args = parse_arguments()
-    output = OutputConfig(
-        args.output_directory,
-        use_counts=args.counts,
-        ref_only=args.ref_only,
-        gtf=args.gtf,
-        read_group_strategy=args.read_group_strategy,
-    )
+    try:
+        output = OutputConfig(
+            args.output_directory,
+            use_counts=args.counts,
+            ref_only=args.ref_only,
+            gtf=args.gtf,
+            read_group_strategy=args.read_group_strategy,
+        )
+    except (ValueError, FileNotFoundError) as e:
+        # Wrong output directory, missing GTF or unknown --read_group_strategy:
+        # a usage problem, reported without a traceback.
+        sys.exit("Error: %s" % e)
     dictionary_builder = DictionaryBuilder(output)
     gene_list = dictionary_builder.read_gene_list(args.gene_list)
     update_names = not all(gene.startswith("ENS") for gene in gene_list)
