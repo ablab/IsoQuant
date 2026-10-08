@@ -286,8 +286,12 @@ def _rank_plot_points(ranked_reads: List[float]) -> Tuple[List[int], List[float]
     if total <= RANK_PLOT_POINTS:
         return list(range(1, total + 1)), list(ranked_reads)
     last = math.log10(total)
-    indices = sorted({min(total - 1, int(10 ** (last * step / (RANK_PLOT_POINTS - 1))) - 1)
-                      for step in range(RANK_PLOT_POINTS)})
+    # The last rank is added explicitly: 10 ** log10(total) rounds below total for many
+    # sizes, which would end the curve one rank short.
+    indices = {min(total - 1, int(10 ** (last * step / (RANK_PLOT_POINTS - 1))) - 1)
+               for step in range(RANK_PLOT_POINTS - 1)}
+    indices.add(total - 1)
+    indices = sorted(indices)
     return [index + 1 for index in indices], [ranked_reads[index] for index in indices]
 
 
