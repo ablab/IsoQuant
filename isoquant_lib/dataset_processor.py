@@ -171,7 +171,9 @@ class DatasetProcessor:
     def process_sample(self, sample):
         logger.info("Processing experiment " + sample.prefix)
         self.run_summary = RunSummary(sample.prefix, isoquant_version=self.args._version,
-                                      command_line=self.args._cmd_line, mode=self.args.mode.name)
+                                      command_line=self.args._cmd_line, mode=self.args.mode.name,
+                                      molecules_split=bool(getattr(self.args, "split_molecules", False)),
+                                      umi_deduplicated=self.args.mode.needs_pcr_deduplication())
         # Alignment statistics are per experiment: without the reset a second sample
         # would report (and store as __not_aligned) the counts of the previous one too.
         self.alignment_stat_counter = EnumStats()

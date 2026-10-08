@@ -96,11 +96,16 @@ class RunSummary:
     """Collects the QC numbers of a single experiment (sample)."""
 
     def __init__(self, sample_name: str, isoquant_version: str = "", command_line: str = "",
-                 mode: str = ""):
+                 mode: str = "", molecules_split: bool = False, umi_deduplicated: bool = False):
         self.sample_name = sample_name
         self.isoquant_version = isoquant_version
         self.command_line = command_line
         self.mode = mode
+        # With --split_molecules reads are split into cDNA molecules before mapping, so
+        # alignment counts are molecules, not sequenced reads.
+        self.molecules_split = molecules_split
+        # In UMI modes the counts are built from the reads that survived deduplication.
+        self.umi_deduplicated = umi_deduplicated
 
         self.alignment: Dict[str, int] = {}
         # False when part of the input was not processed, which makes primary and
@@ -386,6 +391,8 @@ class RunSummary:
             "isoquant_version": self.isoquant_version,
             "mode": self.mode,
             "command_line": self.command_line,
+            "molecules_split": self.molecules_split,
+            "umi_deduplicated": self.umi_deduplicated,
         }
         if self.alignment:
             alignment = dict(self.alignment)

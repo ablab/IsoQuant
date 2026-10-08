@@ -275,6 +275,20 @@ class TestHtml:
         assert "Barcode calling" in page
         assert "UMI deduplication (edit distance 4)" in page
 
+    def test_labels_follow_split_molecules_and_umi_deduplication(self, tmp_path):
+        # Split reads are mapped as molecules, and UMI-mode counts only hold the reads
+        # that survived deduplication: the labels must not call either of them reads.
+        summary = RunSummary("S", molecules_split=True, umi_deduplicated=True)
+        summary.set_alignment_stats(_enum_stats(primary=190, unaligned=10),
+                                    covers_all_reads=False)
+        summary.collect_output_files(_populated_sample(tmp_path))
+        page = self._render(tmp_path, summary)
+        assert "Molecules on processed references" in page
+        assert "Mapping rate (processed references)" in page
+        assert "counted reads (after UMI deduplication)" in page
+        assert "share of molecules on processed references" in page
+        assert "Input reads" not in page
+
     def test_group_tiles_name_their_strategy(self, tmp_path):
         # With --read_group file_name barcode the number could be either; reading a
         # file_name group count as "barcodes with counts" is off by orders of magnitude.
