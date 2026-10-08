@@ -177,7 +177,9 @@ class TestRates:
         umi = _summary(tmp_path).to_dict()["umi_filtering"]
         assert umi["edit_distance"] == 4
         assert umi["molecules"] == 60
-        assert umi["duplication_rate"] == 0.6
+        # 60 survivors out of the 120 barcoded assigned reads that were deduplicated;
+        # the 30 unbarcoded reads in "Total assignments processed" are not duplicates.
+        assert umi["duplication_rate"] == 0.5
 
     def test_ranked_depths_are_kept_for_the_plotted_feature_only(self, tmp_path):
         # One float per group, and only the gene curve is ever drawn.

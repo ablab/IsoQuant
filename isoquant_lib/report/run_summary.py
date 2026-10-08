@@ -37,6 +37,11 @@ MAX_GROUPED_SCAN_BYTES = 2 * 1024 ** 3
 # this many the per-group maps are dropped and the groups are only counted.
 MAX_GROUPED_SCAN_GROUPS = 1000000
 
+# Keys of the UMI filtering stats file (UMIFilter in barcode_calling/umi_filtering.py):
+# the reads that survived deduplication, and the reads that entered it.
+UMI_SAVED_READS = "Total reads saved"
+UMI_DEDUPLICATED_READS = "Assigned to any gene and barcoded"
+
 # Feature whose per-group depth curve the report plots. The ranked list is one float
 # per group, so it is only built for that one.
 RANK_PLOT_FEATURE = "gene"
@@ -337,6 +342,22 @@ class RunSummary:
     def barcode_rate(self) -> Optional[float]:
         return _rate(self.barcodes.get("Barcode detected", 0), self.barcodes.get("Total reads", 0))
 
+    @property
+    def umi_deduplicated_reads(self) -> Optional[int]:
+        """Reads that entered UMI deduplication: assigned to a gene and barcoded.
+        "Total assignments processed" also holds unbarcoded reads, which are never
+        deduplicated and must not be counted as duplicates."""
+        return self.umi_filtering.get(UMI_DEDUPLICATED_READS)
+
+    @property
+    def umi_duplication_rate(self) -> Optional[float]:
+        """Share of the deduplicated reads that were removed as PCR/RT duplicates."""
+        saved = self.umi_filtering.get(UMI_SAVED_READS)
+        deduplicated = self.umi_deduplicated_reads
+        if saved is None or not deduplicated:
+            return None
+        return _rate(deduplicated - saved, deduplicated)
+
     def assignment_rollup(self) -> Dict[str, int]:
         """Headline assignment categories on top of the per-type counts."""
         return dict(self.assignment_buckets)
@@ -396,11 +417,9 @@ class RunSummary:
             summary["barcodes"] = barcodes
         if self.umi_filtering:
             umi = {"by_stage": dict(self.umi_filtering), "edit_distance": self.umi_edit_distance}
-            saved = self.umi_filtering.get("Total reads saved")
-            processed = self.umi_filtering.get("Total assignments processed")
-            if saved is not None and processed:
-                umi["molecules"] = saved
-                umi["duplication_rate"] = _rate(processed - saved, processed)
+            if self.umi_duplication_rate is not None:
+                umi["molecules"] = self.umi_filtering[UMI_SAVED_READS]
+                umi["duplication_rate"] = self.umi_duplication_rate
             summary["umi_filtering"] = umi
         if self.groups:
             summary["groups"] = {strategy: self.group_rollup(strategy) for strategy in self.groups}
