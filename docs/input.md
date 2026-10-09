@@ -43,6 +43,21 @@ A BAM file with Illumina reads can be provided via `--illumina_bam`. It cannot b
 The option accepts one or multiple bam files separated by space. All files will be combined and used to correct offsets between introns in long and short reads as well as skipped exons.
 
 
+### Read tags
+
+When IsoQuant aligns the reads itself (`--fastq` or `--unmapped_bam`), it keeps read tags in the resulting BAM file,
+e.g. the poly-A tail length estimated by Dorado (`pt:i`), which can be used later with `--polya_trimmed tag:pt` 
+without realigning the reads. Tags are taken from:
+
+  * unmapped BAM files, e.g. produced by `dorado basecaller`;
+  * FASTA/FASTQ files, in which read headers contain tab-separated SAM tags after the read id 
+  (`@read_id<TAB>pt:i:85<TAB>...`), e.g. produced by `dorado basecaller --emit-fastq` or `samtools fastq -T`.
+  Headers are checked on the first 1000 reads; if any of them has a comment that is not made of SAM tags 
+  (e.g. MinKNOW-style `runid=... read=...`), no tags are kept.
+
+Tags written by minimap2 itself (e.g. `NM`, `ts`) and tags referring to BAM header lines (`RG`, `PG`) are not copied.
+
+
 ## Specifying input data via yaml file
 
 To provide all input files in a single description file, you can use a [YAML](https://www.redhat.com/en/topics/automation/what-is-yaml) file via `--yaml` (see description below).

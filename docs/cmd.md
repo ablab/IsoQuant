@@ -99,6 +99,9 @@ Indicate that reads were poly-A trimmed. Possible values are:
   Use this option at your own risk.
   - `tag:<TAG>`: read poly-A status from a BAM tag, e.g. `tag:pt` for Dorado (requires basecalling with `--estimate-poly-a`). A tail is considered present when the tag value >= 0.
   If the read has a `TS:A` tag (transcript strand relative to the read), the tail is placed on the corresponding end. Otherwise internal IsoQuant strand detection is used.
+  The tag must be present in the aligned reads. When IsoQuant aligns the reads itself, tags are kept automatically (see [read tags](input.md#read-tags)); 
+  when providing your own alignments via `--bam`, make sure the aligner copies the tags, e.g. `samtools fastq -T pt,TS calls.bam | minimap2 -ax splice -y ...`.
+  IsoQuant warns if none of the checked alignments carry the tag.
   - `list:<FILE>`: a file with IDs of reads that have a poly-A tail, one per line (may be gzipped).
   An optional second column (tab or space separated) with `+` or `-` gives the transcript strand relative to the read, and is treated as `TS:A` above; any other value is ignored.
   - `flnc:<FILE>`: `flnc.report.csv` produced by `isoseq refine`. Reads with `polyAlen` > 0 have a tail at their 3' end;

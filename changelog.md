@@ -11,6 +11,8 @@ per-barcode statistics), can be disabled with `--no_report`;
 strategy since 4.0.0;
 - Fixed read classification statistics in the visualization tool when read groups are present;
 - Alignment statistics are no longer accumulated across experiments in multi-sample runs.
+- `--polya_trimmed` now accepts external poly-A sources: `tag:<TAG>` (e.g. Dorado `pt`), `list:<FILE>` and `flnc:<FILE>` (`isoseq refine` report) ([#429](https://github.com/ablab/IsoQuant/issues/429));
+- Read tags from unmapped BAM files and from FASTA/FASTQ headers with SAM tags (e.g. Dorado `pt:i`) are now kept in alignments produced by IsoQuant.
 
 ## Isoquant 4.0.0, 25 July 2026
 

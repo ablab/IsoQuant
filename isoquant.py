@@ -73,6 +73,7 @@ from isoquant_lib.barcode_calling.options import (
 )
 from isoquant_lib.barcode_calling.pipeline import call_barcodes
 from isoquant_lib.utils.file_utils import check_file_exists
+from isoquant_lib.utils.read_tags import count_tagged_alignments
 from isoquant_lib.common import setup_worker_logging, _get_log_params
 
 
@@ -1274,6 +1275,25 @@ def prepare_reference_genome(args):
         args.reference = gunzipped_reference
 
 
+def warn_about_missing_polya_tag(args) -> None:
+    """--polya_trimmed tag:X silently falls back to sequence-based detection when the alignments lack the tag."""
+    if args.polya_trimmed != PolyATrimmed.tag or args.input_data.input_type != InputDataType.bam:
+        return
+    tag = args.polya_trimmed_tag
+    for sample in args.input_data.samples:
+        for lib in sample.file_list:
+            for bam_file in lib:
+                tagged, checked = count_tagged_alignments(bam_file, tag)
+                if checked == 0 or tagged > 0:
+                    continue
+                logger.warning("None of the first %d primary alignments in %s carry the %s tag, "
+                               "--polya_trimmed tag:%s will have no effect for this file and polyA tails "
+                               "will be detected from read sequences only" % (checked, bam_file, tag, tag))
+                logger.warning("IsoQuant keeps read tags when aligning an unaligned BAM or FASTQ with SAM tags "
+                               "in read headers (rerun with --clean_start if the alignment is from an earlier run); "
+                               "when aligning yourself, use e.g. samtools fastq -T %s | minimap2 -y" % tag)
+
+
 def run_pipeline(args):
     logger.info(" === IsoQuant pipeline started === ")
     logger.info("Python version: %s" % sys.version)
@@ -1303,6 +1323,8 @@ def run_pipeline(args):
     if args.run_aligner_only:
         logger.info("Isoform assignment step is skipped because --run-aligner-only option was used")
         return
+
+    warn_about_missing_polya_tag(args)
 
     # run isoform assignment
     dataset_processor = DatasetProcessor(args)

@@ -14,11 +14,13 @@ import json
 import pysam
 import gzip
 import sys
+from typing import List, Tuple
 
 from isoquant_lib.common import get_path_to_program
 from isoquant_lib.utils.error_codes import IsoQuantExitCode
 from isoquant_lib.gtf2db import convert_db_to_gtf, db2bed
 from .input_data_storage import SampleData, InputDataType
+from .read_tags import bam_tags_to_keep, fastx_tags_to_keep, is_fasta
 
 logger = logging.getLogger('IsoQuant')
 
@@ -310,6 +312,53 @@ def find_annotation(aligner, args):
         return os.path.abspath(bed_fname)
 
 
+PipeStage = Tuple[List[str], str, IsoQuantExitCode]
+
+
+def read_input_stages(reads_path: str, data_type: InputDataType) -> Tuple[str, List[PipeStage], List[str]]:
+    """What minimap2 reads from, the commands feeding it, and the read tags that reach it.
+
+    Tags are kept regardless of --polya_trimmed, so that the alignments can be reused with tag-based
+    options later without realigning.
+    """
+    if data_type == InputDataType.fastq:
+        kept_tags = fastx_tags_to_keep(reads_path)
+        if not kept_tags:
+            return reads_path, [], []
+        tag_list = ",".join(kept_tags)
+        to_reads = 'fasta' if is_fasta(reads_path) else 'fastq'
+        return '-', [(['samtools', 'import', '-T', tag_list, reads_path],
+                      "Samtools import finished with errors!", IsoQuantExitCode.SUBPROCESS_FAILED),
+                     (['samtools', to_reads, '-T', tag_list, '-'],
+                      "Samtools %s finished with errors!" % to_reads, IsoQuantExitCode.SUBPROCESS_FAILED)], kept_tags
+    if data_type == InputDataType.unmapped_bam:
+        kept_tags = bam_tags_to_keep(reads_path)
+        tag_option = ['-T', ",".join(kept_tags)] if kept_tags else []
+        return '-', [(['samtools', 'fastq'] + tag_option + [reads_path],
+                      "BAM to FASTQ conversion finished with errors!", IsoQuantExitCode.SUBPROCESS_FAILED)], kept_tags
+    logger.critical("Data type %s is not compatible with minimap2" % data_type.name)
+    sys.exit(IsoQuantExitCode.INVALID_PARAMETER)
+
+
+def run_piped_commands(stages: List[PipeStage], log_fpath: str) -> None:
+    """Run commands connected by pipes; each stage carries its error message and exit code."""
+    with open(log_fpath, "a") as log_file:
+        processes = []
+        stdin = None
+        for i, (command, _, _) in enumerate(stages):
+            stdout = subprocess.PIPE if i + 1 < len(stages) else None
+            process = subprocess.Popen(command, stdin=stdin, stdout=stdout, stderr=log_file)
+            if stdin is not None:
+                # the child holds its own copy, closing ours lets the upstream process see a closed pipe
+                stdin.close()
+            stdin = process.stdout
+            processes.append(process)
+        for process, (_, message, exit_code) in zip(processes, stages):
+            if process.wait() != 0:
+                logger.critical("%s See %s" % (message, log_fpath))
+                sys.exit(exit_code)
+
+
 def align_reads(aligner, reads_file, annotation_file, args, label, out_dir, data_type=InputDataType.fastq):
     reads_path = os.path.abspath(reads_file)
     fname, ext = os.path.splitext(reads_path.split('/')[-1])
@@ -360,15 +409,12 @@ def align_reads(aligner, reads_file, annotation_file, args, label, out_dir, data
             additional_options.append("--junc-bed")
             additional_options.append(annotation_file)
 
-        if data_type == InputDataType.fastq:
-            command = [minimap2_path, args.index, reads_path, '-a', '-x', MINIMAP_PRESET[args.data_type],
-                       '--secondary=yes', '-Y', '--MD', '-t', str(args.threads)] + additional_options
-        elif data_type == InputDataType.unmapped_bam:
-            command = [minimap2_path, args.index, '-', '-a', '-x', MINIMAP_PRESET[args.data_type],
-                       '--secondary=yes', '-Y', '--MD', '-t', str(args.threads)] + additional_options
-        else:
-            logger.critical("Data type %s is not compatible with minimap2" % data_type.name)
-            sys.exit(IsoQuantExitCode.INVALID_PARAMETER)
+        reads_input, read_stages, kept_tags = read_input_stages(reads_path, data_type)
+        if kept_tags:
+            logger.info("Read tags %s will be kept in the alignments" % ", ".join(kept_tags))
+            additional_options.append('-y')
+        command = [minimap2_path, args.index, reads_input, '-a', '-x', MINIMAP_PRESET[args.data_type],
+                   '--secondary=yes', '-Y', '--MD', '-t', str(args.threads)] + additional_options
 
         if args.mapping_options:
             command += args.mapping_options.split()
@@ -379,42 +425,11 @@ def align_reads(aligner, reads_file, annotation_file, args, label, out_dir, data
             minimap_version = version_run.stdout.decode('UTF-8').strip()
 
         logger.info("Running minimap2 version %s (takes a while)" % minimap_version)
-        if data_type == InputDataType.fastq:
-            with open(log_fpath, "a") as log_file:
-                minimap2_process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=log_file)
-                samtools_sort_process = subprocess.Popen(['samtools', 'sort', '-@', str(args.threads), '-o', alignment_bam_path],
-                                                         stdin=minimap2_process.stdout, stderr=log_file)
-                minimap2_return_code = minimap2_process.wait()
-                minimap2_process.stdout.close()
-                if minimap2_return_code != 0:
-                    logger.critical("Minimap2 finished with errors! See " + log_fpath)
-                    sys.exit(IsoQuantExitCode.ALIGNMENT_FAILED)
-                samtools_return_code = samtools_sort_process.wait()
-                if samtools_return_code != 0:
-                    logger.critical("Samtools sort finished with errors! See " + log_fpath)
-                    sys.exit(IsoQuantExitCode.SAMTOOLS_FAILED)
-
-        elif data_type == InputDataType.unmapped_bam:
-            with open(log_fpath, "a") as log_file:
-                bam_open_process = subprocess.Popen(['samtools', 'fastq', reads_path], stdout=subprocess.PIPE, stderr=log_file)
-                minimap2_process = subprocess.Popen(command, stdin=bam_open_process.stdout, stdout=subprocess.PIPE, stderr=log_file)
-                samtools_sort_process = subprocess.Popen(['samtools', 'sort', '-@', str(args.threads), '-o', alignment_bam_path],
-                                                         stdin=minimap2_process.stdout, stderr=log_file)
-
-                bam_open_return_code = bam_open_process.wait()
-                bam_open_process.stdout.close()
-                if bam_open_return_code != 0:
-                    logger.critical("BAM to FASTQ conversion finished with errors! See " + log_fpath)
-                    sys.exit(IsoQuantExitCode.SUBPROCESS_FAILED)
-                minimap2_return_code = minimap2_process.wait()
-                minimap2_process.stdout.close()
-                if minimap2_return_code != 0:
-                    logger.critical("Minimap2 finished with errors! See " + log_fpath)
-                    sys.exit(IsoQuantExitCode.ALIGNMENT_FAILED)
-                samtools_return_code = samtools_sort_process.wait()
-                if samtools_return_code != 0:
-                    logger.critical("Samtools sort finished with errors! See " + log_fpath)
-                    sys.exit(IsoQuantExitCode.SAMTOOLS_FAILED)
+        sort_command = ['samtools', 'sort', '-@', str(args.threads), '-o', alignment_bam_path]
+        run_piped_commands(read_stages +
+                           [(command, "Minimap2 finished with errors!", IsoQuantExitCode.ALIGNMENT_FAILED),
+                            (sort_command, "Samtools sort finished with errors!", IsoQuantExitCode.SAMTOOLS_FAILED)],
+                           log_fpath)
 
     else:
         logger.critical("Aligner " + aligner + " is not supported")
