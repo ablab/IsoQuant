@@ -13,6 +13,7 @@ from collections import defaultdict, OrderedDict
 from traceback import print_exc
 import pandas
 import logging
+from typing import Iterable, List, Optional
 import gffutils
 
 from isoquant_lib.utils.file_utils import open_text_write
@@ -47,9 +48,20 @@ def set_logger(logger_instance):
     logger_instance.addHandler(ch)
 
 
+def order_groups(groups: Iterable[str], group_order: Optional[List[str]] = None) -> List[str]:
+    """Order matrix columns: groups listed in group_order first, in that order,
+    then any remaining ones sorted. Without group_order, plain sorted order."""
+    groups = set(groups)
+    if not group_order:
+        return sorted(groups)
+    ordered = [g for g in group_order if g in groups]
+    listed = set(ordered)
+    return ordered + sorted(g for g in groups if g not in listed)
+
+
 def convert_to_matrix(input_linear_counts, output_file_path, feature_id_to_name_dict=None,
                       gzipped=False, feature_type='gene', convert_to_tpm=False, usable_reads_per_group=None,
-                      max_groups: int = 0) -> int:
+                      max_groups: int = 0, group_order: Optional[List[str]] = None) -> int:
     """Convert linear counts to full matrix format.
 
     Returns:
@@ -90,7 +102,7 @@ def convert_to_matrix(input_linear_counts, output_file_path, feature_id_to_name_
     output_file_path += ".gz" if gzipped else ""
     with open_text_write(output_file_path) as outfile:
         # Write the header with group_ids
-        columns = list(sorted(count_matrix.columns))
+        columns = order_groups(count_matrix.columns, group_order)
         if num_groups > GROUP_COUNT_CUTOFF:
             logger.warning("You have %d groups in your matrix, conversion might take a lot of time and the output file can be very large" % num_groups)
         outfile.write(feature_type + '_id\t' + '\t'.join(columns) + '\n')
@@ -106,7 +118,8 @@ def convert_to_matrix(input_linear_counts, output_file_path, feature_id_to_name_
 
 
 def convert_to_mtx(input_linear_counts, output_file_prefix, feature_id_to_name=None,
-                   gzipped=False, convert_to_tpm=False, usable_reads_per_group=None):
+                   gzipped=False, convert_to_tpm=False, usable_reads_per_group=None,
+                   group_order: Optional[List[str]] = None):
     logger.info("Converting %s to MTX format" % input_linear_counts)
     cols = len(open(input_linear_counts).readline().strip().split('\t'))
     if cols != 3:
@@ -117,7 +130,7 @@ def convert_to_mtx(input_linear_counts, output_file_prefix, feature_id_to_name=N
                          names=['gene_id', 'group_id', 'count'],
                          dtype={'gene_id': str, 'group_id': str, 'count': float})
     unique_genes = list(sorted(df['gene_id'].unique()))
-    unique_groups = list(sorted(df['group_id'].unique()))
+    unique_groups = order_groups(df['group_id'].unique(), group_order)
     gene_index_map = {gene_id: idx + 1 for idx, gene_id in enumerate(unique_genes)}
     group_index_map = {group_id: idx + 1 for idx, group_id in enumerate(unique_groups)}
 
@@ -198,7 +211,7 @@ def _ordered_unique_features(df) -> tuple:
 
 def convert_profile_to_matrix(input_linear_counts: str, output_file_path: str,
                               gzipped: bool = False, feature_type: str = 'exon',
-                              max_groups: int = 0) -> int:
+                              max_groups: int = 0, group_order: Optional[List[str]] = None) -> int:
     """Convert exon/intron linear counts to a single matrix TSV.
 
     Each cell contains ``include,exclude`` (comma-separated). Missing
@@ -225,7 +238,7 @@ def convert_profile_to_matrix(input_linear_counts: str, output_file_path: str,
                           values='exclude_counts', aggfunc='sum', fill_value=0)
 
     feature_order, _ = _ordered_unique_features(df)
-    columns = sorted(set(incl.columns).union(excl.columns))
+    columns = order_groups(set(incl.columns).union(excl.columns), group_order)
     incl = incl.reindex(index=feature_order, columns=columns, fill_value=0)
     excl = excl.reindex(index=feature_order, columns=columns, fill_value=0)
     num_groups = len(columns)
@@ -247,7 +260,7 @@ def convert_profile_to_matrix(input_linear_counts: str, output_file_path: str,
 
 
 def convert_profile_to_mtx(input_linear_counts: str, output_file_prefix: str,
-                           gzipped: bool = False) -> None:
+                           gzipped: bool = False, group_order: Optional[List[str]] = None) -> None:
     """Convert exon/intron linear counts to MTX format.
 
     Writes a shared features file and barcodes file plus two matrices
@@ -259,7 +272,7 @@ def convert_profile_to_mtx(input_linear_counts: str, output_file_prefix: str,
         return
 
     feature_order, feature_to_gene = _ordered_unique_features(df)
-    unique_groups = list(sorted(df['group_id'].unique()))
+    unique_groups = order_groups(df['group_id'].unique(), group_order)
     feature_index_map = {feature_id: idx + 1 for idx, feature_id in enumerate(feature_order)}
     group_index_map = {group_id: idx + 1 for idx, group_id in enumerate(unique_groups)}
 

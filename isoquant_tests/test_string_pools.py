@@ -179,6 +179,49 @@ class TestStringPoolManager:
         # Basenames should NOT be in the pool
         assert "file1" not in manager.file_name_pool
 
+    def test_build_file_name_pool_keeps_input_order(self):
+        """File names and labels keep the order they were given, not alphabetical."""
+        class MockSample:
+            file_list = [("/p/zeta.bam", None), ("/p/alpha.bam", None), ("/p/mid.bam", None)]
+            readable_names_dict = None
+
+        manager = StringPoolManager()
+        manager.build_file_name_pool(MockSample())
+        assert manager.file_name_pool.int_to_str == ["zeta", "alpha", "mid"]
+
+        class MockLabeledSample:
+            file_list = [("/p/a.bam", None), ("/p/b.bam", None), ("/p/c.bam", None)]
+            readable_names_dict = {"/p/a.bam": "WT_2", "/p/b.bam": "KO", "/p/c.bam": "WT_1"}
+
+        manager = StringPoolManager()
+        manager.build_file_name_pool(MockLabeledSample())
+        assert manager.file_name_pool.int_to_str == ["WT_2", "KO", "WT_1"]
+
+    def test_group_column_order(self):
+        """Only file_name grouping imposes a matrix column order."""
+        class MockSample:
+            file_list = [("/p/zeta.bam", None), ("/p/alpha.bam", None)]
+            readable_names_dict = None
+
+        manager = StringPoolManager()
+        manager.build_file_name_pool(MockSample())
+        manager.set_group_spec_pool_type(0, 'file_name')
+        manager.set_group_spec_pool_type(1, 'dynamic')
+        assert manager.get_group_column_order(0) == ["zeta", "alpha"]
+        assert manager.get_group_column_order(1) is None
+        assert manager.get_group_column_order(5) is None
+
+    def test_group_column_order_numeric_labels(self):
+        """Numeric YAML labels load as ints but must match string matrix columns."""
+        class MockSample:
+            file_list = [("/p/a.bam", None), ("/p/b.bam", None), ("/p/c.bam", None)]
+            readable_names_dict = {"/p/a.bam": 10, "/p/b.bam": 2, "/p/c.bam": 1}
+
+        manager = StringPoolManager()
+        manager.build_file_name_pool(MockSample())
+        manager.set_group_spec_pool_type(0, 'file_name')
+        assert manager.get_group_column_order(0) == ["10", "2", "1"]
+
     def test_build_barcode_spot_pool(self):
         """Test building barcode-to-spot pool."""
         manager = StringPoolManager()

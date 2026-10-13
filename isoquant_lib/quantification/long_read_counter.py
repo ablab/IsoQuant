@@ -10,7 +10,7 @@ from bisect import bisect_left, bisect_right
 from collections import defaultdict, OrderedDict
 from enum import Enum, unique
 from functools import partial
-from typing import Set
+from typing import List, Optional, Set
 
 from isoquant_lib.assignment.isoform_assignment import (
     MatchEventSubtype,
@@ -230,6 +230,12 @@ class AbstractCounter:
             return [AbstractReadGrouper.default_group_id]
         pool = self.string_pools.get_read_group_pool(self.group_index)
         return [pool.get_str(i) for i in range(len(pool))]
+
+    def _get_column_order(self) -> Optional[List[str]]:
+        """Column order for grouped matrices: input order for file_name grouping, else None (sorted)."""
+        if self.string_pools is None:
+            return None
+        return self.string_pools.get_group_column_order(self.group_index)
 
     def _get_num_groups(self) -> int:
         """Number of groups in the pool."""
@@ -485,6 +491,7 @@ class AssignedFeatureCounter(AbstractCounter):
             return
 
         num_groups = self._get_num_groups()
+        group_order = self._get_column_order()
         counts_format = {GroupedOutputFormat[f] for f in args.counts_format}
         explicit_matrix = GroupedOutputFormat.matrix in counts_format
         default_format = GroupedOutputFormat.default in counts_format
@@ -497,7 +504,8 @@ class AssignedFeatureCounter(AbstractCounter):
                 logger.info("Skipping full matrix conversion: %d groups exceeds limit of %d. "
                             "Use '--counts_format matrix' to force conversion." % (num_groups, max_groups))
             else:
-                actual_num_groups = convert_to_matrix(self.output_file, self.output_counts_prefix, max_groups=max_groups) or num_groups
+                actual_num_groups = convert_to_matrix(self.output_file, self.output_counts_prefix, max_groups=max_groups,
+                                                      group_order=group_order) or num_groups
                 if normalization_method != NormalizationMethod.none:
                     reads_for_tpm = None
                     if normalization_method == NormalizationMethod.usable_reads:
@@ -505,18 +513,19 @@ class AssignedFeatureCounter(AbstractCounter):
                                          for group_id in range(num_groups)}
                     convert_to_matrix(self.output_file, self.output_tpm_prefix,
                                       convert_to_tpm=True, usable_reads_per_group=reads_for_tpm,
-                                      max_groups=max_groups)
+                                      max_groups=max_groups, group_order=group_order)
 
         if (GroupedOutputFormat.mtx in counts_format or
                 (default_format and actual_num_groups > GROUP_COUNT_CUTOFF)):
-            convert_to_mtx(self.output_file, self.output_counts_prefix)
+            convert_to_mtx(self.output_file, self.output_counts_prefix, group_order=group_order)
             if normalization_method != NormalizationMethod.none:
                 reads_for_tpm = None
                 if normalization_method == NormalizationMethod.usable_reads:
                     reads_for_tpm = {self._get_group_name(group_id): self.reads_for_tpm[group_id]
                                      for group_id in range(num_groups)}
                 convert_to_mtx(self.output_file, self.output_tpm_prefix,
-                               convert_to_tpm=True, usable_reads_per_group=reads_for_tpm)
+                               convert_to_tpm=True, usable_reads_per_group=reads_for_tpm,
+                               group_order=group_order)
 
 
 def create_gene_counter(output_file_name, strategy, complete_feature_list=None, string_pools=None, group_index: int = 0):
@@ -633,6 +642,7 @@ class ProfileFeatureCounter(AbstractCounter):
         default_format = GroupedOutputFormat.default in counts_format
         num_groups = (len(self.string_pools.get_read_group_pool(self.group_index))
                       if self.string_pools is not None else 1)
+        group_order = self._get_column_order()
         actual_num_groups = num_groups
         if explicit_matrix or default_format:
             max_groups = GROUP_COUNT_CUTOFF if default_format and not explicit_matrix else 0
@@ -645,11 +655,11 @@ class ProfileFeatureCounter(AbstractCounter):
                 actual_num_groups = convert_profile_to_matrix(
                     self.output_file, self.output_counts_prefix,
                     feature_type=self._feature_type(),
-                    max_groups=max_groups) or num_groups
+                    max_groups=max_groups, group_order=group_order) or num_groups
 
         if (GroupedOutputFormat.mtx in counts_format or
                 (default_format and actual_num_groups > GROUP_COUNT_CUTOFF)):
-            convert_profile_to_mtx(self.output_file, self.output_counts_prefix)
+            convert_profile_to_mtx(self.output_file, self.output_counts_prefix, group_order=group_order)
 
     @staticmethod
     def is_valid(assignment):

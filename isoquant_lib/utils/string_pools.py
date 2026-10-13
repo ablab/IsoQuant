@@ -35,7 +35,7 @@ import os
 import glob
 import re
 import logging
-from typing import List, Dict
+from typing import List, Dict, Optional
 
 from isoquant_lib.utils.file_utils import strip_compression_suffix
 from isoquant_lib.assignment.read_groups import AbstractReadGrouper, get_grouping_pool_types
@@ -237,29 +237,29 @@ class StringPoolManager:
 
         Uses same logic as FileNameGrouper: uses readable_names_dict (labels)
         if available, otherwise uses basename without extension.
-        Pool is built in sorted order for deterministic IDs across workers.
-        Also includes 'NA' for reads without filename info.
+        Pool keeps the order in which files (or labels) were given, so grouped
+        count matrices list columns in input order; that order is fixed by the
+        command line, hence identical across workers.
 
         Args:
             sample: Sample object with file_list and readable_names_dict attributes
         """
-        # Collect all file names first
-        file_names = set()
+        # Collect all file names first, deduplicated but in input order
+        file_names: Dict[str, None] = {}
 
         # If readable_names_dict is available (e.g., when -l labels are used),
         # use its values - matching FileNameGrouper behavior
         if sample.readable_names_dict:
             for readable_name in sample.readable_names_dict.values():
-                file_names.add(readable_name)
+                file_names[readable_name] = None
         else:
             # file_list is a list of lists (libraries), each library has one or more files
             for lib in sample.file_list:
                 # Get basename without extension, matching FileNameGrouper logic
                 readable_name = os.path.splitext(os.path.basename(strip_compression_suffix(lib[0])))[0]
-                file_names.add(readable_name)
+                file_names[readable_name] = None
 
-        # Add in sorted order for deterministic IDs
-        for name in sorted(file_names):
+        for name in file_names:
             self.file_name_pool.add(name)
         logger.debug(f"File name pool: {len(self.file_name_pool)} unique readable names")
 
@@ -437,6 +437,18 @@ class StringPoolManager:
                 return self._get_or_create_dynamic_pool(spec_index)
         else:  # 'dynamic' or unknown
             return self._get_or_create_dynamic_pool(spec_index)
+
+    def get_group_column_order(self, spec_index: int) -> Optional[List[str]]:
+        """
+        Column order for grouped count matrices of a grouping spec.
+
+        Only file_name grouping has a meaningful order (the order files or labels
+        were given); None for every other pool, whose columns stay sorted.
+        """
+        if self.group_spec_pool_types.get(spec_index) != 'file_name':
+            return None
+        # str(): YAML labels may load as ints, while matrix columns are read as strings
+        return [str(name) for name in self.file_name_pool.int_to_str]
 
     def _get_or_create_dynamic_pool(self, spec_index: int) -> StringPool:
         """Get or create a dynamic pool for a spec index."""
