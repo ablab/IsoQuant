@@ -1,19 +1,5 @@
 # IsoQuant changelog
 
-## IsoQuant 4.0.1, in development
-
-- Added per-experiment run summary: `SAMPLE_ID.summary.html` and `SAMPLE_ID.summary_stats.json`
-(mapping rate, read assignment statistics, barcode detection rate, UMI deduplication and
-per-barcode statistics), can be disabled with `--no_report`;
-- Fixed visualization tool not finding the per-read output after it was renamed to
-`read_info.tsv.gz` in 4.0.0 ([spl-IsoQuant #11](https://github.com/algbio/spl-IsoQuant/issues/11));
-- Fixed visualization tool not detecting grouped counts, whose names contain the grouping
-strategy since 4.0.0;
-- Fixed read classification statistics in the visualization tool when read groups are present;
-- Alignment statistics are no longer accumulated across experiments in multi-sample runs.
-- `--polya_trimmed` now accepts external poly-A sources: `tag:<TAG>` (e.g. Dorado `pt`), `list:<FILE>` and `flnc:<FILE>` (`isoseq refine` report) ([#429](https://github.com/ablab/IsoQuant/issues/429));
-- Read tags from unmapped BAM files and from FASTA/FASTQ headers with SAM tags (e.g. Dorado `pt:i`) are now kept in alignments produced by IsoQuant.
-
 ## Isoquant 4.0.0, 25 July 2026
 
 Major update with new functionality and output formats.
