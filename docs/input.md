@@ -55,8 +55,6 @@ without realigning the reads. Tags are taken from:
   Headers are checked on the first 1000 reads; if any of them has a comment that is not made of SAM tags 
   (e.g. MinKNOW-style `runid=... read=...`), no tags are kept.
 
-Tags written by minimap2 itself (e.g. `NM`, `ts`) and tags referring to BAM header lines (`RG`, `PG`) are not copied.
-
 
 ## Specifying input data via yaml file
 
