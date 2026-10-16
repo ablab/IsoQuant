@@ -65,21 +65,22 @@ Fresh vs resume (`isoquant.py`):
 - **Post-construct (always runs)**: `report_construction_stats` sums per-chr `_read_stat` / `_transcript_stat`
   (under the saves prefix), prints "Read assignment statistics" / "Transcript model statistics" (TestMode greps
   them), fills the run summary.
-9. `merge` (parent marker) with units `merge/<unit>`:
+9. `merge` (parent marker) with one stage per output, `merge/<output>` (built by `merge_printer_output`,
+   `merge_gtf`, `merge_counter`, `merge_training_csv` in `DatasetProcessor.merge_outputs`):
    `read_info`, `assignments`, `corrected_bed`, `sqanti_t2t`, `polya_training`, `tss_training`, `gtf`,
-   `extended_gtf`, `model_reads`, and **two units per counter**: `merge/counter/<basename>` (truncate + merge counts
+   `extended_gtf`, `model_reads`, and **two stages per counter**: `merge/counter/<basename>` (truncate + merge counts
    and stats rows; cleanup keeps `.usable`) and `merge/counter_finalize/<basename>` (`load_usable_fragments` +
    `finalize`: TPM/matrix/MTX/loom; cleanup removes `.usable`). Merging is mechanical; conversion depends on
    options and group count.
    - **Counter constructors never write anything.** Each counter lists the files it appends to in
      `output_paths()` (default `[output_file]`; `TerminalCounter` adds its training CSV), and the counting
      (per-chromosome) aggregator empties them all once at the end of its `__init__` (`empty_counter_outputs`).
-     The merge aggregator is built with `truncate_outputs=False`: no printers, nothing emptied. Each merge unit
+     The merge aggregator is built with `truncate_outputs=False`: no printers, nothing emptied. Each merge stage
      empties only its own final output, so a rerun cannot empty a finished one -- and a new counter is safe by
      default (forgetting an extra file in `output_paths()` can only leave stale rows in a chromosome piece rerun
      after a crash, never empty a finished output).
    - Units close outputs before their marker (`close()` on printers, `with` in `merge_counts`).
-   - `merge_files` / `merge_counts` take `remove_inputs` (units pass False) and `fragment_dir`.
+   - `merge_files` / `merge_counts` take `remove_inputs` (merge stages pass False) and `fragment_dir`.
    - Unit names come from counter file names, which depend on the string pools, hence the parent marker.
 10. **Finish**: run summary, compress barcode tables; then `process_all_samples` marks `sample/<prefix>` and
     **after the marker** deletes shared intermediates by glob (`remove_sample_intermediates`, also for skipped
@@ -101,7 +102,7 @@ deletes them as before, D9).
 - Close every output before returning: the marker is written right after.
 - New counter: write nothing in `__init__`; if it appends to more files than `output_file`, list them in
   `output_paths()`. New printer in `ReadAssignmentAggregator._init_printers`: None/Void when
-  `truncate_outputs=False` (printers open their file when built), plus a merge unit that opens, merges and
+  `truncate_outputs=False` (printers open their file when built), plus a merge stage that opens, merges and
   closes only its own final file.
 
 Per-chromosome completion lines ("Finished processing chromosome", "PCR duplicates filtered for chromosome") are
@@ -129,4 +130,4 @@ intermediate files for" (after collect).
 - Developer training mode no longer leaves an empty `<p>.polyA_prediction.tsv.training.csv` in the output dir.
 - Per-chr fragments never appear in the output dir; chromosome ids containing `/` are now made file-name safe
   everywhere (merges, UMI filtered reads / allinfo fragments, read-group splits).
-- Log order changes (summary stats are printed after construction, merge logs per unit).
+- Log order changes (summary stats are printed after construction, merge logs per stage).

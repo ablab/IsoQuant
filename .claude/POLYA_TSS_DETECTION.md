@@ -274,7 +274,7 @@ inference to training-feature emission. In that mode `dump()` runs
 the same peak-detection + feature-extraction pipeline but skips the
 XGBoost `predict()` call and appends per-peak rows
 (`FEATURE_COLUMNS + ['chromosome', 'true_peak']`) to a per-chr CSV
-next to the per-chr prediction TSV. `dataset_processor.training_unit`
+next to the per-chr prediction TSV. `dataset_processor.merge_training_csv`
 concatenates fragments into the user-supplied PATH and removes the
 per-chr files. Grouped counters are skipped entirely in training
 mode. Predictions emit a header-only TSV.

@@ -541,10 +541,10 @@ class DatasetProcessor:
     def merge_outputs(self, sample, store: CheckpointStore) -> None:
         """Merge the per-chromosome fragments into the final outputs, one stage per output.
 
-        Every unit opens (and truncates) only its own output, and the aggregator is built
-        with truncate_outputs=False, so rerunning a unit cannot empty an output finished
-        before. Fragments are removed by each unit after its marker. A parent marker skips
-        everything, including building the aggregator (unit names depend on its string pools).
+        Every merge stage opens (and truncates) only its own output, and the aggregator is built
+        with truncate_outputs=False, so rerunning a stage cannot empty an output finished
+        before. Fragments are removed by each stage after its marker. A parent marker skips
+        everything, including building the aggregator (stage names depend on its string pools).
         """
         if store.is_done("merge"):
             logger.info("merge: done in the previous run, skipping")
@@ -568,7 +568,8 @@ class DatasetProcessor:
         def fragments_of(file_name: str) -> List[str]:
             return merge_file_list(file_name, label, chr_ids, fragment_dir)
 
-        def text_unit(name: str, enabled: bool, final_name: str, make_printer, header_lines: Optional[int],
+        # one merge stage: concatenate the per-chr pieces of a printer output (TSV/BED) into its final file
+        def merge_printer_output(name: str, enabled: bool, final_name: str, make_printer, header_lines: Optional[int],
                       message: str) -> None:
             def run() -> None:
                 printer = make_printer()
@@ -581,27 +582,27 @@ class DatasetProcessor:
                       enabled=enabled, keep_tmp=keep_tmp)
 
         genedb = bool(self.args.genedb)
-        text_unit("read_info", genedb and large_output_enabled(self.args, "read_info"), sample.out_read_info_tsv,
+        merge_printer_output("read_info", genedb and large_output_enabled(self.args, "read_info"), sample.out_read_info_tsv,
                   lambda: ReadInfoPrinter(sample.out_read_info_tsv, self.args, self.io_support,
                                           additional_header=aggregator.common_header, gzipped=self.args.gzipped),
                   3, "Read info is stored in ")
-        text_unit("assignments", genedb and large_output_enabled(self.args, "read_assignments"), sample.out_assigned_tsv,
+        merge_printer_output("assignments", genedb and large_output_enabled(self.args, "read_assignments"), sample.out_assigned_tsv,
                   lambda: BasicTSVAssignmentPrinter(sample.out_assigned_tsv, self.args, self.io_support,
                                                     additional_header=aggregator.common_header,
                                                     gzipped=self.args.gzipped),
                   3, "Read assignments are stored in ")
-        text_unit("corrected_bed", large_output_enabled(self.args, "corrected_bed"), sample.out_corrected_bed,
+        merge_printer_output("corrected_bed", large_output_enabled(self.args, "corrected_bed"), sample.out_corrected_bed,
                   lambda: BEDPrinter(sample.out_corrected_bed, self.args, print_corrected=True,
                                      gzipped=self.args.gzipped),
                   None, "Corrected read alignments are stored in ")
-        text_unit("sqanti_t2t", bool(self.args.sqanti_output), sample.out_t2t_tsv,
+        merge_printer_output("sqanti_t2t", bool(self.args.sqanti_output), sample.out_t2t_tsv,
                   lambda: SqantiTSVPrinter(sample.out_t2t_tsv, self.args, self.io_support),
                   1, "SQANTI-like novel vs known comparison is stored in ")
 
-        self.training_unit(store, "polya_training", getattr(self.args, "collect_polya_training", None),
+        self.merge_training_csv(store, "polya_training", getattr(self.args, "collect_polya_training", None),
                            sample.out_polya_prediction_tsv + TRAINING_SUFFIX, label, chr_ids, fragment_dir)
         tss_csv = getattr(self.args, "collect_tss_training", None) if self.args.fl_data else None
-        self.training_unit(store, "tss_training", tss_csv,
+        self.merge_training_csv(store, "tss_training", tss_csv,
                            sample.out_tss_prediction_tsv + TRAINING_SUFFIX, label, chr_ids, fragment_dir)
 
         unaligned = self.alignment_stat_counter.stats_dict.get(AlignmentType.unaligned, 0)
@@ -616,14 +617,15 @@ class DatasetProcessor:
                     logger.info("Grouped counts are saves to: " + counter.output_counts_file_name)
             logger.info("Counts can be converted to other formats using isoquant_lib/quantification/convert_grouped_counts.py")
         for counter in aggregator.global_counter.counters:
-            self.counter_units(store, counter, label, chr_ids, fragment_dir, unaligned, finalize=genedb)
+            self.merge_counter(store, counter, label, chr_ids, fragment_dir, unaligned, finalize=genedb)
 
         if construct:
             exon_id_storage = FeatureIdStorage(SimpleIDDistributor())
             gff_name = os.path.join(sample.out_dir, sample.prefix + ".transcript_models.gtf")
             extended_gff_name = os.path.join(sample.out_dir, sample.prefix + ".extended_annotation.gtf")
 
-            def gtf_unit(name: str, enabled: bool, final_name: str, gtf_suffix: str, message: str) -> None:
+            # one merge stage: concatenate the per-chr GTF pieces under a fresh GTF header
+            def merge_gtf(name: str, enabled: bool, final_name: str, gtf_suffix: str, message: str) -> None:
                 def run() -> None:
                     gff_printer = GFFPrinter(sample.out_dir, sample.prefix, exon_id_storage,
                                              gtf_suffix=gtf_suffix, header=self.common_header)
@@ -635,13 +637,13 @@ class DatasetProcessor:
                           cleanup=lambda: remove_files(fragments_of(final_name)),
                           enabled=enabled, keep_tmp=keep_tmp)
 
-            gtf_unit("gtf", True, gff_name, ".transcript_models.gtf", "Transcript model file ")
-            gtf_unit("extended_gtf", genedb, extended_gff_name, ".extended_annotation.gtf",
+            merge_gtf("gtf", True, gff_name, ".transcript_models.gtf", "Transcript model file ")
+            merge_gtf("extended_gtf", genedb, extended_gff_name, ".extended_annotation.gtf",
                      "Extended annotation is saved to ")
             # Per-chr model read_info files carry common_header (2) + column header
             # (1) = 3 header lines, matching the main read_info merge. The base
             # (ungzipped) path names the per-chr files; the final handle may be gzip.
-            text_unit("model_reads", large_output_enabled(self.args, "read2transcripts"),
+            merge_printer_output("model_reads", large_output_enabled(self.args, "read2transcripts"),
                       sample.out_transcript_model_reads_tsv,
                       lambda: ReadInfoPrinter(sample.out_transcript_model_reads_tsv, self.args, IOSupport(self.args),
                                               additional_header=self.common_header, gzipped=self.args.gzipped),
@@ -656,14 +658,15 @@ class DatasetProcessor:
                     logger.info("Grouped counts for discovered transcript models are saves to: " +
                                 counter.output_counts_file_name)
             for counter in aggregator.transcript_model_global_counter.counters:
-                self.counter_units(store, counter, label, chr_ids, fragment_dir, unaligned, finalize=True)
+                self.merge_counter(store, counter, label, chr_ids, fragment_dir, unaligned, finalize=True)
             for counter in aggregator.gene_model_global_counter.counters:
-                self.counter_units(store, counter, label, chr_ids, fragment_dir, 0, finalize=True)
+                self.merge_counter(store, counter, label, chr_ids, fragment_dir, 0, finalize=True)
 
         # fragments of disabled outputs, if any, go with aux/per_chr once the sample is complete
         mark_stage_done(store, "merge")
 
-    def counter_units(self, store: CheckpointStore, counter, label: str, chr_ids: List[str],
+    # two merge stages per counter: concatenate its per-chr counts, then convert (TPM/matrix/MTX/loom)
+    def merge_counter(self, store: CheckpointStore, counter, label: str, chr_ids: List[str],
                       fragment_dir: str, unaligned: int, finalize: bool) -> None:
         """Two stages per counter: a mechanical merge of the fragments, then the conversion
         (TPM, matrix, MTX, loom), which depends on the options and the number of groups."""
@@ -690,7 +693,8 @@ class DatasetProcessor:
                   cleanup=lambda: remove_files(usable_fragment_list(counter, label, chr_ids, fragment_dir)),
                   enabled=finalize, keep_tmp=keep_tmp)
 
-    def training_unit(self, store: CheckpointStore, name: str, csv_path: Optional[str], fragment_base: str,
+    # one merge stage: concatenate the per-chr polyA/TSS training CSVs (developer option)
+    def merge_training_csv(self, store: CheckpointStore, name: str, csv_path: Optional[str], fragment_base: str,
                       label: str, chr_ids: List[str], fragment_dir: str) -> None:
         """Developer training-data collection: concatenate the per-chromosome training
         fragments (written by TerminalCounter._dump_training_features) into the CSV."""
