@@ -15,7 +15,7 @@
 # The SC data comes from prepare_sc_resume_data.sh.
 #
 # Killing on a log line is not exact: other workers keep running for the few milliseconds the
-# line takes to arrive, so after every partial run the expected checkpoint markers are checked
+# line takes to arrive, so after every partial run the expected checkpoints are checked
 # (expect / expect_count) and the script fails if a scenario drifted (e.g. SC4 getting
 # collect.done would silently turn it into "after collect"). "check" only runs these checks
 # against the stored data.
@@ -55,26 +55,26 @@ complete() {
     $ISOQUANT -o "$RESUME_DIR/$name" "$@" > "$RESUME_DIR/$name.run.log" 2>&1
 }
 
-# expect <name> <marker path relative to the run> <present|absent> [<marker> <state>]...
+# expect <name> <checkpoint path relative to the run> <present|absent> [<checkpoint> <state>]...
 expect() {
     local run=$1; shift
     while [ $# -gt 0 ]; do
-        local marker=$1 state=$2; shift 2
-        if [ -f "$RESUME_DIR/$run/$marker" ]; then local found=present; else local found=absent; fi
+        local checkpoint=$1 state=$2; shift 2
+        if [ -f "$RESUME_DIR/$run/$checkpoint" ]; then local found=present; else local found=absent; fi
         if [ "$found" != "$state" ]; then
-            echo "ERROR: $run: $marker is $found, expected $state -- regenerate this partial run" >&2
+            echo "ERROR: $run: $checkpoint is $found, expected $state -- regenerate this partial run" >&2
             exit 4
         fi
     done
-    echo "    $run: markers as expected"
+    echo "    $run: checkpoints as expected"
 }
 
-# expect_count <name> <marker dir relative to the run> <number of *.done markers in it>
+# expect_count <name> <checkpoint dir relative to the run> <number of *.done checkpoints in it>
 expect_count() {
     local n
     n=$(find "$RESUME_DIR/$1/$2" -maxdepth 1 -name '*.done' 2>/dev/null | wc -l)
     if [ "$n" != "$3" ]; then
-        echo "ERROR: $1: $n markers in $2, expected $3 -- regenerate this partial run" >&2
+        echo "ERROR: $1: $n checkpoints in $2, expected $3 -- regenerate this partial run" >&2
         exit 4
     fi
 }
@@ -93,16 +93,16 @@ generate_sirv() {
     # in model construction
     partial SRIV.Set4.ONT_R10.resume2 --stop "Gene and transcript records have unequal strands: SIRV5: -, SIRV504: +" \
         -- "${opts[@]}" --bam $bam
-    expect SRIV.Set4.ONT_R10.resume2 $s/collect.done present $s/construct.done absent
-    # read collection finished (marker written, before construction)
+    expect SRIV.Set4.ONT_R10.resume2 $s/collect.done present $s/process_assigned_reads.done absent
+    # read collection finished (checkpoint written, before assignment processing)
     partial SRIV.Set4.ONT_R10.resume3 --stop "To keep these intermediate files for" \
         -- "${opts[@]}" --bam $bam
-    expect SRIV.Set4.ONT_R10.resume3 $s/collect.done present $s/construct.done absent
+    expect SRIV.Set4.ONT_R10.resume3 $s/collect.done present $s/process_assigned_reads.done absent
     # in model construction, with extra outputs
     partial SRIV.Set4.ONT_R10.resume4 --after "Processing assigned reads" --stop "Finished processing chromosome" \
         -- "${opts[@]}" --bam $bam --count_exons --sqanti_output --check_canonical
-    expect_count SRIV.Set4.ONT_R10.resume4 $s/construct 1
-    expect SRIV.Set4.ONT_R10.resume4 $s/construct.done absent
+    expect_count SRIV.Set4.ONT_R10.resume4 $s/process_assigned_reads 1
+    expect SRIV.Set4.ONT_R10.resume4 $s/process_assigned_reads.done absent
     # in read collection, two BAM files
     partial SRIV.Set4.ONT_R10.resume_group1 --after "Collecting read alignments" --stop "Finished processing chromosome" \
         -- "${opts[@]}" --bam $DATA/groups/Lexogen.SIRVs.Set4.ONT_cDNA.R10.4.grouped.group0.bam \
@@ -153,11 +153,11 @@ generate_sc() {
     # in assignment processing / construction, 2 of 4 chromosomes done
     partial Mouse.10x.4chr.resume_sc7 --after "Processing assigned reads" --stop "Finished processing chromosome" \
         --occurrence 2 -- "${opts[@]}" "${one[@]}"
-    expect_count Mouse.10x.4chr.resume_sc7 $s/construct 2
-    expect Mouse.10x.4chr.resume_sc7 $s/dedup_bam.done present $s/construct.done absent
+    expect_count Mouse.10x.4chr.resume_sc7 $s/process_assigned_reads 2
+    expect Mouse.10x.4chr.resume_sc7 $s/dedup_bam.done present $s/process_assigned_reads.done absent
     # in the merge: gene counts converted, transcript counts not
     partial Mouse.10x.4chr.resume_sc8 --stop "Matrix was saved to 3 files" -- "${opts[@]}" "${one[@]}"
-    expect Mouse.10x.4chr.resume_sc8 $s/construct.done present \
+    expect Mouse.10x.4chr.resume_sc8 $s/process_assigned_reads.done present \
         $s/merge/counter_finalize/$p.gene_counts.tsv.done present \
         $s/merge/counter_finalize/$p.gene_grouped_barcode_counts.linear.tsv.done absent $s/merge.done absent
     # all outputs and the summary written, experiment not marked complete, nothing cleaned up

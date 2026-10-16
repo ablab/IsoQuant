@@ -461,12 +461,12 @@ Each run is stopped by `run_until.py`:
 - `--after` lines (in order) arm the stop, `--occurrence N` picks the N-th match after that -- needed
   because e.g. "Finished processing chromosome" is printed by both read collection and construction;
 - exit code 3 when the run ends before the stop point, so a finished run is never stored as partial;
-- per-chromosome completion lines are logged after the chromosome's marker, so "killed after the 2nd
+- per-chromosome completion lines are logged after the chromosome's checkpoint, so "killed after the 2nd
   `Finished processing chromosome`" means 2 chromosomes are marked;
 - `--log` keeps the output (`<name>.run_until.log` next to the partial run).
 
 Killing on a log line is not exact (other workers keep running while the line travels through the pipe),
-so after every partial run `generate_resume_test.sh` checks the expected checkpoint markers (`expect`,
+so after every partial run `generate_resume_test.sh` checks the expected checkpoints (`expect`,
 `expect_count`) and exits with 4 if a scenario drifted, e.g. SC4 ("all chromosomes collected, `collect` not
 marked") getting `collect.done` would otherwise silently duplicate SC5's starting state.
 `generate_resume_test.sh <isoquant_dir> check` only runs these checks against the stored data.
@@ -491,7 +491,7 @@ and `SC.Mouse.10x.4chr.2samples.allinfo` (YAML input, experiments S1/S2), which 
 | `RESUME_SC6` | deduplicated BAM, 2 of 4 fragments |
 | `RESUME_SC7` | assignment processing, 2 of 4 chromosomes |
 | `RESUME_SC8` | merge: gene counts converted, transcript counts not |
-| `RESUME_SC9` | after the run summary, before the sample marker and cleanup |
+| `RESUME_SC9` | after the run summary, before the sample checkpoint and cleanup |
 | `RESUME_SC10` | not killed: resuming a finished run |
 | `RESUME_SC_2S` | 2 experiments: S1 complete (must be skipped), S2 in read collection |
 
