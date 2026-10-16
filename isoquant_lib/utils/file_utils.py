@@ -140,7 +140,7 @@ def merge_file_list(fname: str, label: str, chr_ids, fragment_dir: Optional[str]
     # "...transcript...") and reconstruct the wrong per-chr name, silently
     # dropping counts and crashing on the missing files.
     # The chromosome id is made file-name safe exactly like the writers do, and the
-    # fragments live in fragment_dir (aux/per_chr) when it is given.
+    # fragments live in fragment_dir (aux/chr_fragments) when it is given.
     directory, base = os.path.split(fname)
     if fragment_dir is not None:
         directory = fragment_dir
@@ -159,7 +159,7 @@ def merge_files(file_name, label, chr_ids, merged_file_handler, copy_header=True
     """Concatenate the per-chromosome fragments of file_name into merged_file_handler.
 
     Returns the fragment names; with remove_inputs=False they are kept, so the caller can
-    delete them only after its checkpoint marker is written.
+    delete them only after its checkpoint is written.
     """
     file_names = merge_file_list(file_name, label, chr_ids, fragment_dir)
     file_names.sort(key=lambda s: [int(t) if t.isdigit() else t.lower() for t in re.split(r"(\d+)", s)])

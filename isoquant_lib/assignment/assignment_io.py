@@ -82,7 +82,7 @@ class TextFileAssignmentPrinter(AbstractAssignmentPrinter):
             self.output_file.flush()
 
     def close(self):
-        # a checkpoint marker follows right after, so the (possibly gzipped) stream
+        # a checkpoint follows right after, so the (possibly gzipped) stream
         # must be complete on disk; closing twice is harmless
         self.output_file.close()
 

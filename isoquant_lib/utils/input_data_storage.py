@@ -57,10 +57,10 @@ class SampleData:
         return os.path.join(self.chr_fragment_dir, name)
 
     def _init_paths(self):
-        # resume markers of this experiment's stages (see isoquant_lib/utils/checkpoints.py)
+        # resume checkpoints of this experiment's stages (see isoquant_lib/utils/checkpoints.py)
         self.checkpoint_dir = self._make_aux_path("checkpoints")
         # per-chromosome fragments of the merged outputs, removed once each output is merged
-        self.chr_fragment_dir = self._make_aux_path("per_chr")
+        self.chr_fragment_dir = self._make_aux_path("chr_fragments")
         self.out_assigned_tsv = self._make_path(self.prefix + ".read_assignments.tsv")
         self.out_read_info_tsv = self._make_path(self.prefix + ".read_info.tsv")
         self.out_transcript_model_reads_tsv = self._make_path(self.prefix + ".transcript_model_reads.tsv")

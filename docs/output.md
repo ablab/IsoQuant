@@ -241,8 +241,8 @@ Additionally, an `isoquant.log` log file will be saved to the output directory.
 
 If raw reads were provided, BAM file(s) will be stored in `<output_dir>/<SAMPLE_ID>/aux/`.  
 In case `--keep_tmp` option was specified this directory will also contain temporary files, 
-including per-chromosome pieces of the final outputs in `<output_dir>/<SAMPLE_ID>/aux/per_chr/`.
+including per-chromosome pieces of the final outputs in `<output_dir>/<SAMPLE_ID>/aux/chr_fragments/`.
 
-`<output_dir>/checkpoints/` and `<output_dir>/<SAMPLE_ID>/aux/checkpoints/` hold the markers `--resume` uses 
+`<output_dir>/checkpoints/` and `<output_dir>/<SAMPLE_ID>/aux/checkpoints/` hold the checkpoints `--resume` uses 
 to skip finished stages; experiment names cannot be `checkpoints`.
 

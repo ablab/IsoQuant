@@ -343,7 +343,7 @@ Caveats:
   ./isoquant.py --reference <fa> --genedb <gtf> --bam <bam> \
                 --data_type nanopore --dump_intron_graphs -o <out>
   ```
-- When running with `--resume`, the `construct/<chr>` markers in
+- When running with `--resume`, the `process_assigned_reads/<chr>` checkpoints in
   `<sample>/aux/checkpoints/` short-circuit model construction and no new
   dumps are produced — delete them (or rerun without `--resume`) to regenerate.
 

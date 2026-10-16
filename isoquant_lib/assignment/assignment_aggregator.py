@@ -39,12 +39,13 @@ logger = logging.getLogger('IsoQuant')
 
 class ReadAssignmentAggregator:
     def __init__(self, args, sample, string_pools, gffutils_db=None, chr_id=None, gzipped=False, grouping_strategy_names=None,
-                 truncate_outputs: bool = True):
-        # truncate_outputs=False is the merge driver's mode: no printer is opened and no
-        # counter output is emptied, so building the aggregator has no filesystem side
-        # effects and a resumed merge cannot empty an output that was already finished
+                 for_merge: bool = False):
+        # for_merge=True is the merge driver's mode: no printer is opened and no counter
+        # output is emptied, so building the aggregator has no filesystem side effects and
+        # a resumed merge cannot empty an output that was already finished. Otherwise this
+        # is a counting (per-chromosome) aggregator, which owns and empties its outputs.
         self.args = args
-        self.truncate_outputs = truncate_outputs
+        self.for_merge = for_merge
         self.string_pools = string_pools
         self.grouping_strategy_names = grouping_strategy_names if grouping_strategy_names else ["default"]
         self.common_header = "# Command line: " + args._cmd_line + "\n# IsoQuant version: " + args._version + "\n"
@@ -62,7 +63,7 @@ class ReadAssignmentAggregator:
         self._init_ungrouped_counters(sample, chr_id)
         self._init_grouped_counters(sample, chr_id)
         self._init_grouped_model_counters(sample, chr_id)
-        if self.truncate_outputs:
+        if not self.for_merge:
             self.empty_counter_outputs()
 
     def all_counters(self) -> CompositeCounter:
@@ -76,14 +77,14 @@ class ReadAssignmentAggregator:
         default: the merge builds the same counters for outputs that may be finished
         already (see .claude/RESUME_CHECKPOINTS.md) and must not touch them.
         """
-        for path in self.all_counters().output_paths():
+        for path in self.all_counters().files_to_empty_before_counting():
             open(path, "w").close()
 
     # ------------------------------------------------------------------ printers
 
     def _init_printers(self, sample, chr_id, gzipped):
         printer_list = []
-        if not self.truncate_outputs:
+        if self.for_merge:
             # printers open (and empty) their file when built, so the merge builds its own
             self.corrected_bed_printer = None
             self.read_info_printer = None

@@ -39,8 +39,8 @@ from isoquant_lib.utils.file_utils import (merge_files, merge_counts, merge_file
                                           load_usable_fragments, usable_fragment_list,
                                           open_text_write, read_stats_tsv, remove_files,
                                           resolve_optionally_gzipped)
-from isoquant_lib.utils.checkpoints import (CheckpointStore, enum_stats_to_payload, mark_stage_done, marker_name,
-                                           payload_to_enum_stats, run_checkpoint_dir, run_stage)
+from isoquant_lib.utils.checkpoints import (CheckpointStore, enum_stats_to_state, mark_done_with_debug_hook, checkpoint_name,
+                                           state_to_enum_stats, run_checkpoint_dir, run_stage)
 from isoquant_lib.utils.bam_utils import (PLACEHOLDERS, collect_unmapped_read_ids,
                                          load_barcode_umi_tags, merge_bam_files,
                                          references_with_alignments, write_unmapped_bam)
@@ -125,8 +125,8 @@ class DatasetProcessor:
         self.run_summary: Optional[RunSummary] = None
         # each experiment derives its polyA requirements from the options as given,
         # never from the flags the previous experiment left in args
-        self.original_require_monointronic_polya = args.require_monointronic_polya
-        self.original_require_monoexonic_polya = args.require_monoexonic_polya
+        self.user_defined_require_monointronic_polya = args.require_monointronic_polya
+        self.user_defined_require_monoexonic_polya = args.require_monoexonic_polya
 
         if args.genedb:
             logger.info("Loading gene database from " + self.args.genedb)
@@ -147,21 +147,21 @@ class DatasetProcessor:
     def __del__(self):
         pass
 
-    def sample_store(self, sample: SampleData) -> CheckpointStore:
+    def sample_checkpoints(self, sample: SampleData) -> CheckpointStore:
         return CheckpointStore(sample.checkpoint_dir, self.args.resume)
 
     def process_all_samples(self, input_data):
         logger.info("Processing " + proper_plural_form("experiment", len(input_data.samples)))
         logger.info("Secondary alignments will%s be used" % ("" if self.args.use_secondary else " not"))
-        run_store = CheckpointStore(run_checkpoint_dir(self.args.output), self.args.resume)
+        run_checkpoints = CheckpointStore(run_checkpoint_dir(self.args.output), self.args.resume)
         for sample in input_data.samples:
-            sample_marker = marker_name("sample", sample.prefix)
-            if run_store.is_done(sample_marker):
+            sample_checkpoint = checkpoint_name("sample", sample.prefix)
+            if run_checkpoints.is_done(sample_checkpoint):
                 logger.info("Experiment %s was completed during the previous run, skipping" % sample.prefix)
             else:
                 self.process_sample(sample)
-                mark_stage_done(run_store, sample_marker)
-            # after the sample marker only: a crash before it must find every intermediate
+                mark_done_with_debug_hook(run_checkpoints, sample_checkpoint)
+            # after the sample checkpoint only: a crash before it must find every intermediate
             self.remove_sample_intermediates(sample)
         logger.info("Processed " + proper_plural_form("experiment", len(self.input_data.samples)))
 
@@ -189,7 +189,7 @@ class DatasetProcessor:
         state later steps need, whichever stages the previous run already finished.
         """
         logger.info("Processing experiment " + sample.prefix)
-        store = self.sample_store(sample)
+        checkpoints = self.sample_checkpoints(sample)
         keep_tmp = self.args.keep_tmp
 
         # ---- prologue (always runs)
@@ -234,15 +234,15 @@ class DatasetProcessor:
             split_barcodes_dict = {chr_id: sample.get_barcodes_split_file(chr_id) for chr_id in split_chr_ids}
 
         # ---- input preparation stages
-        run_stage(store, "read_groups_split", run=lambda: prepare_read_groups(self.args, sample))
-        run_stage(store, "polya_split", run=lambda: self.split_external_polya(sample),
+        run_stage(checkpoints, "read_group_split", run=lambda: prepare_read_groups(self.args, sample))
+        run_stage(checkpoints, "polya_split", run=lambda: self.split_external_polya(sample),
                   cleanup=lambda: remove_files([sample.polya_reads_normalized]),
                   enabled=self.args.polya_trimmed.uses_read_table() and not self.args.read_assignments,
                   keep_tmp=keep_tmp)
-        run_stage(store, "barcode_split", run=lambda: self.split_read_barcode_table(sample, split_barcodes_dict),
+        run_stage(checkpoints, "barcode_split", run=lambda: self.split_read_barcode_table(sample, split_barcodes_dict),
                   enabled=uses_barcode_table)
         # nothing to tag with otherwise; the user was warned about that at startup
-        run_stage(store, "tagged_bam", run=lambda: self.write_tagged_bam(sample, tagged_bam_references) and None,
+        run_stage(checkpoints, "tagged_bam", run=lambda: self.write_tagged_bam(sample, tagged_bam_references) and None,
                   enabled=uses_barcode_table and tagged_bam_references is not None)
 
         # ---- read collection and UMI filtering
@@ -250,7 +250,7 @@ class DatasetProcessor:
             saves_file = self.args.read_assignments[0]
             logger.info('Using read assignments from {}*'.format(saves_file))
         else:
-            run_stage(store, "collect", run=lambda: self.collect_reads(sample, store),
+            run_stage(checkpoints, "collect", run=lambda: self.collect_reads(sample, checkpoints),
                       restore=self.restore_collection_stats)
             saves_file = sample.out_raw_file
             logger.info('Read assignments files saved to {}*. '.
@@ -259,9 +259,9 @@ class DatasetProcessor:
                 logger.info("To keep these intermediate files for debug purposes use --keep_tmp flag")
 
             if self.args.mode.needs_pcr_deduplication():
-                self.filter_umis(sample, store)
+                self.filter_umis(sample, checkpoints)
                 # the survivors files live under out_raw_file and are deleted with the sample intermediates
-                run_stage(store, "dedup_bam", run=lambda: self.write_deduplicated_bam(sample) and None,
+                run_stage(checkpoints, "dedup_bam", run=lambda: self.write_deduplicated_bam(sample) and None,
                           enabled=large_output_enabled(self.args, "deduplicated_bam"))
 
         # ---- derive (always runs)
@@ -291,17 +291,17 @@ class DatasetProcessor:
         # derived from the options as given, not from the previous experiment's flags
         self.args.require_monointronic_polya = set_polya_requirement_strategy(
             # do not require polyA tails for mono-intronic only if the data is reliable and polyA percentage is low
-            self.original_require_monointronic_polya or self.args.requires_polya_for_construction,
+            self.user_defined_require_monointronic_polya or self.args.requires_polya_for_construction,
             self.args.polya_requirement_strategy)
         self.args.require_monoexonic_polya = set_polya_requirement_strategy(
             # do not require polyA tails for mono-intronic only if the data is reliable and polyA percentage is low
-            self.original_require_monoexonic_polya or self.args.requires_polya_for_construction,
+            self.user_defined_require_monoexonic_polya or self.args.requires_polya_for_construction,
             self.args.polya_requirement_strategy)
 
         # ---- transcript model construction and quantification
-        run_stage(store, "construct", run=lambda: self.construct_models(sample, saves_file, store))
-        self.report_construction_stats(saves_file)
-        self.merge_outputs(sample, store)
+        run_stage(checkpoints, "process_assigned_reads", run=lambda: self.process_assigned_reads(sample, saves_file, checkpoints))
+        self.report_assignment_stats(saves_file)
+        self.merge_outputs(sample, checkpoints)
 
         # ---- finish
         self.write_run_summary(sample)
@@ -391,10 +391,10 @@ class DatasetProcessor:
     def get_chr_list(self):
         return self.chr_ids
 
-    def collect_reads(self, sample, store: CheckpointStore) -> Dict:
+    def collect_reads(self, sample, checkpoints: CheckpointStore) -> Dict:
         """The collect stage: per-chromosome alignment processing, multimapper resolution.
 
-        Returns the alignment statistics as the stage payload; a resumed run restores them
+        Returns the alignment statistics as the stage state; a resumed run restores them
         with restore_collection_stats, everything else is read back from the _info file.
         """
         logger.info('Collecting read alignments')
@@ -415,7 +415,7 @@ class DatasetProcessor:
             itertools.repeat(chr_ids),
             itertools.repeat(self.args),
             itertools.repeat(processed_read_manager_type),
-            itertools.repeat(store),
+            itertools.repeat(checkpoints),
             itertools.repeat("collect"),
         )
 
@@ -484,20 +484,20 @@ class DatasetProcessor:
         else:
             logger.info('Finishing read assignment, total assignments %d, polyA percentage %.1f' %
                         (total_assignments, 100 * polya_assignments / total_assignments))
-        return {"alignment_stats": enum_stats_to_payload(self.alignment_stat_counter.stats_dict),
+        return {"alignment_stats": enum_stats_to_state(self.alignment_stat_counter.stats_dict),
                 "covers_all_reads": covers_all_reads}
 
-    def restore_collection_stats(self, payload: Optional[Dict]) -> None:
+    def restore_collection_stats(self, state: Optional[Dict]) -> None:
         """Re-apply what a skipped collect stage would have left in memory."""
-        if not payload:
+        if not state:
             return
-        for element, count in payload_to_enum_stats(payload["alignment_stats"], AlignmentType).items():
+        for element, count in state_to_enum_stats(state["alignment_stats"], AlignmentType).items():
             self.alignment_stat_counter.add(element, count)
         self.alignment_stat_counter.print_start("Alignment statistics from the previous run:")
         self.run_summary.set_alignment_stats(self.alignment_stat_counter.stats_dict,
-                                             covers_all_reads=payload["covers_all_reads"])
+                                             covers_all_reads=state["covers_all_reads"])
 
-    def construct_models(self, sample, saves_file: str, store: CheckpointStore) -> None:
+    def process_assigned_reads(self, sample, saves_file: str, checkpoints: CheckpointStore) -> None:
         """The construct stage: per-chromosome assignment processing and model construction."""
         chr_ids = self.get_chr_list()
         logger.info("Processing assigned reads " + sample.prefix)
@@ -517,9 +517,9 @@ class DatasetProcessor:
             logger.info("  Splice site reporting level: %s" % self.args.report_canonical_strategy.name)
 
         self.map_over_chromosomes(construct_models_in_parallel, sample, chr_ids, saves_file, self.args,
-                                  store, "construct")
+                                  checkpoints, "process_assigned_reads")
 
-    def report_construction_stats(self, saves_file: str) -> None:
+    def report_assignment_stats(self, saves_file: str) -> None:
         """Post-construct step (always runs): sum the per-chromosome statistics files."""
         read_stat_counter = EnumStats()
         transcript_stat_counter = EnumStats()
@@ -536,15 +536,15 @@ class DatasetProcessor:
             transcript_stat_counter.print_start("Transcript model statistics")
             self.run_summary.set_transcript_model_stats(transcript_stat_counter.stats_dict)
 
-    def merge_outputs(self, sample, store: CheckpointStore) -> None:
+    def merge_outputs(self, sample, checkpoints: CheckpointStore) -> None:
         """Merge the per-chromosome fragments into the final outputs, one stage per output.
 
         Every merge stage opens (and truncates) only its own output, and the aggregator is built
-        with truncate_outputs=False, so rerunning a stage cannot empty an output finished
-        before. Fragments are removed by each stage after its marker. A parent marker skips
+        with for_merge=True, so rerunning a stage cannot empty an output finished
+        before. Fragments are removed by each stage after its checkpoint. A parent checkpoint skips
         everything, including building the aggregator (stage names depend on its string pools).
         """
-        if store.is_done("merge"):
+        if checkpoints.is_done("merge"):
             logger.info("merge: done in the previous run, skipping")
             return
         chr_ids = self.get_chr_list()
@@ -561,7 +561,7 @@ class DatasetProcessor:
                                               load_barcode_pool=False, load_tsv_pools=False)
         aggregator = ReadAssignmentAggregator(self.args, sample, string_pools, gzipped=self.args.gzipped,
                                               grouping_strategy_names=self.grouping_strategy_names,
-                                              truncate_outputs=False)
+                                              for_merge=True)
 
         def fragments_of(file_name: str) -> List[str]:
             return merge_file_list(file_name, label, chr_ids, fragment_dir)
@@ -575,7 +575,7 @@ class DatasetProcessor:
                             header_lines=header_lines, remove_inputs=False, fragment_dir=fragment_dir)
                 printer.close()
                 logger.info(message + printer.output_file_name)
-            run_stage(store, marker_name("merge", name), run=run,
+            run_stage(checkpoints, checkpoint_name("merge", name), run=run,
                       cleanup=lambda: remove_files(fragments_of(final_name)),
                       enabled=enabled, keep_tmp=keep_tmp)
 
@@ -597,10 +597,10 @@ class DatasetProcessor:
                   lambda: SqantiTSVPrinter(sample.out_t2t_tsv, self.args, self.io_support),
                   1, "SQANTI-like novel vs known comparison is stored in ")
 
-        self.merge_training_csv(store, "polya_training", getattr(self.args, "collect_polya_training", None),
+        self.merge_training_csv(checkpoints, "polya_training", getattr(self.args, "collect_polya_training", None),
                            sample.out_polya_prediction_tsv + TRAINING_SUFFIX, label, chr_ids, fragment_dir)
         tss_csv = getattr(self.args, "collect_tss_training", None) if self.args.fl_data else None
-        self.merge_training_csv(store, "tss_training", tss_csv,
+        self.merge_training_csv(checkpoints, "tss_training", tss_csv,
                            sample.out_tss_prediction_tsv + TRAINING_SUFFIX, label, chr_ids, fragment_dir)
 
         unaligned = self.alignment_stat_counter.stats_dict.get(AlignmentType.unaligned, 0)
@@ -615,7 +615,7 @@ class DatasetProcessor:
                     logger.info("Grouped counts are saves to: " + counter.output_counts_file_name)
             logger.info("Counts can be converted to other formats using isoquant_lib/quantification/convert_grouped_counts.py")
         for counter in aggregator.global_counter.counters:
-            self.merge_counter(store, counter, label, chr_ids, fragment_dir, unaligned, finalize=genedb)
+            self.merge_counter(checkpoints, counter, label, chr_ids, fragment_dir, unaligned, finalize=genedb)
 
         if construct:
             exon_id_storage = FeatureIdStorage(SimpleIDDistributor())
@@ -631,7 +631,7 @@ class DatasetProcessor:
                                 remove_inputs=False, fragment_dir=fragment_dir)
                     gff_printer.close()
                     logger.info(message + gff_printer.model_fname)
-                run_stage(store, marker_name("merge", name), run=run,
+                run_stage(checkpoints, checkpoint_name("merge", name), run=run,
                           cleanup=lambda: remove_files(fragments_of(final_name)),
                           enabled=enabled, keep_tmp=keep_tmp)
 
@@ -656,15 +656,15 @@ class DatasetProcessor:
                     logger.info("Grouped counts for discovered transcript models are saves to: " +
                                 counter.output_counts_file_name)
             for counter in aggregator.transcript_model_global_counter.counters:
-                self.merge_counter(store, counter, label, chr_ids, fragment_dir, unaligned, finalize=True)
+                self.merge_counter(checkpoints, counter, label, chr_ids, fragment_dir, unaligned, finalize=True)
             for counter in aggregator.gene_model_global_counter.counters:
-                self.merge_counter(store, counter, label, chr_ids, fragment_dir, 0, finalize=True)
+                self.merge_counter(checkpoints, counter, label, chr_ids, fragment_dir, 0, finalize=True)
 
-        # fragments of disabled outputs, if any, go with aux/per_chr once the sample is complete
-        mark_stage_done(store, "merge")
+        # fragments of disabled outputs, if any, go with aux/chr_fragments once the sample is complete
+        mark_done_with_debug_hook(checkpoints, "merge")
 
     # two merge stages per counter: concatenate its per-chr counts, then convert (TPM/matrix/MTX/loom)
-    def merge_counter(self, store: CheckpointStore, counter, label: str, chr_ids: List[str],
+    def merge_counter(self, checkpoints: CheckpointStore, counter, label: str, chr_ids: List[str],
                       fragment_dir: str, unaligned: int, finalize: bool) -> None:
         """Two stages per counter: a mechanical merge of the fragments, then the conversion
         (TPM, matrix, MTX, loom), which depends on the options and the number of groups."""
@@ -685,14 +685,14 @@ class DatasetProcessor:
             load_usable_fragments(counter, label, chr_ids, fragment_dir)
             counter.finalize(self.args)
 
-        run_stage(store, marker_name("merge", "counter", name), run=merge_run, cleanup=merge_cleanup,
+        run_stage(checkpoints, checkpoint_name("merge", "counter", name), run=merge_run, cleanup=merge_cleanup,
                   keep_tmp=keep_tmp)
-        run_stage(store, marker_name("merge", "counter_finalize", name), run=finalize_run,
+        run_stage(checkpoints, checkpoint_name("merge", "counter_finalize", name), run=finalize_run,
                   cleanup=lambda: remove_files(usable_fragment_list(counter, label, chr_ids, fragment_dir)),
                   enabled=finalize, keep_tmp=keep_tmp)
 
     # one merge stage: concatenate the per-chr polyA/TSS training CSVs (developer option)
-    def merge_training_csv(self, store: CheckpointStore, name: str, csv_path: Optional[str], fragment_base: str,
+    def merge_training_csv(self, checkpoints: CheckpointStore, name: str, csv_path: Optional[str], fragment_base: str,
                       label: str, chr_ids: List[str], fragment_dir: str) -> None:
         """Developer training-data collection: concatenate the per-chromosome training
         fragments (written by TerminalCounter._dump_training_features) into the CSV."""
@@ -701,18 +701,18 @@ class DatasetProcessor:
                 merge_files(fragment_base, label, chr_ids, fh, header_lines=1,
                             remove_inputs=False, fragment_dir=fragment_dir)
             logger.info("%s features written to %s" % (name, csv_path))
-        run_stage(store, marker_name("merge", name), run=run,
+        run_stage(checkpoints, checkpoint_name("merge", name), run=run,
                   cleanup=lambda: remove_files(merge_file_list(fragment_base, label, chr_ids, fragment_dir)),
                   enabled=bool(csv_path), keep_tmp=self.args.keep_tmp)
 
-    def filter_umis(self, sample, store: CheckpointStore) -> None:
+    def filter_umis(self, sample, checkpoints: CheckpointStore) -> None:
         """UMI deduplication: one stage per edit distance, then per barcode2barcode column."""
         keep_tmp = self.args.keep_tmp
         for i, edit_distance in enumerate(UMI_EDIT_DISTANCES[self.args.mode]):
-            stage_name = marker_name("umi", "ED%d" % edit_distance)
+            stage_name = checkpoint_name("umi", "ED%d" % edit_distance)
             output_prefix = umi_output_prefix(sample.out_umi_filtered, edit_distance)
-            run_stage(store, stage_name,
-                      run=partial(self.filter_umis_round, sample, store, stage_name, edit_distance,
+            run_stage(checkpoints, stage_name,
+                      run=partial(self.filter_umis_round, sample, checkpoints, stage_name, edit_distance,
                                   output_prefix, i == 0, None, None,
                                   "Filtering PCR duplicates with edit distance %d" % edit_distance),
                       cleanup=partial(self.remove_umi_fragments, sample.out_umi_filtered_tmp, edit_distance),
@@ -725,7 +725,7 @@ class DatasetProcessor:
         filename, barcode_col, spot_cols = parse_barcode2spot_spec(self.args.barcode2barcode)
         mapping_cache = {}
 
-        def barcode_remap(col_idx: int) -> Dict[str, str]:
+        def barcode_to_spot_mapping_for_column(col_idx: int) -> Dict[str, str]:
             if "full" not in mapping_cache:
                 mapping_cache["full"] = load_barcode2barcode_mapping(filename, barcode_col, spot_cols)
             return {bc: spots[col_idx] for bc, spots in mapping_cache["full"].items()
@@ -734,27 +734,27 @@ class DatasetProcessor:
         for col_idx in range(len(spot_cols)):
             bc2bc_prefix = umi_barcode2barcode_prefix(sample.out_umi_filtered_tmp, col_idx)
             for edit_distance in UMI_EDIT_DISTANCES[self.args.mode]:
-                stage_name = marker_name("umi_bc2bc", "col%d" % col_idx, "ED%d" % edit_distance)
+                stage_name = checkpoint_name("umi_barcode2barcode", "col%d" % col_idx, "ED%d" % edit_distance)
                 output_prefix = umi_output_prefix(
                     sample.out_umi_filtered + ".barcode_barcode_col%d" % col_idx, edit_distance)
 
                 def run(col_idx=col_idx, edit_distance=edit_distance, stage_name=stage_name,
                         output_prefix=output_prefix, bc2bc_prefix=bc2bc_prefix) -> None:
-                    self.filter_umis_round(sample, store, stage_name, edit_distance, output_prefix, False,
-                                           barcode_remap(col_idx), bc2bc_prefix,
+                    self.filter_umis_round(sample, checkpoints, stage_name, edit_distance, output_prefix, False,
+                                           barcode_to_spot_mapping_for_column(col_idx), bc2bc_prefix,
                                            "Filtering UMIs for barcode2barcode column %d with edit distance %d"
                                            % (col_idx, edit_distance))
-                run_stage(store, stage_name, run=run,
+                run_stage(checkpoints, stage_name, run=run,
                           cleanup=partial(self.remove_umi_fragments, bc2bc_prefix, edit_distance),
                           keep_tmp=keep_tmp)
 
-    def filter_umis_round(self, sample, store: CheckpointStore, stage_name: str, edit_distance: int,
+    def filter_umis_round(self, sample, checkpoints: CheckpointStore, stage_name: str, edit_distance: int,
                           output_prefix: str, output_filtered_reads: bool, barcode_remap: Optional[Dict[str, str]],
                           tmp_prefix: Optional[str], message: str) -> None:
         logger.info(message)
         logger.info("Results will be saved to %s" % output_prefix)
         results = self.map_over_chromosomes(filter_umis_in_parallel, sample, self.get_chr_list(), self.args,
-                                            edit_distance, store, stage_name, output_filtered_reads,
+                                            edit_distance, checkpoints, stage_name, output_filtered_reads,
                                             barcode_remap, tmp_prefix)
 
         stat_dict = defaultdict(int)

@@ -18,13 +18,13 @@ from isoquant_lib.utils.checkpoints import (
     CheckpointStore,
     DebugFailure,
     DEBUG_FAIL_ENV,
-    Payload,
+    StageState,
     RUN_RECORD,
     check_debug_failure,
-    check_resumable,
-    enum_stats_to_payload,
-    marker_name,
-    payload_to_enum_stats,
+    get_resume_incompatibility_reason,
+    enum_stats_to_state,
+    checkpoint_name,
+    state_to_enum_stats,
     run_stage,
     write_run_record,
 )
@@ -43,8 +43,8 @@ def fresh_and_resumed(root: str) -> tuple[CheckpointStore, CheckpointStore]:
 
 
 class TestCheckpointStore:
-    def test_payload_alias_is_runtime_safe(self):
-        assert Payload is not None
+    def test_state_alias_is_runtime_safe(self):
+        assert StageState is not None
 
     def test_fresh_store_never_reports_done(self, tmp_path):
         fresh, resumed = fresh_and_resumed(str(tmp_path / "cp"))
@@ -52,20 +52,20 @@ class TestCheckpointStore:
         assert not fresh.is_done("stage")
         assert resumed.is_done("stage")
 
-    def test_payload_round_trip(self, tmp_path):
+    def test_state_round_trip(self, tmp_path):
         fresh, resumed = fresh_and_resumed(str(tmp_path / "cp"))
         fresh.mark_done("collect", {"a": 1, "b": {"x": 2}})
-        assert resumed.load("collect") == {"a": 1, "b": {"x": 2}}
-        assert resumed.load("missing") is None
+        assert resumed.load_state("collect") == {"a": 1, "b": {"x": 2}}
+        assert resumed.load_state("missing") is None
 
     def test_nested_names_and_no_tmp_left(self, tmp_path):
         fresh, resumed = fresh_and_resumed(str(tmp_path / "cp"))
-        fresh.mark_done(marker_name("umi_bc2bc", "col0", "ED3", "chr1"))
-        assert resumed.is_done("umi_bc2bc/col0/ED3/chr1")
+        fresh.mark_done(checkpoint_name("umi_barcode2barcode", "col0", "ED3", "chr1"))
+        assert resumed.is_done("umi_barcode2barcode/col0/ED3/chr1")
         leftovers = [f for _, _, files in os.walk(fresh.root) for f in files if ".tmp." in f]
         assert leftovers == []
 
-    def test_reset_wipes_markers(self, tmp_path):
+    def test_reset_wipes_checkpoints(self, tmp_path):
         fresh, resumed = fresh_and_resumed(str(tmp_path / "cp"))
         fresh.mark_done("a/b")
         fresh.reset()
@@ -77,19 +77,19 @@ class TestCheckpointStore:
         clone = pickle.loads(pickle.dumps(store))
         assert clone.root == store.root and clone.resume
 
-    def test_unreadable_marker_is_not_done(self, tmp_path):
+    def test_unreadable_checkpoint_is_not_done(self, tmp_path):
         fresh, resumed = fresh_and_resumed(str(tmp_path / "cp"))
         fresh.mark_done("collect", {"n": 1})
-        with open(fresh.path("collect"), "w") as f:
+        with open(fresh.checkpoint_path("collect"), "w") as f:
             f.write('{"payl')  # e.g. truncated by a power loss
         assert not resumed.is_done("collect")
-        assert resumed.load("collect") is None
-        open(fresh.path("collect"), "w").close()
+        assert resumed.load_state("collect") is None
+        open(fresh.checkpoint_path("collect"), "w").close()
         assert not resumed.is_done("collect")
 
-    def test_marker_name_sanitises_every_part(self):
-        assert marker_name("collect", "chrUn/random") == "collect/chrUn_random"
-        assert marker_name("sample", "a/b", "c") == "sample/a_b/c"
+    def test_checkpoint_name_sanitises_every_part(self):
+        assert checkpoint_name("collect", "chrUn/random") == "collect/chrUn_random"
+        assert checkpoint_name("sample", "a/b", "c") == "sample/a_b/c"
 
 
 class TestRunStage:
@@ -99,7 +99,7 @@ class TestRunStage:
         run_stage(fresh, "s", run=lambda: calls.append("run") or {"n": 3},
                   cleanup=lambda: calls.append("cleanup"))
         assert calls == ["run", "cleanup"]
-        assert resumed.load("s") == {"n": 3}
+        assert resumed.load_state("s") == {"n": 3}
 
     def test_skip_restores_and_cleans_again(self, tmp_path):
         fresh, resumed = fresh_and_resumed(str(tmp_path / "cp"))
@@ -122,7 +122,7 @@ class TestRunStage:
         run_stage(fresh, "s", run=lambda: None, cleanup=lambda: calls.append("cleanup"), keep_tmp=True)
         assert calls == []
 
-    def test_failure_leaves_no_marker_and_no_cleanup(self, tmp_path):
+    def test_failure_leaves_no_checkpoint_and_no_cleanup(self, tmp_path):
         fresh, resumed = fresh_and_resumed(str(tmp_path / "cp"))
         calls = []
 
@@ -142,7 +142,7 @@ class TestDebugHook:
             run_stage(fresh, "s", run=lambda: None)
         assert resumed.is_done("s")
 
-    def test_before_leaves_no_marker(self, tmp_path, monkeypatch):
+    def test_before_leaves_no_checkpoint(self, tmp_path, monkeypatch):
         fresh, resumed = fresh_and_resumed(str(tmp_path / "cp"))
         monkeypatch.setenv(DEBUG_FAIL_ENV, "s:before")
         with pytest.raises(DebugFailure):
@@ -163,28 +163,28 @@ class TestDebugHook:
         check_debug_failure("s", "after")
 
 
-def test_enum_payload_round_trip():
+def test_enum_state_round_trip():
     stats = {Colour.red: 5, Colour.blue: 0}
-    assert payload_to_enum_stats(enum_stats_to_payload(stats), Colour) == stats
+    assert state_to_enum_stats(enum_stats_to_state(stats), Colour) == stats
 
 
 class TestRunRecord:
     def test_own_record_is_resumable(self, tmp_path):
         run_id = write_run_record(str(tmp_path), "4.1.0")
-        assert check_resumable(str(tmp_path), run_id, "4.1.0") is None
+        assert get_resume_incompatibility_reason(str(tmp_path), run_id, "4.1.0") is None
 
     def test_other_version_only_warns(self, tmp_path, caplog):
         run_id = write_run_record(str(tmp_path), "4.1.0")
-        assert check_resumable(str(tmp_path), run_id, "4.2.0") is None
+        assert get_resume_incompatibility_reason(str(tmp_path), run_id, "4.2.0") is None
 
     def test_missing_record(self, tmp_path):
-        assert "no readable checkpoint record" in check_resumable(str(tmp_path), "abc", "4.1.0")
+        assert "no readable checkpoint record" in get_resume_incompatibility_reason(str(tmp_path), "abc", "4.1.0")
 
     def test_params_of_another_run(self, tmp_path):
         write_run_record(str(tmp_path), "4.1.0")
-        assert "do not belong" in check_resumable(str(tmp_path), "another-run", "4.1.0")
+        assert "do not belong" in get_resume_incompatibility_reason(str(tmp_path), "another-run", "4.1.0")
         # .params written by a version without checkpoints has no run id at all
-        assert "do not belong" in check_resumable(str(tmp_path), None, "4.1.0")
+        assert "do not belong" in get_resume_incompatibility_reason(str(tmp_path), None, "4.1.0")
 
     def test_other_checkpoint_format(self, tmp_path):
         run_id = write_run_record(str(tmp_path), "4.1.0")
@@ -192,7 +192,7 @@ class TestRunRecord:
         record = json.loads(path.read_text())
         record["checkpoint_format"] = CHECKPOINT_FORMAT + 1
         path.write_text(json.dumps(record))
-        assert "format" in check_resumable(str(tmp_path), run_id, "4.1.0")
+        assert "format" in get_resume_incompatibility_reason(str(tmp_path), run_id, "4.1.0")
 
     def test_reset_store_keeps_no_record(self, tmp_path):
         run_dir = str(tmp_path / "checkpoints")

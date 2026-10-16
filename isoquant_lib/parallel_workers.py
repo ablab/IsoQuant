@@ -40,7 +40,7 @@ from .assignment.read_groups import create_read_grouper, get_grouping_strategy_n
 from isoquant_lib.model_construction.transcript_printer import GFFPrinter, VoidTranscriptPrinter, create_extended_storage
 from .assignment.assignment_aggregator import ReadAssignmentAggregator
 from isoquant_lib.utils.string_pools import setup_string_pools
-from isoquant_lib.utils.checkpoints import CheckpointStore, mark_stage_done, marker_name
+from isoquant_lib.utils.checkpoints import CheckpointStore, mark_done_with_debug_hook, checkpoint_name
 from .common import large_output_enabled
 from isoquant_lib.utils.bam_utils import (load_barcode_umi_tags, load_survivor_tags,
                                          write_tagged_chromosome_bam)
@@ -131,19 +131,19 @@ def load_polya_read_dict(sample, chr_id: str, args) -> Dict[str, ExternalPolyA]:
 
 
 def collect_reads_in_parallel(sample, chr_id, chr_ids, args, processed_read_manager_type,
-                              checkpoint_store: CheckpointStore, stage_name: str):
+                              checkpoints: CheckpointStore, stage_name: str):
     current_chr_record = Fasta(args.reference, indexname=args.fai_file_name)[chr_id]
     if args.high_memory:
         current_chr_record = str(current_chr_record)
     read_grouper = create_read_grouper(args, sample, chr_id)
-    chr_marker = stage_name + "/" + marker_name(chr_id)  # stage_name may already be nested
+    chr_checkpoint = stage_name + "/" + checkpoint_name(chr_id)  # stage_name may already be nested
     save_file = sample.get_save_file(chr_id)
     group_file = read_groups_file_name(save_file)
     bamstat_file = bamstat_file_name(save_file)
     processed_reads_manager = processed_read_manager_type(sample, args.multimap_strategy, chr_ids, args.genedb)
 
     # a done chromosome is reloaded, not skipped: multimapper resolution needs every chromosome
-    if checkpoint_store.is_done(chr_marker):
+    if checkpoints.is_done(chr_checkpoint):
         logger.info("Detected processed reads for " + chr_id)
         if os.path.exists(group_file) and os.path.exists(save_file):
             load_read_groups(group_file, read_grouper)
@@ -217,19 +217,19 @@ def collect_reads_in_parallel(sample, chr_id, chr_ids, args, processed_read_mana
         string_pools.save_barcode_umi_pools(sample.get_barcode_pools_file(chr_id))
 
     processed_reads_manager.finalize(chr_id)
-    mark_stage_done(checkpoint_store, chr_marker)
-    # logged after the marker: the resume tests stop on this line
+    mark_done_with_debug_hook(checkpoints, chr_checkpoint)
+    # logged after the checkpoint: the resume tests stop on this line
     logger.info("Finished processing chromosome " + chr_id)
 
     return chr_id, read_grouper.read_groups, alignment_collector.alignment_stat_counter, processed_reads_manager
 
 
 def construct_models_in_parallel(sample, chr_id, chr_ids, saves_prefix, args,
-                                 checkpoint_store: CheckpointStore, stage_name: str):
+                                 checkpoints: CheckpointStore, stage_name: str):
     from .assignment.read_groups import get_grouping_pool_types
     # checked before any setup: string pools, the genedb and the reference are expensive to load
-    chr_marker = stage_name + "/" + marker_name(chr_id)  # stage_name may already be nested
-    if checkpoint_store.is_done(chr_marker):
+    chr_checkpoint = stage_name + "/" + checkpoint_name(chr_id)  # stage_name may already be nested
+    if checkpoints.is_done(chr_checkpoint):
         logger.info("Processed assignments from chromosome " + chr_id + " detected")
         return
     logger.info("Processing chromosome " + chr_id)
@@ -365,25 +365,25 @@ def construct_models_in_parallel(sample, chr_id, chr_ids, saves_prefix, args,
         aggregator.transcript_model_global_counter.dump()
         aggregator.gene_model_global_counter.dump()
         transcript_stat_counter.dump(chr_transcript_stat_file)
-    # every per-chromosome fragment must be complete on disk before the marker
+    # every per-chromosome fragment must be complete on disk before the checkpoint
     aggregator.global_printer.close()
     sqanti_t2t_printer.close()
     model_reads_printer.close()
     tmp_gff_printer.close()
     tmp_extended_gff_printer.close()
-    mark_stage_done(checkpoint_store, chr_marker)
-    # logged after the marker: the resume tests stop on this line
+    mark_done_with_debug_hook(checkpoints, chr_checkpoint)
+    # logged after the checkpoint: the resume tests stop on this line
     logger.info("Finished processing chromosome " + chr_id)
 
 
-def filter_umis_in_parallel(sample, chr_id, chr_ids, args, edit_distance, checkpoint_store: CheckpointStore,
+def filter_umis_in_parallel(sample, chr_id, chr_ids, args, edit_distance, checkpoints: CheckpointStore,
                             stage_name: str, output_filtered_reads=False,
                             barcode_remap=None, output_prefix_override=None):
     out_prefix = output_prefix_override if output_prefix_override else sample.out_umi_filtered_tmp
     all_info_file_name = allinfo_file_name(out_prefix, chr_id, edit_distance)
     stats_output_file_name = allinfo_stats_file_name(out_prefix, chr_id, edit_distance)
-    chr_marker = stage_name + "/" + marker_name(chr_id)  # stage_name may already be nested
-    if checkpoint_store.is_done(chr_marker):
+    chr_checkpoint = stage_name + "/" + checkpoint_name(chr_id)  # stage_name may already be nested
+    if checkpoints.is_done(chr_checkpoint):
         logger.info("PCR duplicates were filtered for chromosome %s during the previous run" % chr_id)
         return all_info_file_name, stats_output_file_name
 
@@ -431,8 +431,8 @@ def filter_umis_in_parallel(sample, chr_id, chr_ids, args, edit_distance, checkp
                                   filtered_reads,
                                   stats_output_file_name,
                                   string_pools)
-    mark_stage_done(checkpoint_store, chr_marker)
-    # logged after the marker: the resume tests stop on this line
+    mark_done_with_debug_hook(checkpoints, chr_checkpoint)
+    # logged after the checkpoint: the resume tests stop on this line
     logger.info("PCR duplicates filtered for chromosome " + chr_id)
 
     return all_info_file_name, stats_output_file_name
