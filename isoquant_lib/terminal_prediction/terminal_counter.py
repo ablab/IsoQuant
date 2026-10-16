@@ -88,7 +88,7 @@ class TerminalCounter(AbstractCounter):
         self.output_tpm_file_name = None
         self.output_stats_file_name = None
         self.usable_file_name = None
-        # nothing is written here: the owner empties output_paths() before counting
+        # nothing is written here: the counting aggregator empties files_to_empty_before_counting()
 
         self.args = args
         self.string_pools = string_pools
@@ -152,7 +152,7 @@ class TerminalCounter(AbstractCounter):
     def get_output_file_handler(self):
         return open(self.output_file, "a")
 
-    def output_paths(self) -> list:
+    def files_to_empty_before_counting(self) -> list:
         # the per-chr training fragment is appended to as well
         if self._training_csv_path:
             return [self.output_file, self._training_csv_path]

@@ -75,7 +75,7 @@ does not depend on any subset property).
      files into `output_prefix + ".read_info.tsv"` (+`.gz`), matching the main merge
      (`copy_header=False, header_lines=3`). Run it as a `run_stage` unit (see
      `.claude/RESUME_CHECKPOINTS.md`) whose cleanup removes the per-chr read_info + column
-     filtered-reads temps after its marker.
+     filtered-reads temps after its checkpoint.
 
 5. **Docs** — `docs/formats.md` (UMI section): document
    `SAMPLE_ID.UMI_filtered.barcode_barcode_col{C}.ED{N}.read_info.tsv[.gz]` as the

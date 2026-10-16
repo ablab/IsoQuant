@@ -16,7 +16,7 @@ import logging
 from concurrent.futures import ProcessPoolExecutor
 
 from ..common import setup_worker_logging, _get_log_params
-from ..utils.checkpoints import CheckpointStore, marker_name, run_checkpoint_dir, run_stage
+from ..utils.checkpoints import CheckpointStore, checkpoint_name, run_checkpoint_dir, run_stage
 from .detect_barcodes import detect_cell_barcode_list, get_barcode_length, \
     process_in_parallel, process_single_thread
 
@@ -60,7 +60,7 @@ def run_barcode_calling(bc_args, threads):
         raise future_res.exception()
 
 
-def detect_cell_barcodes(args, sample, input_files, threads, store: CheckpointStore) -> str:
+def detect_cell_barcodes(args, sample, input_files, threads, checkpoints: CheckpointStore) -> str:
     """Pass 1: extract barcode windows verbatim, then derive the cell barcode list.
 
     Returns the path of that list, which pass 2 uses as its whitelist.
@@ -92,7 +92,7 @@ def detect_cell_barcodes(args, sample, input_files, threads, store: CheckpointSt
         if future_res.exception() is not None:
             raise future_res.exception()
 
-    run_stage(store, marker_name("cell_barcodes", sample.prefix), run=run)
+    run_stage(checkpoints, checkpoint_name("cell_barcodes", sample.prefix), run=run)
     return sample.out_cell_barcodes_tsv
 
 
@@ -104,7 +104,7 @@ def call_barcodes(args):
         # TODO barcoded files via YAML
         args.input_data.samples[0].barcoded_reads = args.barcoded_reads
         return
-    store = CheckpointStore(run_checkpoint_dir(args.output), args.resume)
+    checkpoints = CheckpointStore(run_checkpoint_dir(args.output), args.resume)
     for sample in args.input_data.samples:
         # Collect all input files for this sample
         input_files = [files[0] for files in sample.file_list]
@@ -124,7 +124,7 @@ def call_barcodes(args):
             bc_threads = 1 if args.mode.enforces_single_thread() else args.threads
             barcode_files = args.barcode_whitelist
             if args.detect_cell_barcodes:
-                barcode_files = [detect_cell_barcodes(args, sample, input_files, bc_threads, store)]
+                barcode_files = [detect_cell_barcodes(args, sample, input_files, bc_threads, checkpoints)]
 
             bc_args = BarcodeCallingArgs(input_files, barcode_files, args.mode,
                                          output_barcodes_list, output_fasta_list, sample.aux_dir, bc_threads,
@@ -135,7 +135,7 @@ def call_barcodes(args):
             for input_file, output_barcodes in zip(input_files, output_barcodes_list):
                 logger.info("Processed %s, barcodes are stored in %s" % (input_file, output_barcodes))
 
-        run_stage(store, marker_name("barcodes", sample.prefix), run=run)
+        run_stage(checkpoints, checkpoint_name("barcodes", sample.prefix), run=run)
 
         # whether called now or during the previous run, the sample reads these from now on
         sample.barcoded_reads.extend(output_barcodes_list)

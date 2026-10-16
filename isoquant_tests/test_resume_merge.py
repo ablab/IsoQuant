@@ -6,8 +6,8 @@
 
 """Pieces the resumable merge relies on (see .claude/RESUME_CHECKPOINTS.md).
 
-- the merge aggregator (truncate_outputs=False) must not touch any finished output, and no
-  counter constructor writes anything (the counting aggregator empties output_paths() itself);
+- the merge aggregator (for_merge=True) must not touch any finished output, and no counter
+  constructor writes anything (the counting aggregator empties files_to_empty_before_counting());
 - per-chromosome fragments live in a separate directory, named like the writers name them;
 - fragments survive a merge with remove_inputs=False, so a rerun can merge them again;
 - .usable fragments are loaded once, by the finalize step only.
@@ -76,7 +76,7 @@ class TestMergeAggregatorHasNoSideEffects:
             assert len(before) > 10
 
             aggregator = ReadAssignmentAggregator(args, sample, make_pools(), grouping_strategy_names=strategies,
-                                                  truncate_outputs=False)
+                                                  for_merge=True)
             assert snapshot(out_dir) == before
             assert aggregator.read_info_printer is None and aggregator.basic_printer is None
             # every counter kind was built, including the grouped model, terminal and velocity counters
@@ -108,8 +108,8 @@ class TestMergeAggregatorHasNoSideEffects:
         args = make_args()
         strategies = ["file_name", "barcode"]
         aggregator = ReadAssignmentAggregator(args, sample, make_pools(), grouping_strategy_names=strategies,
-                                              truncate_outputs=False)
-        paths = aggregator.all_counters().output_paths()
+                                              for_merge=True)
+        paths = aggregator.all_counters().files_to_empty_before_counting()
         assert any(p.endswith(".training.csv") for p in paths)
         for path in paths:
             with open(path, "w") as outf:
@@ -120,8 +120,8 @@ class TestMergeAggregatorHasNoSideEffects:
 
 class TestFragmentDir:
     def test_names_go_to_fragment_dir(self):
-        assert merge_file_list("/out/s/s.gene_counts.tsv", "s", ["chr1"], "/out/s/aux/per_chr") == \
-            ["/out/s/aux/per_chr/s_chr1.gene_counts.tsv"]
+        assert merge_file_list("/out/s/s.gene_counts.tsv", "s", ["chr1"], "/out/s/aux/chr_fragments") == \
+            ["/out/s/aux/chr_fragments/s_chr1.gene_counts.tsv"]
 
     def test_chromosome_ids_are_sanitised_like_the_writers(self):
         assert merge_file_list("/out/s.gene_counts.tsv", "s", ["chrUn/random"]) == \
@@ -132,7 +132,7 @@ class TestFragmentDir:
             merge_file_list("/out/other.tsv", "s", ["chr1"], "/frag")
 
     def test_merge_keeps_inputs_when_asked(self, tmp_path):
-        frag = tmp_path / "per_chr"
+        frag = tmp_path / "chr_fragments"
         frag.mkdir()
         for chr_id in ("chr1", "chr2"):
             (frag / ("s_%s.tsv" % chr_id)).write_text("#h\n%s\n" % chr_id)
@@ -147,7 +147,7 @@ class TestFragmentDir:
 
 class TestUsableLoadedOnce:
     def test_merge_counts_leaves_usable_to_finalize(self, tmp_path):
-        frag = str(tmp_path / "per_chr")
+        frag = str(tmp_path / "chr_fragments")
         os.makedirs(frag)
         final_prefix = str(tmp_path / "s.gene")
         counter = create_gene_counter(final_prefix, "with_ambiguous")

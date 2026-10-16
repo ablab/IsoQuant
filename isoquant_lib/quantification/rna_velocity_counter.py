@@ -113,7 +113,7 @@ class RNAVelocityCounter(AbstractCounter):
         self.output_tpm_file_name = None
         self.output_stats_file_name = None
         self.usable_file_name = None
-        # nothing is written here: the owner empties output_paths() before counting
+        # nothing is written here: the counting aggregator empties files_to_empty_before_counting()
 
         self.args = args
         self.string_pools = string_pools

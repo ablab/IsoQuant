@@ -37,7 +37,7 @@ The per-worker split tables under `aux/` (`sample.barcodes_split_reads + "_<chr>
 deliberately **left uncompressed**: short-lived temporaries read back by Python, so compressing
 them would cost CPU in every chromosome worker for a transient saving.
 
-Resume hazard, handled: `call_barcodes` skips on the `barcodes/<prefix>` marker and
+Resume hazard, handled: `call_barcodes` skips on the `barcodes/<prefix>` checkpoint and
 re-populates `sample.barcoded_reads` with the *uncompressed* names, which no longer exist after
 compression. Readers go through `resolve_optionally_gzipped()`, which returns whichever of
 `<path>` / `<path>.gz` exists.
@@ -129,7 +129,7 @@ Built in `DatasetProcessor.write_tagged_bam`, right after the split-table block 
 
 Guarded by its own resume stage, `tagged_bam` in `<sample>/aux/checkpoints/` (see
 `.claude/RESUME_CHECKPOINTS.md`). This output is a full copy of the input, the most expensive
-thing on the branch, and it is written *before* read collection — without the marker every
+thing on the branch, and it is written *before* read collection — without the checkpoint every
 `--resume` after a crash in the long stages re-copied the whole BAM.
 
 The reference list is computed **once** in `process_sample` and passed into `write_tagged_bam`.
@@ -195,7 +195,7 @@ Its one other consumer, `prepare_read_filter` (`assignment_loader.py`), now take
 Two ordering constraints, both respected in `process_sample`:
 
 - built **after** `filter_umis` (the `dedup_bam` stage) and **before** the experiment's
-  intermediates are deleted (`remove_sample_intermediates`, after the `sample/<prefix>` marker),
+  intermediates are deleted (`remove_sample_intermediates`, after the `sample/<prefix>` checkpoint),
   which removes `out_raw_file + "_*"` including the survivors files;
 - only the first edit distance writes those files, and the `barcode2barcode` rounds never do,
   so the subset is defined by the primary dedup round.
