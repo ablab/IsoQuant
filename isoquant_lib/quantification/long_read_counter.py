@@ -192,7 +192,7 @@ class AbstractCounter:
         self.output_counts_file_name = counts_file_name(self.output_counts_prefix, linear=not ignore_read_groups)
         self.output_tpm_file_name = tpm_file_name(self.output_tpm_prefix)
         self.output_file = self.output_counts_file_name
-        open(self.output_file, "w").close()
+        # nothing is written here: see files_to_empty_before_counting()
         self.output_stats_file_name = None
         self.usable_file_name = None
         # Grouped subclasses overwrite these right after calling us; the defaults
@@ -202,6 +202,16 @@ class AbstractCounter:
 
     def get_output_file_handler(self):
         return open(self.output_file, "a")
+
+    def files_to_empty_before_counting(self) -> list:
+        """Files this counter appends to.
+
+        A counter never empties them itself: the per-chromosome aggregator empties them
+        once before counting (ReadAssignmentAggregator.empty_counter_outputs), while the
+        merge builds counters for finished outputs and must leave them untouched. A
+        counter writing an extra file has to list it here.
+        """
+        return [self.output_file]
 
     # ------------------------------------------------- read group names
     # Two distinct contracts, deliberately separate methods:
@@ -279,6 +289,9 @@ class CompositeCounter:
 
     def add_counter(self, counter):
         self.counters.append(counter)
+
+    def files_to_empty_before_counting(self) -> list:
+        return [path for p in self.counters for path in p.files_to_empty_before_counting()]
 
     def add_read_info(self, read_assignment):
         for p in self.counters:
