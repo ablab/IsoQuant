@@ -30,7 +30,7 @@ import yaml
 RT_VOID = "void"           # Just run detect_barcodes, no quality check
 RT_SINGLE = "single"       # Single barcode per read (10x, curio, stereo)
 RT_STEREO_SPLIT = "stereo_split"  # Multiple barcodes per read (stereo split)
-RT_SPLIT_MODES = {RT_STEREO_SPLIT, "tenX_v3_split", "tenX_v2_split"}  # All split run types
+RT_SPLIT_MODES = {RT_STEREO_SPLIT, "tenX_v3_split", "tenX_v2_split", "visium_hd_split"}  # All split run types
 
 log = logging.getLogger('BarcodeTestRunner')
 

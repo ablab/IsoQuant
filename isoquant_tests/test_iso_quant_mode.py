@@ -35,11 +35,11 @@ class TestModes(unittest.TestCase):
         self.assertTrue(IsoQuantMode.tenX_v3.supports_molecule_splitting())
         self.assertTrue(IsoQuantMode.tenX_v2.supports_molecule_splitting())
         self.assertTrue(IsoQuantMode.visium_5prime.supports_molecule_splitting())
+        self.assertTrue(IsoQuantMode.visium_hd.supports_molecule_splitting())
 
         # Chemistries without one; asking for --split_molecules true here is an error
         self.assertFalse(IsoQuantMode.bulk.supports_molecule_splitting())
         self.assertFalse(IsoQuantMode.curio.supports_molecule_splitting())
-        self.assertFalse(IsoQuantMode.visium_hd.supports_molecule_splitting())
         self.assertFalse(IsoQuantMode.custom_sc.supports_molecule_splitting())
 
     def test_splitting_detector_exists_for_every_supporting_mode(self):
