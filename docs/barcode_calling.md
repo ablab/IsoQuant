@@ -169,7 +169,7 @@ of them exactly.
 | polyT | Position of polyT tail start (-1 if not found) |
 | R1 | Position of R1 primer end (-1 if not found) |
 
-**10x Genomics with `--split_molecules`** (`tenX_v3`, `tenX_v2`):
+**10x Genomics with `--split_molecules`** (`tenX_v3`, `tenX_v2`, `visium_5prime`, `visium_hd`):
 
 | Column | Description |
 |--------|-------------|
@@ -243,7 +243,18 @@ Molecule structure:
 ```
 
 Requires 2 barcode whitelist files (part 1 and part 2).
-The final barcode is the concatenation of both parts.
+The barcode is reported as `PART1|PART2`.
+
+### Visium HD with read splitting (`--split_molecules`)
+
+For concatenated ONT reads containing multiple Visium HD cDNA molecules; on by default
+(`--split_molecules auto`). The read and its reverse complement are scanned for successive
+`R1 ... polyT ... TSO` molecules. Both barcode parts are read backwards from each polyT, so a
+molecule is detected even when its R1 is damaged; the end of the 10x TSO
+(`ATGTACTCTGCGTTGATACCACTGCTT`) marks where the next molecule starts.
+
+As for 10x, the output includes one line per detected molecule, plus a split FASTA file with
+extracted cDNA segments. See [read splitting](single_cell.md#read-splitting) for details.
 
 ### Curio Bioscience (`curio`)
 

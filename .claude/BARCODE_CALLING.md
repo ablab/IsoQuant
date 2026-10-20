@@ -24,7 +24,7 @@ isoquant_lib/barcode_calling/
 │   ├── base.py                    # Result classes (BarcodeDetectionResult, etc.)
 │   ├── curio.py                   # CurioBarcodeDetector, CurioBruteForceDetector, CurioIlluminaDetector
 │   ├── stereo.py                  # StereoBarcodeDetector, StereoSplittingBarcodeDetector, SharedMemory variants
-│   └── tenx.py                    # TenXBarcodeDetector, VisiumHDBarcodeDetector
+│   └── tenx.py                    # TenX(Splitting)BarcodeDetector, VisiumHD(Splitting)BarcodeDetector, SplittingScanMixin
 │
 └── umi_filtering.py               # UMI-based deduplication
 ```
@@ -117,6 +117,7 @@ matches = indexer.get_occurrences(sequence, max_hits=10, min_kmers=2)
 - `TenXSplittingBarcodeDetector` - 10x v3 split mode (concatenated reads → multiple FASTA); see algorithm docs below
 - `TenXv2SplittingBarcodeDetector` - 10x v2 split mode (inherits from TenXSplittingBarcodeDetector, different TSO sequence)
 - `VisiumHDBarcodeDetector` - Visium HD spatial (two-part barcode)
+- `VisiumHDSplittingBarcodeDetector` - Visium HD split mode; see [Visium HD split mode](#visium-hd-split-mode-visiumhdsplittingbarcodedetector)
 
 ### Detection Flow (Standard Single-Barcode Modes)
 
@@ -203,6 +204,46 @@ Step 2 — TSO search (only if valid barcode found):
 - `Mouse.10x_concat.3M.800K` — 800K simulated reads, 3M full whitelist (stress test)
 - `Mouse.10x_concat.realistic.800K` — 800K simulated reads, 9K realistic whitelist
 
+**Shared scanning** (`SplittingScanMixin`, `tenx.py`): `_scan_strand`, `_is_consistent_detection`,
+`_find_barcode_umi_split_fwd` (per-molecule detection + first TSO after polyT) and the step constants
+live in a mixin shared with Visium HD. The host provides `R1`, `TSO`, `MAX_R1_POLYT_DISTANCE`,
+`tso_indexer`, `result_type()` and `_find_barcode_umi_fwd_local`; the mixin must not define any of
+them (it precedes the host in the MRO, so it would shadow e.g. the v2 TSO). Extracting it was
+verified byte-identical on 10x (TSV, stats and split FASTA, realistic and 3M whitelists).
+
+Known scan quirk (inherited, kept for 10x): an inconsistent R1/polyT pair moves the window to
+`max(prev_start + MIN_SPLIT_STEP, r1 - 32)`, which jumps past that R1's molecule when it is within
+~180 bp of the window start. Visium HD avoids it (see below).
+
+### Visium HD Split Mode (`VisiumHDSplittingBarcodeDetector`)
+
+Molecule (barcode-first orientation): `R1(22) UMI(9) BC1(15-16) BC2(14-15) VV polyT(30) cDNA TSO`;
+polyT starts 41–43 bp after the R1 end. Design and measurements: `.claude/VISIUM_HD_SPLITTING.md`.
+
+`VisiumHDSplittingBarcodeDetector(SplittingScanMixin, VisiumHDBarcodeDetector)` differs from 10x in:
+- **R1 is optional**: both barcode parts are read backwards from polyT
+  (`VisiumHDBarcodeDetector._extract_barcodes_near_polyt`, shared verbatim with the non-split path)
+  and must each match their whitelist, so random hits stay rare; an R1 more than
+  `MAX_R1_POLYT_DISTANCE` (60) before polyT is ignored instead of rejecting the molecule.
+  Measured +1.1 recall points on concatenated reads for −0.05 precision; 10x cannot do this
+  (single 16 bp barcode, polyT-only hits are mostly false — see PolyT-anchored fallback below).
+- **polyT rescue**: R1 found but polyT > 50 bp away → relaxed polyT search (window 5) right after
+  the barcodes, as in the non-split detector (+0.04 recall, no precision cost).
+- **TSO** = `ATGTACTCTGCGTTGATACCACTGCTT` (10x v3 TSO without the leading CCC; matches both).
+- **Per-read fallback** when scanning finds nothing valid: the non-split per-strand
+  `_find_barcode_umi_fwd` on the read, then its reverse complement, with the strand set explicitly
+  (the non-split `find_barcode_umi` leaves strand `.` when polyT is missing, and
+  `_process_read_split` would then cut the segment from the reverse complement).
+- **Result** `VisiumHDSplitBarcodeDetectionResult`: same columns as `TenXSplitBarcodeDetectionResult`;
+  FASTA segment starts at `r1 - 10` when R1 is consistent with polyT, else at `polyT - 42 - 10`
+  (the parent would return 0 for a mid-read molecule without R1, re-emitting all upstream molecules).
+
+**CI**: `Barcode.Mouse.VisiumHD_concat.yml` → `Mouse.VisiumHD_concat.v1.s1.800K` (simulated, 2.2
+molecules/read); `Barcode.Mouse.VisiumHD.yml` runs `...correct_struct` pinned to
+`--split_molecules false` and `...correct_struct.split` (default `auto`). QA mode
+`visium_hd_split` in `misc/assess_barcode_quality.py` identifies ground-truth barcodes by the `|`
+separator, since part lengths vary.
+
 ### Result Classes
 
 ```
@@ -211,6 +252,7 @@ BarcodeDetectionResult (base)
 │   └── TSOBarcodeDetectionResult (adds TSO5 position — Stereo-seq)
 └── TenXBarcodeDetectionResult (adds R1, polyT positions)
     └── TenXSplitBarcodeDetectionResult (adds tso position, get_fasta_segment_start/end)
+        └── VisiumHDSplitBarcodeDetectionResult (segment start without/with a distant R1)
 
 SplittingBarcodeDetectionResult (list of TSOBarcodeDetectionResult or TenXSplitBarcodeDetectionResult)
 ```

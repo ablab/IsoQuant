@@ -342,15 +342,16 @@ preparation (see [read splitting](single_cell.md#read-splitting)). Accepts:
   request that cannot be honoured is never silently ignored
 * `false` - never split
 
-Splitting is supported for `tenX_v3`, `tenX_v2`, `stereoseq` and `visium_5prime`. It is worth
+Splitting is supported for `tenX_v3`, `tenX_v2`, `stereoseq`, `visium_5prime` and `visium_hd`. It is worth
 enabling even on libraries without concatenated molecules: on non-concatenated 10x data it
 recovers about one extra point of recall at unchanged precision, at roughly twice the barcode
-calling runtime.
+calling runtime; on non-concatenated Visium HD data it changes neither precision nor recall.
 
 Splitting requires raw reads. The split molecules have to be aligned, so requesting it
 alongside an already aligned input (`--bam`) is contradictory and IsoQuant stops with an error
-- under `auto` as well as `true`. Supply the reads as FASTQ/FASTA to have them split and
-mapped, or pass `--split_molecules false` to use the alignments as given.
+- under `auto` as well as `true`, and also with `--barcoded_bam` or `--barcoded_reads`. Supply
+the reads as FASTQ/FASTA to have them split and mapped, or pass `--split_molecules false` to use
+the alignments as given.
 
 The superseded mode names `tenX_v3_split`, `tenX_v2_split` and `stereoseq_nosplit` still work
 and are translated to the corresponding `--mode` plus `--split_molecules` combination.
