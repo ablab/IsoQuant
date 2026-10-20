@@ -724,16 +724,17 @@ class VisiumHDSplittingBarcodeDetector(SplittingScanMixin, VisiumHDBarcodeDetect
     # R1 end -> polyT start beyond which the relaxed polyT search near R1 is tried
     R1_POLYT_RESCUE_DISTANCE = VisiumHDBarcodeDetector.TOTAL_BARCODE_LEN_VIS + VisiumHDBarcodeDetector.UMI_LEN_VIS + 10
 
-    # TODO: variants under measurement
-    REQUIRE_R1 = True
-    RESCUE_POLYT_NEAR_R1 = False
-
     def __init__(self, barcode_pair_list: List[List[str]]):
         super().__init__(barcode_pair_list)
         self.tso_indexer = KmerIndexer([self.TSO], kmer_size=9)
 
     def _find_barcode_umi_fwd_local(self, read_id: str, sequence: str) -> TenXBarcodeDetectionResult:
-        """Find barcodes before the first polyT; R1 is searched only to the left of it."""
+        """Find barcodes before the first polyT; R1 is searched only to the left of it.
+
+        Unlike 10x, R1 is optional: both barcode parts are read backwards from polyT and must match
+        their whitelists, which keeps random hits rare (measured: +1.1% recall on concatenated reads,
+        -0.05% precision). An R1 too far from polyT is ignored rather than rejecting the molecule.
+        """
         polyt_start = find_polyt_start(sequence)
         if polyt_start == -1:
             return TenXBarcodeDetectionResult(read_id, polyT=-1)
@@ -749,7 +750,7 @@ class VisiumHDSplittingBarcodeDetector(SplittingScanMixin, VisiumHDBarcodeDetect
                                                       r1_occurrences, min_score=8,
                                                       end_delta=self.STRICT_TERMINAL_MATCH_DELTA)
 
-        if r1_end is not None and self.RESCUE_POLYT_NEAR_R1 and polyt_start - r1_end > self.R1_POLYT_RESCUE_DISTANCE:
+        if r1_end is not None and polyt_start - r1_end > self.R1_POLYT_RESCUE_DISTANCE:
             # polyT of this molecule may be too damaged for the default search, look right after the barcodes
             presumable_polyt_start = r1_end + self.TOTAL_BARCODE_LEN_VIS + self.UMI_LEN_VIS
             search_start = presumable_polyt_start - 4
@@ -758,10 +759,7 @@ class VisiumHDSplittingBarcodeDetector(SplittingScanMixin, VisiumHDBarcodeDetect
             if near_polyt_start != -1:
                 polyt_start = near_polyt_start + search_start
 
-        if r1_end is None:
-            if self.REQUIRE_R1:
-                return TenXBarcodeDetectionResult(read_id, polyT=polyt_start)
-        elif not self.REQUIRE_R1 and polyt_start - r1_end > self.MAX_R1_POLYT_DISTANCE:
+        if r1_end is not None and polyt_start - r1_end > self.MAX_R1_POLYT_DISTANCE:
             # R1 belongs elsewhere, read the barcodes from polyT alone
             r1_end = None
         return self._extract_barcodes_near_polyt(read_id, sequence, polyt_start, r1_end)

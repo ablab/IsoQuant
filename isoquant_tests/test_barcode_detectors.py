@@ -921,10 +921,11 @@ class TestVisiumHDSplittingBarcodeDetector:
     def _detector():
         return VisiumHDSplittingBarcodeDetector([VISIUM_HD_BC1_WHITELIST, VISIUM_HD_BC2_WHITELIST])
 
-    def _molecule(self, index, tso_prefix=""):
+    def _molecule(self, index, tso_prefix="", r1=None, polyt_len=30):
         """One molecule in barcode-first orientation: R1 UMI BC1 BC2 VV polyT cDNA TSO."""
         bc1, bc2, umi = self.MOLECULES[index]
-        return self.R1 + umi + bc1 + bc2 + "GC" + "T" * 30 + self.CDNA + tso_prefix + self.TSO_TAIL
+        r1 = self.R1 if r1 is None else r1
+        return r1 + umi + bc1 + bc2 + "GC" + "T" * polyt_len + self.CDNA + tso_prefix + self.TSO_TAIL
 
     def _concat_read(self, strands):
         parts = []
@@ -966,6 +967,26 @@ class TestVisiumHDSplittingBarcodeDetector:
         assert len(result.detected_patterns) == 2
         first_pattern = min(result.detected_patterns, key=lambda p: p.polyT)
         assert first_pattern.tso == len(first) - len(self.TSO_TAIL)
+
+    def test_internal_molecule_without_r1(self):
+        """Barcodes are read backwards from polyT, so a molecule with a destroyed R1 is still found."""
+        first = self._molecule(0)
+        read = first + self._molecule(1, r1="GATCGATCGATCGATCGATCGA")
+        result = self._detector().find_barcode_umi("test_read", read)
+        assert sorted((p.get_barcode(), p.strand) for p in result.detected_patterns) == \
+            sorted((bc, strand) for bc, _, strand in self._expected("++"))
+        second = max(result.detected_patterns, key=lambda p: p.polyT)
+        assert second.r1 == -1
+        # without R1 the UMI window is taken backwards from BC1 (one base longer, as in the non-splitting detector)
+        assert second.get_umi().endswith(self.MOLECULES[1][2])
+        # the segment starts where R1 would end, not at the read start
+        assert second.get_fasta_segment_start() >= len(first)
+
+    def test_short_polyt_found_near_r1(self):
+        """A polyT too short for the default search is looked for right after the barcodes."""
+        read = self._molecule(0, polyt_len=8) + self._molecule(1)
+        result = self._detector().find_barcode_umi("test_read", read)
+        assert self._detections(result) == self._expected("++")
 
     def test_segments_do_not_overlap(self):
         read = self._concat_read("+++")
