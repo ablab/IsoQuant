@@ -11,6 +11,7 @@ from isoquant_lib.barcode_calling.callers import (
     TSOBarcodeDetectionResult,
     TenXBarcodeDetectionResult,
     TenXSplitBarcodeDetectionResult,
+    VisiumHDSplitBarcodeDetectionResult,
     SplittingBarcodeDetectionResult,
     ReadStats,
     increase_if_valid
@@ -472,6 +473,38 @@ class TestTenXSplitBarcodeDetectionResult:
         assert container.get_barcode() == "ACTGACTGACTGACTG"
         # Individual pattern retains its tso position
         assert container.detected_patterns[0].get_tso_position() == 80
+
+
+class TestVisiumHDSplitBarcodeDetectionResult:
+    """Visium HD split results: the segment starts at the (expected) R1 end, even without R1."""
+
+    def test_segment_start_with_consistent_r1(self):
+        result = VisiumHDSplitBarcodeDetectionResult("read_001", polyT=500, r1=458)
+        assert result.get_fasta_segment_start() == 448  # r1 - 10
+
+    def test_segment_start_with_r1_and_no_polyt(self):
+        result = VisiumHDSplitBarcodeDetectionResult("read_001", polyT=-1, r1=458)
+        assert result.get_fasta_segment_start() == 448
+
+    def test_segment_start_without_r1(self):
+        # barcodes read backwards from polyT: start where R1 would end, not at the read start
+        result = VisiumHDSplitBarcodeDetectionResult("read_001", polyT=500, r1=-1)
+        assert result.get_fasta_segment_start() == 448  # polyT - 42 - 10
+
+    @pytest.mark.parametrize("r1", [100, 520])
+    def test_segment_start_with_distant_r1(self, r1):
+        result = VisiumHDSplitBarcodeDetectionResult("read_001", polyT=500, r1=r1)
+        assert result.get_fasta_segment_start() == 448
+
+    def test_segment_start_clamped(self):
+        result = VisiumHDSplitBarcodeDetectionResult("read_001", polyT=30, r1=-1)
+        assert result.get_fasta_segment_start() == 0
+
+    def test_same_output_as_tenx_split(self):
+        result = VisiumHDSplitBarcodeDetectionResult("read_001", barcode="ACGT|ACGT", polyT=50, r1=8, tso=80)
+        assert VisiumHDSplitBarcodeDetectionResult.header() == TenXSplitBarcodeDetectionResult.header()
+        assert str(result).endswith("\t80")
+        assert result.get_fasta_segment_end(500) == 115
 
 
 class TestReadStats:

@@ -20,8 +20,8 @@ from isoquant_lib.modes import (
     SPLIT_MOLECULES_TRUE,
 )
 
-SPLITTING_MODES = ["tenX_v3", "tenX_v2", "stereoseq", "visium_5prime"]
-NON_SPLITTING_MODES = ["curio", "visium_hd", "custom_sc"]
+SPLITTING_MODES = ["tenX_v3", "tenX_v2", "stereoseq", "visium_5prime", "visium_hd"]
+NON_SPLITTING_MODES = ["curio", "custom_sc"]
 
 
 def resolve(mode, split_molecules=None, needs_mapping=True):
@@ -183,6 +183,8 @@ class TestDetectorSelection:
         # visium_5prime gains splitting by reusing the 10x 3' detector
         ("visium_5prime", True, "TenXSplittingBarcodeDetector"),
         ("visium_5prime", False, "TenXBarcodeDetector"),
+        ("visium_hd", True, "VisiumHDSplittingBarcodeDetector"),
+        ("visium_hd", False, "VisiumHDBarcodeDetector"),
     ])
     def test_exact_detector_mapping(self, mode, split, expected):
         from isoquant_lib.barcode_calling.detect_barcodes import barcode_detector_class

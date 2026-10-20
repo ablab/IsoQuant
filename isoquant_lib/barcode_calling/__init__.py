@@ -10,7 +10,7 @@ Barcode calling for single-cell and spatial transcriptomics.
 This package provides k-mer indexing and barcode detection for various platforms:
 - Curio (double barcode)
 - Stereo-seq (standard and splitting modes)
-- 10x Genomics (v3, Visium HD)
+- 10x Genomics (v3, Visium HD; standard and splitting modes)
 
 Subpackages:
     indexers: K-mer indexing implementations
@@ -34,6 +34,7 @@ from .callers import (
     TSOBarcodeDetectionResult,
     TenXBarcodeDetectionResult,
     TenXSplitBarcodeDetectionResult,
+    VisiumHDSplitBarcodeDetectionResult,
     SplittingBarcodeDetectionResult,
     ReadStats,
     increase_if_valid,
@@ -53,6 +54,7 @@ from .callers import (
     TenXSplittingBarcodeDetector,
     TenXv2SplittingBarcodeDetector,
     VisiumHDBarcodeDetector,
+    VisiumHDSplittingBarcodeDetector,
     UniversalSingleMoleculeExtractor,
     MoleculeStructure
 )
@@ -99,6 +101,7 @@ __all__ = [
     'TSOBarcodeDetectionResult',
     'TenXBarcodeDetectionResult',
     'TenXSplitBarcodeDetectionResult',
+    'VisiumHDSplitBarcodeDetectionResult',
     'SplittingBarcodeDetectionResult',
     'ReadStats',
     'increase_if_valid',
@@ -117,6 +120,7 @@ __all__ = [
     'TenXSplittingBarcodeDetector',
     'TenXv2SplittingBarcodeDetector',
     'VisiumHDBarcodeDetector',
+    'VisiumHDSplittingBarcodeDetector',
     # universal calling
     'UniversalSingleMoleculeExtractor',
     'MoleculeStructure',
