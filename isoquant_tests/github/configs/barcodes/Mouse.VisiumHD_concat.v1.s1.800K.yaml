@@ -1,0 +1,24 @@
+name: Mouse.VisiumHD_concat.v1.s1.800K
+output: /abga/work/andreyp/ci_isoquant/output
+run_type: visium_hd_split
+reads: /abga/work/andreyp/ci_isoquant/data/barcodes/Mouse.VisiumHD_concat.v1.s1.800K.fastq.gz
+barcodes: /abga/work/andreyp/ci_isoquant/data/barcodes/visium_v1_hd.slide1.barcodes1.tsv /abga/work/andreyp/ci_isoquant/data/barcodes/visium_v1_hd.slide1.barcodes2.tsv
+mode: visium_hd
+detect_options: "--split_molecules true"
+threads: '8'
+qa_mode: visium_hd_split
+baselines:
+  barcode:
+    all_correct_reads: 433291.0
+    assignment_precision: 97.69
+    assignment_recall: 73.97
+    correct_assignments: 1301799.0
+    excessive_assignments: 24.0
+    incorrect_assignments: 30842.0
+    no_barcodes_assigned: 74999.0
+    pct_all_correct: 54.16
+    pct_no_barcodes: 9.37
+    pct_some_correct: 35.52
+    some_correct_reads: 284172.0
+    total_reads: 800000.0
+    total_true_barcodes: 1759901.0

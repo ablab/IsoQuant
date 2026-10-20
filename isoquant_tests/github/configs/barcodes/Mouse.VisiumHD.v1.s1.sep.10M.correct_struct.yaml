@@ -4,6 +4,7 @@ run_type: single
 reads: /abga/work/andreyp/ci_isoquant/data/barcodes/Mouse.VisiumHD.v1.s1.sep.10M.correct_struct.800K.fastq.gz
 barcodes: /abga/work/andreyp/ci_isoquant/data/barcodes/visium_v1_hd.slide1.barcodes1.tsv /abga/work/andreyp/ci_isoquant/data/barcodes/visium_v1_hd.slide1.barcodes2.tsv
 mode: visium_hd
+detect_options: "--split_molecules false"
 threads: '8'
 qa_mode: visium_hd
 baselines:
