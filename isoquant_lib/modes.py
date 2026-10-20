@@ -45,7 +45,8 @@ class IsoQuantMode(Enum):
         return self in [IsoQuantMode.tenX_v3,
                         IsoQuantMode.tenX_v2,
                         IsoQuantMode.stereoseq,
-                        IsoQuantMode.visium_5prime]
+                        IsoQuantMode.visium_5prime,
+                        IsoQuantMode.visium_hd]
 
     def needs_barcode_iterator(self):
         # a property of the Stereo-seq whitelist size, unrelated to splitting

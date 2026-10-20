@@ -347,6 +347,32 @@ class TenXSplitBarcodeDetectionResult(TenXBarcodeDetectionResult):
         return TenXBarcodeDetectionResult.header() + "\ttso_start"
 
 
+class VisiumHDSplitBarcodeDetectionResult(TenXSplitBarcodeDetectionResult):
+    """Detection result for Visium HD split mode.
+
+    Visium HD barcodes are read backwards from polyT, so a molecule may be detected without R1,
+    or with an R1 that belongs elsewhere; the segment then starts where R1 should end.
+    """
+
+    # R1 end ... UMI(9) BC1(15-16) BC2(14-15) VV ... polyT
+    R1_POLYT_DISTANCE = 42
+    MAX_R1_POLYT_DISTANCE = 60
+
+    def has_consistent_r1(self) -> bool:
+        """R1 is found and, if polyT is found too, sits right before the barcodes."""
+        if self.r1 == -1:
+            return False
+        return self.polyT == -1 or 0 < self.polyT - self.r1 <= self.MAX_R1_POLYT_DISTANCE
+
+    def get_fasta_segment_start(self) -> int:
+        """Start position of FASTA segment: just before the (expected) R1 end."""
+        if self.has_consistent_r1():
+            return max(0, self.r1 - 10)
+        if self.polyT != -1:
+            return max(0, self.polyT - self.R1_POLYT_DISTANCE - 10)
+        return 0
+
+
 class SplittingBarcodeDetectionResult:
     """Result container for read splitting modes (multiple barcodes per read)."""
 

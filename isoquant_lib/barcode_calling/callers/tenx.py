@@ -21,7 +21,8 @@ from ..common import (
     detect_exact_positions, detect_first_exact_positions, str_to_2bit,
     find_optimal_kmer_size,
 )
-from .base import TenXBarcodeDetectionResult, TenXSplitBarcodeDetectionResult, SplittingBarcodeDetectionResult
+from .base import (TenXBarcodeDetectionResult, TenXSplitBarcodeDetectionResult,
+                   VisiumHDSplitBarcodeDetectionResult, SplittingBarcodeDetectionResult)
 
 logger = logging.getLogger('IsoQuant')
 
@@ -447,6 +448,11 @@ class VisiumHDBarcodeDetector:
             return TenXBarcodeDetectionResult(read_id, barcode1 + "|" + barcode2, potential_umi, bc1_score + bc2_score,
                                               UMI_good=True, polyT=polyt_start, r1=r1_end)
 
+        return self._extract_barcodes_near_polyt(read_id, sequence, polyt_start, r1_end)
+
+    def _extract_barcodes_near_polyt(self, read_id: str, sequence: str, polyt_start: int,
+                                     r1_end: Optional[int]) -> TenXBarcodeDetectionResult:
+        """Read BC2, then BC1 backwards from polyT, and the UMI between R1 (if found) and BC1."""
         barcode2_end = polyt_start - 1 - self.SEPARATOR_BASES
         barcode2_start = barcode2_end - self.BARCODE2_LEN_VIS + 1
         potential_barcode2 = sequence[barcode2_start:barcode2_end + 1]
@@ -506,17 +512,101 @@ class VisiumHDBarcodeDetector:
         return cls.result_type().header()
 
 
-class TenXSplittingBarcodeDetector(TenXBarcodeDetector):
-    """10x Genomics v3 splitting detector — finds multiple barcodes in concatenated reads."""
+class SplittingScanMixin:
+    """Finds successive molecules R1...polyT...TSO in a concatenated read, on one strand at a time.
+
+    Shared by the R1-anchored splitting detectors. The host class provides R1, TSO,
+    MAX_R1_POLYT_DISTANCE, tso_indexer, result_type() (a split result class with a TSO position)
+    and _find_barcode_umi_fwd_local(read_id, sequence) detecting one molecule near the first polyT.
+    Must not define any of these itself: it precedes the host in the MRO.
+    """
 
     MIN_REMAINING_SEQ = 50
     DEFAULT_POLYT_STEP = 100
     MIN_SPLIT_STEP = 150
 
+    def _find_barcode_umi_split_fwd(self, read_id: str, sequence: str,
+                                    offset: int = 0) -> TenXSplitBarcodeDetectionResult:
+        """Detect one barcode+UMI+TSO pattern in the forward-oriented subsequence."""
+        base_result = self._find_barcode_umi_fwd_local(read_id, sequence)
+
+        tso_start = -1
+        if base_result.polyT != -1 and base_result.is_valid():
+            tso_search_start = base_result.polyT
+            tso_search_end = len(sequence) - 1
+            tso_occurrences = self.tso_indexer.get_occurrences_substr(
+                sequence, tso_search_start, tso_search_end
+            )
+            tso_s, tso_e = detect_first_exact_positions(
+                sequence, tso_search_start, tso_search_end + 1,
+                self.tso_indexer.k, self.TSO,
+                tso_occurrences,
+                min_score=18, start_delta=3, end_delta=3
+            )
+            if tso_s is not None:
+                tso_start = tso_s
+
+        result = self.result_type()(
+            read_id,
+            barcode=base_result.get_barcode(),
+            UMI=base_result.get_umi(),
+            BC_score=base_result.BC_score,
+            UMI_good=base_result.UMI_good,
+            polyT=base_result.polyT,
+            r1=base_result.r1,
+            tso=tso_start,
+        )
+        if offset > 0:
+            result.update_coordinates(offset)
+        return result
+
+    def _is_consistent_detection(self, r: TenXSplitBarcodeDetectionResult) -> bool:
+        """Check if polyT and R1 positions are consistent (belong to the same molecule).
+
+        The fallback R1 search in _find_barcode_umi_fwd can match R1 from a
+        different molecule far away when a spurious polyT is found in cDNA.
+        Reject these by checking that R1 and polyT are within expected distance.
+        """
+        if r.r1 == -1 or r.polyT == -1 or not r.is_valid():
+            return True  # no barcode found, nothing to reject
+        return r.r1 < r.polyT and r.polyT - r.r1 <= self.MAX_R1_POLYT_DISTANCE
+
+    def _scan_strand(self, read_id: str, sequence: str, strand: str,
+                     read_result: SplittingBarcodeDetectionResult) -> None:
+        """Scan one strand for barcode patterns, appending results."""
+        current_start = 0
+        prev_start = -1
+        while True:
+            seq = sequence[current_start:]
+            r = self._find_barcode_umi_split_fwd(read_id, seq, offset=current_start)
+            if r.polyT == -1:
+                break
+            r.set_strand(strand)
+
+            if self._is_consistent_detection(r):
+                read_result.append(r)
+                if r.tso != -1:
+                    next_start = r.tso + len(self.TSO)
+                else:
+                    next_start = r.polyT + self.DEFAULT_POLYT_STEP
+            else:
+                # polyT and R1 are from different molecules — skip to before R1
+                # so the next iteration can detect the molecule with proper R1/polyT proximity
+                next_start = r.r1 - len(self.R1) - 10
+
+            next_start = max(prev_start + self.MIN_SPLIT_STEP, next_start)
+            prev_start = next_start
+            current_start = next_start
+            if len(sequence) - current_start < self.MIN_REMAINING_SEQ:
+                break
+
+
+class TenXSplittingBarcodeDetector(SplittingScanMixin, TenXBarcodeDetector):
+    """10x Genomics v3 splitting detector — finds multiple barcodes in concatenated reads."""
+
     def __init__(self, barcode_list: Optional[List[str]], whitelist_matching: bool = True):
         super().__init__(barcode_list, whitelist_matching)
-        from ..indexers import KmerIndexer as _KmerIndexer
-        self.tso_indexer = _KmerIndexer([self.TSO], kmer_size=9)
+        self.tso_indexer = KmerIndexer([self.TSO], kmer_size=9)
 
     # MAX_R1_POLYT_DISTANCE (inherited): R1...BC(16)...UMI(12)...polyT = ~28bp plus margin
 
@@ -565,81 +655,6 @@ class TenXSplittingBarcodeDetector(TenXBarcodeDetector):
         read_barcode_end = barcode_start + bc_end - 1
         return self._make_umi_result(read_id, sequence, barcode, bc_score,
                                      read_barcode_end, polyt_start, r1_end)
-
-    def _find_barcode_umi_split_fwd(self, read_id: str, sequence: str,
-                                    offset: int = 0) -> TenXSplitBarcodeDetectionResult:
-        """Detect one barcode+UMI+TSO pattern in the forward-oriented subsequence."""
-        base_result = self._find_barcode_umi_fwd_local(read_id, sequence)
-
-        tso_start = -1
-        if base_result.polyT != -1 and base_result.is_valid():
-            tso_search_start = base_result.polyT
-            tso_search_end = len(sequence) - 1
-            tso_occurrences = self.tso_indexer.get_occurrences_substr(
-                sequence, tso_search_start, tso_search_end
-            )
-            tso_s, tso_e = detect_first_exact_positions(
-                sequence, tso_search_start, tso_search_end + 1,
-                self.tso_indexer.k, self.TSO,
-                tso_occurrences,
-                min_score=18, start_delta=3, end_delta=3
-            )
-            if tso_s is not None:
-                tso_start = tso_s
-
-        result = TenXSplitBarcodeDetectionResult(
-            read_id,
-            barcode=base_result.get_barcode(),
-            UMI=base_result.get_umi(),
-            BC_score=base_result.BC_score,
-            UMI_good=base_result.UMI_good,
-            polyT=base_result.polyT,
-            r1=base_result.r1,
-            tso=tso_start,
-        )
-        if offset > 0:
-            result.update_coordinates(offset)
-        return result
-
-    def _is_consistent_detection(self, r: 'TenXSplitBarcodeDetectionResult') -> bool:
-        """Check if polyT and R1 positions are consistent (belong to the same molecule).
-
-        The fallback R1 search in _find_barcode_umi_fwd can match R1 from a
-        different molecule far away when a spurious polyT is found in cDNA.
-        Reject these by checking that R1 and polyT are within expected distance.
-        """
-        if r.r1 == -1 or r.polyT == -1 or not r.is_valid():
-            return True  # no barcode found, nothing to reject
-        return r.r1 < r.polyT and r.polyT - r.r1 <= self.MAX_R1_POLYT_DISTANCE
-
-    def _scan_strand(self, read_id: str, sequence: str, strand: str,
-                     read_result: SplittingBarcodeDetectionResult) -> None:
-        """Scan one strand for barcode patterns, appending results."""
-        current_start = 0
-        prev_start = -1
-        while True:
-            seq = sequence[current_start:]
-            r = self._find_barcode_umi_split_fwd(read_id, seq, offset=current_start)
-            if r.polyT == -1:
-                break
-            r.set_strand(strand)
-
-            if self._is_consistent_detection(r):
-                read_result.append(r)
-                if r.tso != -1:
-                    next_start = r.tso + len(self.TSO)
-                else:
-                    next_start = r.polyT + self.DEFAULT_POLYT_STEP
-            else:
-                # polyT and R1 are from different molecules — skip to before R1
-                # so the next iteration can detect the molecule with proper R1/polyT proximity
-                next_start = r.r1 - len(self.R1) - 10
-
-            next_start = max(prev_start + self.MIN_SPLIT_STEP, next_start)
-            prev_start = next_start
-            current_start = next_start
-            if len(sequence) - current_start < self.MIN_REMAINING_SEQ:
-                break
 
     def find_barcode_umi(self, read_id: str, sequence: str) -> SplittingBarcodeDetectionResult:
         """Find all barcode+UMI patterns in a (potentially concatenated) read.
@@ -698,3 +713,98 @@ class TenXv2SplittingBarcodeDetector(TenXSplittingBarcodeDetector):
 
     def __init__(self, barcode_list: Optional[List[str]], whitelist_matching: bool = True):
         super().__init__(barcode_list, whitelist_matching)
+
+
+class VisiumHDSplittingBarcodeDetector(SplittingScanMixin, VisiumHDBarcodeDetector):
+    """Visium HD splitting detector — finds multiple barcodes in concatenated reads."""
+
+    # 10x v3 TSO without its leading CCC, so that reads with and without it match
+    TSO = "ATGTACTCTGCGTTGATACCACTGCTT"
+    MAX_R1_POLYT_DISTANCE = VisiumHDSplitBarcodeDetectionResult.MAX_R1_POLYT_DISTANCE
+    # R1 end -> polyT start beyond which the relaxed polyT search near R1 is tried
+    R1_POLYT_RESCUE_DISTANCE = VisiumHDBarcodeDetector.TOTAL_BARCODE_LEN_VIS + VisiumHDBarcodeDetector.UMI_LEN_VIS + 10
+
+    # TODO: variants under measurement
+    REQUIRE_R1 = True
+    RESCUE_POLYT_NEAR_R1 = False
+
+    def __init__(self, barcode_pair_list: List[List[str]]):
+        super().__init__(barcode_pair_list)
+        self.tso_indexer = KmerIndexer([self.TSO], kmer_size=9)
+
+    def _find_barcode_umi_fwd_local(self, read_id: str, sequence: str) -> TenXBarcodeDetectionResult:
+        """Find barcodes before the first polyT; R1 is searched only to the left of it."""
+        polyt_start = find_polyt_start(sequence)
+        if polyt_start == -1:
+            return TenXBarcodeDetectionResult(read_id, polyT=-1)
+
+        r1_occurrences = self.r1_indexer.get_occurrences(sequence[0:polyt_start + 1])
+        r1_start, r1_end = detect_exact_positions(sequence, 0, polyt_start + 1,
+                                                  self.r1_indexer.k, self.R1,
+                                                  r1_occurrences, min_score=10,
+                                                  end_delta=self.TERMINAL_MATCH_DELTA)
+        if r1_start is None:
+            r1_start, r1_end = detect_exact_positions(sequence, 0, polyt_start + 1,
+                                                      self.r1_indexer.k, self.R1,
+                                                      r1_occurrences, min_score=8,
+                                                      end_delta=self.STRICT_TERMINAL_MATCH_DELTA)
+
+        if r1_end is not None and self.RESCUE_POLYT_NEAR_R1 and polyt_start - r1_end > self.R1_POLYT_RESCUE_DISTANCE:
+            # polyT of this molecule may be too damaged for the default search, look right after the barcodes
+            presumable_polyt_start = r1_end + self.TOTAL_BARCODE_LEN_VIS + self.UMI_LEN_VIS
+            search_start = presumable_polyt_start - 4
+            search_end = min(len(sequence), presumable_polyt_start + 10)
+            near_polyt_start = find_polyt_start(sequence[search_start:search_end], window_size=5, polya_fraction=1.0)
+            if near_polyt_start != -1:
+                polyt_start = near_polyt_start + search_start
+
+        if r1_end is None:
+            if self.REQUIRE_R1:
+                return TenXBarcodeDetectionResult(read_id, polyT=polyt_start)
+        elif not self.REQUIRE_R1 and polyt_start - r1_end > self.MAX_R1_POLYT_DISTANCE:
+            # R1 belongs elsewhere, read the barcodes from polyT alone
+            r1_end = None
+        return self._extract_barcodes_near_polyt(read_id, sequence, polyt_start, r1_end)
+
+    def _find_single_molecule(self, read_id: str, sequence: str,
+                              rev_seq: str) -> Optional[VisiumHDSplitBarcodeDetectionResult]:
+        """Non-splitting detection on either strand, used when scanning found nothing.
+
+        Unlike scanning, it also searches R1 in the whole read and reads barcodes when polyT is missing;
+        the strand is set here, since the non-splitting detector leaves it undefined without polyT.
+        """
+        for seq, strand in ((sequence, "+"), (rev_seq, "-")):
+            r = self._find_barcode_umi_fwd(read_id, seq)
+            if r.is_valid():
+                split_result = VisiumHDSplitBarcodeDetectionResult(
+                    read_id, r.get_barcode(), r.get_umi(), r.BC_score, r.UMI_good,
+                    polyT=r.polyT, r1=r.r1, tso=-1)
+                split_result.set_strand(strand)
+                return split_result
+        return None
+
+    def find_barcode_umi(self, read_id: str, sequence: str) -> SplittingBarcodeDetectionResult:
+        """Find all barcode+UMI patterns in a (potentially concatenated) read, on both strands."""
+        read_result = SplittingBarcodeDetectionResult(read_id)
+        self._scan_strand(read_id, sequence, "+", read_result)
+        rev_seq = reverese_complement(sequence)
+        self._scan_strand(read_id, rev_seq, "-", read_result)
+
+        if not any(r.is_valid() for r in read_result.detected_patterns):
+            single_result = self._find_single_molecule(read_id, sequence, rev_seq)
+            if single_result is not None:
+                read_result.detected_patterns = [single_result]
+
+        if read_result.empty():
+            read_result.append(self._find_barcode_umi_split_fwd(read_id, sequence))
+
+        read_result.filter()
+        return read_result
+
+    @staticmethod
+    def result_type():
+        return VisiumHDSplitBarcodeDetectionResult
+
+    @classmethod
+    def header(cls):
+        return cls.result_type().header()

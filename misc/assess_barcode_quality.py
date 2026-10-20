@@ -9,7 +9,8 @@
 Barcode calling quality assessment for simulated data.
 
 Compares detected barcodes against ground truth embedded in read IDs.
-Supports multiple barcode calling modes: tenX_v3, tenX_v2, tenX_v3_split, tenX_v2_split, visium_hd, curio, stereo, stereo_split.
+Supports multiple barcode calling modes: tenX_v3, tenX_v2, tenX_v3_split, tenX_v2_split, visium_hd, visium_hd_split,
+curio, stereo, stereo_split.
 
 Usage:
     python assess_barcode_quality.py --mode stereo --input barcodes.tsv --output metrics.tsv
@@ -36,12 +37,18 @@ MODE_BARCODE_LENGTHS = {
     'tenX_v3_split': 16,
     'tenX_v2_split': 16,
     'visium_hd': 31,  # 16 + 15 (two-part)
+    'visium_hd_split': 31,
     'curio': 14,      # 8 + 6
     'stereo': 25,
     'stereo_split': 25,
 }
 
-SPLIT_MODES = {'stereo_split', 'tenX_v3_split', 'tenX_v2_split'}
+SPLIT_MODES = {'stereo_split', 'tenX_v3_split', 'tenX_v2_split', 'visium_hd_split'}
+
+# Modes whose barcodes are written as PART1|PART2 with variable part lengths,
+# so ground truth fields are recognised by the separator rather than by length
+JOINT_BARCODE_MODES = {'visium_hd_split'}
+JOINT_BARCODE_SEPARATOR = '|'
 
 
 def get_score_thresholds(barcode_length: int) -> Tuple[int, List[int]]:
@@ -100,13 +107,14 @@ def extract_ground_truth_single(read_id: str) -> Tuple[Optional[str], Optional[s
     return barcode, umi
 
 
-def extract_ground_truth_split(read_id: str, barcode_length: int = 25) -> Set[str]:
+def extract_ground_truth_split(read_id: str, barcode_length: int = 25, joint_barcodes: bool = False) -> Set[str]:
     """
     Extract multiple ground truth barcodes from simulated read ID.
 
     Read ID format: READ_<index>_<transcript>_<BC1>_<UMI1>_<extra>_<BC2>_<UMI2>_...
 
-    Barcodes are at positions 3, 6, 9, ... and identified by length.
+    Barcodes are at positions 3, 6, 9, ... and identified by length, or, with joint_barcodes,
+    by the PART1|PART2 separator (Visium HD parts vary in length).
 
     Returns:
         Set of ground truth barcodes
@@ -114,7 +122,11 @@ def extract_ground_truth_split(read_id: str, barcode_length: int = 25) -> Set[st
     parts = read_id.split('_')
     barcodes = set()
     for i in range(3, len(parts), 3):
-        if i < len(parts) and len(parts[i]) == barcode_length:
+        if joint_barcodes:
+            is_barcode = JOINT_BARCODE_SEPARATOR in parts[i]
+        else:
+            is_barcode = len(parts[i]) == barcode_length
+        if is_barcode:
             barcodes.add(parts[i])
     return barcodes
 
@@ -279,13 +291,15 @@ def _strip_split_segment_suffix(read_id: str) -> str:
 def assess_split_barcode_mode(
     input_file: str,
     barcode_length: int = 25,
-    barcode_col: int = 1
+    barcode_col: int = 1,
+    joint_barcodes: bool = False
 ) -> Dict[str, float]:
     """
-    Assess barcode calling quality for split modes (stereo_split, tenX_v3_split, tenX_v2_split).
+    Assess barcode calling quality for split modes (stereo_split, tenX_v3_split, tenX_v2_split, visium_hd_split).
 
     Handles multiple barcode detections per read. Ground truth barcodes are extracted
-    from the template read ID by matching fields of the expected barcode length.
+    from the template read ID by matching fields of the expected barcode length
+    (or containing the part separator, with joint_barcodes).
     """
     # Collect all detections per original read.
     # Strip the split-mode segment suffix (_{start}_{end}_{strand}) so that
@@ -320,7 +334,7 @@ def assess_split_barcode_mode(
     some_correct = 0
 
     for read_id, detected_barcodes in read_detections.items():
-        ground_truth = extract_ground_truth_split(read_id, barcode_length)
+        ground_truth = extract_ground_truth_split(read_id, barcode_length, joint_barcodes)
         total_true_barcodes += len(ground_truth)
 
         # Filter out non-detections
@@ -534,6 +548,7 @@ Supported modes:
   tenX_v3_split - 10x v3 split mode (multiple barcodes per read, 16bp)
   tenX_v2_split - 10x v2 split mode (multiple barcodes per read, 16bp)
   visium_hd    - Visium HD spatial (16+15bp two-part barcode)
+  visium_hd_split - Visium HD split mode (multiple PART1|PART2 barcodes per read)
   curio        - Curio spatial (14bp = 8+6 split barcode)
   stereo       - Stereo-seq spatial (25bp barcode)
   stereo_split - Stereo-seq split detection mode (multiple barcodes per read)
@@ -600,7 +615,8 @@ def main():
         metrics = assess_split_barcode_mode(
             args.input,
             barcode_length=barcode_length,
-            barcode_col=args.barcode_col
+            barcode_col=args.barcode_col,
+            joint_barcodes=args.mode in JOINT_BARCODE_MODES
         )
     else:
         metrics = assess_single_barcode_mode(

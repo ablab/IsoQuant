@@ -16,6 +16,7 @@ Classes:
     TSOBarcodeDetectionResult: Result for Stereo-seq with TSO detection
     TenXBarcodeDetectionResult: Result for 10x Genomics platform
     TenXSplitBarcodeDetectionResult: Result for 10x split mode (includes TSO position)
+    VisiumHDSplitBarcodeDetectionResult: Result for Visium HD split mode (R1 may be missing)
     SplittingBarcodeDetectionResult: Result for read splitting modes
     ExtractionResult: Dict-based result for universal molecule extraction
     ReadStats: Statistics tracker for barcode detection
@@ -33,6 +34,7 @@ Detectors:
     TenXSplittingBarcodeDetector: 10x v3 splitting detector (concatenated reads)
     TenXv2SplittingBarcodeDetector: 10x v2 splitting detector (concatenated reads)
     VisiumHDBarcodeDetector: Visium HD detector
+    VisiumHDSplittingBarcodeDetector: Visium HD splitting detector (concatenated reads)
     UniversalSingleMoleculeExtractor: Universal barcode detector for custom molecules
 """
 
@@ -44,6 +46,7 @@ from .base import (
     TSOBarcodeDetectionResult,
     TenXBarcodeDetectionResult,
     TenXSplitBarcodeDetectionResult,
+    VisiumHDSplitBarcodeDetectionResult,
     SplittingBarcodeDetectionResult,
     ReadStats,
     increase_if_valid,
@@ -73,6 +76,7 @@ from .tenx import (
     TenXSplittingBarcodeDetector,
     TenXv2SplittingBarcodeDetector,
     VisiumHDBarcodeDetector,
+    VisiumHDSplittingBarcodeDetector,
 )
 
 from .molecule_structure import MoleculeStructure
@@ -88,6 +92,7 @@ __all__ = [
     'TSOBarcodeDetectionResult',
     'TenXBarcodeDetectionResult',
     'TenXSplitBarcodeDetectionResult',
+    'VisiumHDSplitBarcodeDetectionResult',
     'SplittingBarcodeDetectionResult',
     'ExtractionResult',
     'DetectedElement',
@@ -108,6 +113,7 @@ __all__ = [
     'TenXSplittingBarcodeDetector',
     'TenXv2SplittingBarcodeDetector',
     'VisiumHDBarcodeDetector',
+    'VisiumHDSplittingBarcodeDetector',
     # Universal extraction
     'MoleculeStructure',
     'UniversalSingleMoleculeExtractor',
