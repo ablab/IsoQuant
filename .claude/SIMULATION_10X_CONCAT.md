@@ -15,27 +15,31 @@ This pipeline is used to validate that `TenXSplittingBarcodeDetector` (and `TenX
 
 **Script**: `~/ngs-analysis/barcode_detection/simulate_barcoded.py`
 
-**Template structure** (10x v3 single molecule, forward strand):
+**Template structure** (10x v3 single molecule, in barcode-first "detector" orientation):
 ```
 [R1 (22bp)] [BC (16bp)] [UMI (12bp)] [polyT (30bp)] [RC(cDNA)] [TSO (30bp)]
 ```
+The script builds this and then reverse-complements it, so a template labelled `+` is in mRNA
+sense (`RC(TSO) cDNA polyA RC(UMI) RC(BC) RC(R1)`).
 
-For v2: UMI is 10bp, TSO RC is 25bp.
+For v2: UMI is 10bp; the TSO is the same 30bp sequence as v3.
+
+Visium HD (`--mode visium_hd`): `[R1 (22bp)] [UMI (9bp)] [BC1 BC2 (29-31bp)] [VV] [polyT (30bp)] [RC(cDNA)] [TSO tail (27bp, 10x TSO without CCC)]`;
+barcodes are taken from a `BC1|BC2` list and keep the `|` in read names.
 
 The TSO sequence embedded at the end of each molecule segment acts as the molecule boundary marker that `TenXSplittingBarcodeDetector` uses to locate the next molecule's start.
 
-**Concatenation**: `--concatenate_templates` chains multiple molecules end-to-end in a single FASTA entry:
+**Concatenation**: `--concatenate_templates` chains multiple molecules end-to-end in a single FASTA entry, with no linker:
 ```
-[mol1: R1+BC+UMI+polyT+RC(cDNA)+TSO] [mol2: R1+BC+UMI+polyT+RC(cDNA)+TSO] ...
+[mol1] [mol2] ...
 ```
+- Every sub-molecule is a copy of the **same transcript**; only barcode and UMI differ.
+- `--concat_probabilities` (default `0.5,0.35,0.1,0.05`): probabilities of 1, 2, 3, ... molecules per template.
+- `--strand_switch_prob` (default 0.4): each sub-molecule, **including the first**, is independently
+  reverse-complemented **as a whole** (adapters included).
+- `--seed`: makes template generation reproducible.
 
-Concatenation probabilities (hardcoded in script):
-- 1 molecule: 50%
-- 2 molecules: 35%
-- 3 molecules: 10%
-- 4 molecules: 5%
-
-Each sub-molecule after the first has ~40% probability of being on the reverse strand (RC of the cDNA segment only — the R1/BC/UMI/polyT/TSO flanks remain in forward orientation relative to the read).
+**Ground truth in names**: `READ_<i>_<transcript>_<BC>_<UMI>_<strand>[_<BC>_<UMI>_<strand>...]`; `i` restarts per transcript.
 
 **Command**:
 ```bash
@@ -49,14 +53,16 @@ python ~/ngs-analysis/barcode_detection/simulate_barcoded.py \
   --concatenate_templates
 ```
 
-For v2 (10bp UMI, 25bp TSO RC):
+For v2 (10bp UMI):
 ```bash
   --mode 10x_v2
 ```
 
 **Outputs**:
 - `<prefix>.templates.fasta` — template sequences (one per simulated read)
-- `<prefix>.template_counts.tsv` — expression table (template_id → count) required by NanoSim
+- `<prefix>.template_counts.tsv` — expression table (template_id → count) required by NanoSim. It starts with a
+  `#` header line because NanoSim skips the first line of the expression file (files made before this was added
+  silently lose their first template).
 
 ---
 
@@ -83,8 +89,13 @@ Key flags:
 - `--aligned_only` — only emit reads that align to the template (no random noise reads)
 - `--truncation_mode none` — preserve full-length templates (truncation would cut molecules in the middle and confuse barcode detection)
 - `--no_model_ir` — disable intron retention model (not relevant for cDNA)
+- `--seed` does not make runs reproducible with `-t > 1`: worker processes reseed Python's `random` after fork.
+- NanoSim additionally reverse-complements whole reads (the `_R` tag in read names), so both strands occur
+  regardless of `--strand_switch_prob`.
 
-Pre-trained models at: `/abga/work/andreyp/simulation/models/`
+Pre-trained models at: `/abga/work/andreyp/simulation/models/`. Low-error Stereo-seq ONT model (3.8% error):
+`/abga/work/andreyp/simulation/models/Stereo/StereoSeq.NanoSim.Model/StereoSeq_S2_PC1-CID_L_Exome_LW`
+(the older prefix `models/Stereo/StereoSeq_S2_PC1-CID_L_Exome_LW` no longer exists).
 
 **Outputs**:
 - `<prefix>_aligned_reads.fasta` — simulated reads with ONT errors
@@ -127,8 +138,6 @@ Pre-simulated data for reference/comparison:
 
 ## Notes on Strand Handling
 
-The detector handles strand-switching transparently:
-- `TenXSplittingBarcodeDetector.find_barcode_umi()` tries both forward and reverse complement of the full read
-- For concatenated reads where sub-molecules switch strand mid-read, the current implementation picks the globally better strand rather than per-molecule strand detection
-- This means strand-switched sub-molecules may be missed — a known limitation for the first implementation
-- Template names from `simulate_barcoded.py` encode the strand of each sub-molecule (check `info.txt` or script source for exact format)
+The splitting detectors scan both the read and its reverse complement and collect molecules from both,
+so concatenated reads whose sub-molecules have mixed orientations are handled per molecule.
+Template names from `simulate_barcoded.py` encode the strand of each sub-molecule (see "Ground truth in names").

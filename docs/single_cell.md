@@ -343,7 +343,7 @@ Splitting is controlled by `--split_molecules`:
 | `true` | split, and stop with an error if the protocol cannot split |
 | `false` | never split |
 
-Supported for `tenX_v3`, `tenX_v2`, `stereoseq` and `visium_5prime`. `--split_molecules true`
+Supported for `tenX_v3`, `tenX_v2`, `stereoseq`, `visium_5prime` and `visium_hd`. `--split_molecules true`
 with any other mode is an error rather than a silent no-op, so a request that cannot be
 honoured never passes unnoticed.
 
@@ -356,13 +356,16 @@ reads it compressed, so alignment is not slowed down.
 Splitting rewrites the reads, so the pieces have to be aligned afresh. Supplying an aligned
 BAM (`--bam`) says the opposite - that no mapping should happen - so the two requests
 contradict each other and IsoQuant aborts rather than guessing. This applies to `auto` as well
-as `true`: pass the raw reads if you want the molecules split and re-aligned, or
-`--split_molecules false` to analyse the alignments as they are.
+as `true`, and also when barcodes come with the alignments (`--barcoded_bam`, e.g. a Space Ranger
+or Cell Ranger BAM) or from `--barcoded_reads`: pass the raw reads if you want the molecules split
+and re-aligned, or `--split_molecules false` to analyse the alignments as they are.
 
 Splitting is worth leaving on even for libraries you do not expect to be concatenated: measured
 on non-concatenated 10x data it recovers about one extra point of recall at unchanged precision
 (87.3% → 88.3% on ONT R9, 89.6% → 90.5% on ONT cDNA R10.4), at roughly twice the barcode
-calling runtime.
+calling runtime. On simulated ONT Visium HD data splitting leaves non-concatenated reads unchanged
+(97.6% precision, 74.6% recall either way) and doubles the recall on concatenated ones
+(35.1% → 74.0% at 97.7% precision, 2.2 molecules per read on average).
 
 The superseded mode names `tenX_v3_split`, `tenX_v2_split` and `stereoseq_nosplit` still work
 and are translated to the corresponding `--mode` plus `--split_molecules` combination.
