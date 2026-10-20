@@ -5,7 +5,7 @@ genome: /abga/work/andreyp/data/reference/mouse/GRCm39.primary_assembly.genome.f
 genedb: /abga/work/andreyp/data/reference/mouse/gencode.vM36.basic.annotation.gtf
 bam: /abga/work/andreyp/ci_isoquant/data/barcodes/Mouse.VisiumHD.800K.aligned.bam
 datatype: ont
-isoquant_options: '"-m visium_hd --complete_genedb --barcoded_reads /abga/work/andreyp/ci_isoquant/data/barcodes/Mouse.VisiumHD.800K.barcoded_reads.tsv
+isoquant_options: '"-m visium_hd --split_molecules false --complete_genedb --barcoded_reads /abga/work/andreyp/ci_isoquant/data/barcodes/Mouse.VisiumHD.800K.barcoded_reads.tsv
   --barcode2barcode /abga/work/andreyp/data/visium/spaceranger/barcode_seq_to_spots.tsv:0:1,2,3
   --large_output read_info  -t 10"'
 edit_distance: '4'
