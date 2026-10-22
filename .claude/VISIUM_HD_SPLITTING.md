@@ -91,14 +91,22 @@ GRCm39 + vM36): split FASTA realigned, 85,910 molecules counted, report says "mo
 
 Refactor safety: extracting `SplittingScanMixin` and the Visium polyT helper left 10x split
 (realistic and 3M whitelists) and Visium non-split output byte-identical to master; Visium
-non-split on the full 800K CI reads is identical to master too (its slight drift from the stored
-baselines, e.g. 611,917 vs 611,984 barcoded reads, predates this branch).
+non-split on the full 800K CI reads is identical to master too (its slight drift from the old stored
+baselines, e.g. 611,917 vs 611,984 barcoded reads, predates this branch; baselines are now refreshed
+together with the UMI fix below).
+
+## UMI without R1 (fixed)
+
+Without R1 the UMI used to be read as the 10 bases before BC1 (`_extract_barcodes_near_polyt`:
+`max(0, end - UMI_LEN_VIS)` .. `end`, inclusive), one more than the 9 bp UMI; now `end - UMI_LEN_VIS + 1`.
+This also changes non-split output. Measured on the concatenated CI reads (9 bp UMIs), correctly
+barcoded molecules without R1 (25,710 of 1,301,799): exact UMI 0.09% → 50.31%, edit distance ≤ 1
+55.35% → 63.60%; molecules with R1 unchanged. Barcode metrics are byte-identical. On the older
+`correct_struct` simulation, whose UMIs are 10 bp, `umi_within_1` drops slightly (572,352 → 572,013),
+because the extra base used to match the extra simulated base; baselines refreshed.
 
 ## Known limitations
 
-- Without R1 the UMI is read as the 10 bases before BC1 (`_extract_barcodes_near_polyt`, inherited
-  verbatim from the non-split detector: `max(0, end - UMI_LEN_VIS)` .. `end`), one more than the
-  9 bp UMI. Fixing it changes non-split output and baselines, so it was left for a separate change.
 - No real concatenated Visium HD ONT data was available; false-positive behaviour of the R1-optional
   path on real reads is unmeasured.
 - Recall is bounded by barcode matching (~75% on this simulation even without concatenation), not by

@@ -5,6 +5,7 @@
 - Read splitting for Visium HD: concatenated ONT reads are split into individual molecules (default `--split_molecules auto`), which doubles barcode calling recall on concatenated reads;
   - `-m visium_hd` with aligned input (`--bam`, including `--barcoded_bam` and `--barcoded_reads`) now requires `--split_molecules false`;
   - `isoquant_detect_barcodes.py --mode visium_hd` now reports one row per detected molecule and writes a split reads FASTA, use `--split_molecules false` for the previous output.
+- Fixed Visium HD UMI extraction when the R1 primer is not detected (the UMI was one base too long).
 
 ## IsoQuant 4.1.0, 19 October 2026
 
