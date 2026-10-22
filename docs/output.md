@@ -192,7 +192,7 @@ Produced only when `fusion` is among the requested `--analysis` values.
 
 Fusion detection runs after the isoform pipeline and reports candidate gene fusions:
 
-* `fusion_<bam_basename>.tsv` - detected gene fusions, one file per input BAM, placed directly in `<output_dir>`;
+* `SAMPLE_ID.fusions.tsv` - detected gene fusions, one file per sample (combining all of the sample's BAM files), placed in the sample's output folder `<output_dir>/SAMPLE_ID/`;
 
 See [output formats](formats.md#fusion-prediction-format) for a description of the columns.
 

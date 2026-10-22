@@ -274,7 +274,7 @@ Space-separated list of analyses to run. Supported values (short aliases in brac
   - Intron retention counts (`*.intron_retention_counts.tsv`): reads retaining vs splicing out each reference intron;
   
 * `fusion` (requires gene annotation): fusion gene detection, produces:
-  - Fusion gene predictions (`fusion_<bam_basename>.tsv`, one file per input BAM).
+  - Fusion gene predictions (`SAMPLE_ID.fusions.tsv`, one file per sample combining all its BAM files).
 
 
 Defaults when `--analysis` is not set:

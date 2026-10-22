@@ -384,7 +384,7 @@ provides comparison between discovered novel transcripts vs reference transcript
 ## Fusion prediction format
 
 Produced only when fusion detection is requested via `--analysis fusion`.
-This option will result in one `fusion_<bam_basename>.tsv` file per input BAM with the following columns:
+This option will result in one `SAMPLE_ID.fusions.tsv` file per sample (all of the sample's BAM files are combined) with the following columns:
 
 * `LeftGene` / `RightGene` - gene symbols of the two fusion partners;
 * `LeftBiotype` / `RightBiotype` - biotype of each partner gene (e.g. `protein_coding`);
