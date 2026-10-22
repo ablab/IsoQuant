@@ -341,6 +341,14 @@ class VisiumHDBarcodeDetector:
     TERMINAL_MATCH_DELTA = 2
     STRICT_TERMINAL_MATCH_DELTA = 1
 
+    MIN_SCORE = 13
+    # With a spot mapping, ties between neighbouring barcodes resolve to one spot, so matching can be looser.
+    # Measured at 8 um: a 3 bp margin adds ~2.4% recall for -0.1% precision; min score 12 adds another
+    # ~4.2% recall but costs -0.9% precision, 11 adds more wrong assignments than correct ones.
+    SPOT_MIN_SCORE = 13
+    # extra bases on each side of the BC2 window and before the BC1 window (spot mapping only)
+    SPOT_WINDOW_MARGIN = 3
+
     def __init__(self, barcode_pair_list: List[List[str]], spot_mapping: Optional[SpotMapping] = None):
         """
         Initialize Visium HD detector.
@@ -360,17 +368,21 @@ class VisiumHDBarcodeDetector:
         self.part2_barcode_indexer = ArrayKmerIndexer(self.part2_list, kmer_size=7)
         self.max_barcodes_hits = 20
         self.min_matching_kmers = 2
-        self.min_score = 13
+        self.min_score = self.MIN_SCORE
+        self.window_margin = 0
+        if spot_mapping is not None:
+            self.min_score = self.SPOT_MIN_SCORE
+            self.window_margin = self.SPOT_WINDOW_MARGIN
 
         logger.debug("Min score set to %d" % self.min_score)
 
-    def _match_part(self, indexer: ArrayKmerIndexer,
-                    window: str) -> Tuple[Optional[str], int, int, int, List[str]]:
+    def _match_part(self, indexer: ArrayKmerIndexer, window: str,
+                    expected_offset: int = 0) -> Tuple[Optional[str], int, int, int, List[str]]:
         """Match one barcode part in window: (barcode, score, start, end, tied barcodes).
 
         barcode is None when nothing matches well enough or the best candidates tie. With a spot
         mapping the tied candidates are returned too, so that their spot can still be resolved; their
-        position is used only when they all agree on it.
+        position is used only when they all agree on it, otherwise the part is assumed at expected_offset.
         """
         matching_barcodes = indexer.get_occurrences(window, max_hits=self.max_barcodes_hits)
         barcode, score, start, end = \
@@ -380,10 +392,9 @@ class VisiumHDBarcodeDetector:
 
         tie_score, ties = find_tied_candidates_ssw_var_len(matching_barcodes, window, min_score=self.min_score)
         if not ties:
-            return None, 0, 0, 0, []
+            return None, 0, expected_offset, expected_offset, []
         positions = {(tie_start, tie_end) for _, tie_start, tie_end in ties}
-        if len(positions) == 1:
-            start, end = positions.pop()
+        start, end = positions.pop() if len(positions) == 1 else (expected_offset, expected_offset)
         return None, tie_score, start, end, [tie_barcode for tie_barcode, _, _ in ties]
 
     def _resolve_barcode(self, barcode1: Optional[str], ties1: List[str],
@@ -490,19 +501,31 @@ class VisiumHDBarcodeDetector:
     def _extract_barcodes_near_polyt(self, read_id: str, sequence: str, polyt_start: int,
                                      r1_end: Optional[int]) -> TenXBarcodeDetectionResult:
         """Read BC2, then BC1 backwards from polyT, and the UMI between R1 (if found) and BC1."""
+        margin = self.window_margin
         barcode2_end = polyt_start - 1 - self.SEPARATOR_BASES
         barcode2_start = barcode2_end - self.BARCODE2_LEN_VIS + 1
+        expected_bc2_offset = 0
+        if margin:
+            # the polyT start is often off by a few bases; the T-rich bases after BC2 cannot match a barcode
+            expected_bc2_offset = min(margin, max(0, barcode2_start))
+            barcode2_start -= expected_bc2_offset
+            barcode2_end += margin
         potential_barcode2 = sequence[barcode2_start:barcode2_end + 1]
         barcode2, bc2_score, bc2_start, bc2_end, ties2 = \
-            self._match_part(self.part2_barcode_indexer, potential_barcode2)
+            self._match_part(self.part2_barcode_indexer, potential_barcode2, expected_bc2_offset)
         logger.debug("Barcode 2: %s, %s" % (potential_barcode2, barcode2))
 
         real_bc2_start = barcode2_start + bc2_start
         barcode1_end = real_bc2_start - 1
         barcode1_start = barcode1_end - self.BARCODE1_LEN_VIS + 1
+        expected_bc1_offset = 0
+        if margin:
+            # widen leftwards only: BC2 follows, and part 2 barcodes resemble part 1 ones
+            expected_bc1_offset = min(margin, max(0, barcode1_start))
+            barcode1_start -= expected_bc1_offset
         potential_barcode1 = sequence[barcode1_start:barcode1_end + 1]
         barcode1, bc1_score, bc1_start, bc1_end, ties1 = \
-            self._match_part(self.part1_barcode_indexer, potential_barcode1)
+            self._match_part(self.part1_barcode_indexer, potential_barcode1, expected_bc1_offset)
         logger.debug("Barcode 1: %s, %s" % (potential_barcode1, barcode1))
         real_bc1_start = barcode1_start + bc1_start
 

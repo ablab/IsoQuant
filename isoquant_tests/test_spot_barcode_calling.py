@@ -150,6 +150,17 @@ class TestDetectorSpots:
         result = detector.find_barcode_umi("read", molecule(PART1[2], PART2[0]))
         assert result.get_barcode() == PART1[2] + "|" + PART2[0]
 
+    def test_window_margin_tolerates_shifted_polyt(self, tmp_path):
+        """A longer separator before polyT shifts the BC2 window by 3; spot mode searches a wider window."""
+        part1, part2 = ["GATCCTAGCTTGACAG"], ["CAGTTCAAGGCTAGC"]
+        mapping = SpotMapping(part1, part2, write_mapping(
+            tmp_path / "m.tsv", [(part1[0] + "|" + part2[0], "s_002um_00028_00028", "s_008um_00007_00007")]), 0, 2)
+        read = R1 + "ACGTTGCAA" + part1[0] + part2[0] + "GCAGC" + "T" * 30 + CDNA + TSO_TAIL
+        assert not VisiumHDBarcodeDetector([part1, part2]).find_barcode_umi("read", read).is_valid()
+        result = VisiumHDBarcodeDetector([part1, part2], spot_mapping=mapping).find_barcode_umi("read", read)
+        assert result.get_barcode() == "s_008um_00007_00007"
+        assert result.get_umi() == "ACGTTGCAA"
+
     def test_no_polyt_path(self, spot_mapping):
         """R1-anchored detection without polyT resolves ties the same way."""
         detector = VisiumHDBarcodeDetector([PART1, PART2], spot_mapping=spot_mapping)
