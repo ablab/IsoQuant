@@ -168,6 +168,10 @@ Each extra round only writes UMI deduplicated reads in allinfo format to
 statistics to `SAMPLE_ID.UMI_filtered.barcode_barcode_col{C}.ED{N}.stats.tsv`
 (`{C}` = 0-based spot-column index).
 
+When IsoQuant calls Visium HD barcodes itself, `--barcode2barcode` is applied during barcode calling
+instead: the barcode column of the barcoded reads table, `read_info` and the allinfo output contain spot IDs,
+the main UMI deduplication is already spot-level, and no extra rounds or `barcode_barcode_col{C}` files are written.
+
 ### Tagged and deduplicated BAM
 
 Two optional BAM outputs for single-cell and spatial modes, enabled with

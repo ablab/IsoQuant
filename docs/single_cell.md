@@ -198,6 +198,9 @@ However, only the main (barcode-based) UMI-deduplicated reads will be used for q
 When `--barcode2barcode` is set, `--read_group barcode_barcode` will be set automatically.
 Grouping by raw barcode sequences will be disabled in this case, use `--read_group barcode` to enable it.
 
+When IsoQuant calls Visium HD barcodes itself (`--mode visium_hd` with `--barcode_whitelist`), the mapping
+is applied during barcode calling instead, see [spot-level barcode calling](#spot-level-barcode-calling-visium-hd).
+
 For Visium HD composite barcodes, use `isoquant_lib/scripts/prepare_visium_spot_ids.py` to generate the mapping file.
 
 
@@ -392,11 +395,33 @@ In this case, use `--barcode2barcode` option to provide barcode to spot mapping 
 
 ```bash
 isoquant.py --reference genome.fa --genedb genes.gtf --complete_genedb \
-  --fastq reads.fastq.gz --data_type nanopore \
-  --mode visium_hd --barcode_whitelist part1.txt part2.txt \
-  --barcode2barcode barcode2spot.tsv:0:1,2 \
+  --bam aligned.bam --barcoded_reads barcoded_reads.tsv --data_type nanopore \
+  --mode visium_hd --barcode2barcode barcode2spot.tsv:0:1,2 \
   -o visium_output
 ```
+
+### Spot-level barcode calling (Visium HD)
+
+Each Visium HD barcode identifies a 2 µm spot, and the barcodes of neighbouring spots differ by one or two
+bases, so a read with a sequencing error in its barcode often matches two neighbours equally well and stays
+unassigned. Most analyses use 8 µm or 16 µm spots, which contain 4x4 or 8x8 such barcodes. When
+`--barcode2barcode` is given while IsoQuant calls the barcodes, the barcodes are reported as spot IDs of the
+selected resolution, and a read whose candidate barcodes all belong to one spot is assigned to it:
+
+```bash
+isoquant.py --reference genome.fa --genedb genes.gtf --complete_genedb \
+  --fastq reads.fastq.gz --data_type nanopore \
+  --mode visium_hd --barcode_whitelist part1.txt part2.txt \
+  --barcode2barcode barcode2spot.tsv:0:2 \
+  -o visium_output
+```
+
+Exactly one spot column has to be selected (column 2 above, e.g. 8 µm); with several columns IsoQuant stops
+with an error. The barcoded reads table, UMI deduplication and the barcode-grouped counts then use spot IDs,
+and the mapping is not applied again. Alignment scores and UMIs are still taken from the barcode sequences.
+On simulated ONT Visium HD data this raises recall at 8 µm from 76.0% (2 µm barcodes mapped to spots
+afterwards) to 76.4%, and at 16 µm from 76.2% to 76.9%, at the same precision (99.3% and 99.6%).
+A `--barcode2spot` file has to be keyed by these spot IDs.
 
 For Visium HD, generate the mapping file from per-part coordinate files:
 
