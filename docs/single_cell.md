@@ -419,8 +419,10 @@ isoquant.py --reference genome.fa --genedb genes.gtf --complete_genedb \
 Exactly one spot column has to be selected (column 2 above, e.g. 8 µm); with several columns IsoQuant stops
 with an error. The barcoded reads table, UMI deduplication and the barcode-grouped counts then use spot IDs,
 and the mapping is not applied again. Alignment scores and UMIs are still taken from the barcode sequences.
-On simulated ONT Visium HD data this raises recall at 8 µm from 76.0% (2 µm barcodes mapped to spots
-afterwards) to 76.4%, and at 16 µm from 76.2% to 76.9%, at the same precision (99.3% and 99.6%).
+Since ambiguity between neighbours no longer matters, barcodes are also searched in a slightly wider window
+around their expected position. On simulated ONT Visium HD data this raises recall at 8 µm from 76.0%
+(2 µm barcodes mapped to spots afterwards) to 78.8% at 99.2% precision (99.3% before), and at 16 µm from
+76.2% to 79.3% at 99.5% precision (99.6% before).
 A `--barcode2spot` file has to be keyed by these spot IDs.
 
 For Visium HD, generate the mapping file from per-part coordinate files:

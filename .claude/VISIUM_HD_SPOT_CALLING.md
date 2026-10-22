@@ -45,12 +45,12 @@ Baseline = today's 2 µm calls mapped to spots afterwards (what `--barcode2barco
 scored with the same QA. Scoring the baseline at 2 µm via the spot column reproduces the plain barcode QA
 exactly (97.58/74.66 non-concatenated, 97.69/73.97 concatenated).
 
-| data | resolution | baseline precision / recall | spot calling precision / recall |
-|---|---|---|---|
-| non-concatenated (`correct_struct`) | 8 µm | 99.29 / 75.98 | 99.28 / 76.42 |
-| non-concatenated | 16 µm | 99.60 / 76.21 | 99.59 / 76.88 |
-| concatenated (2.2 molecules/read) | 8 µm | 99.32 / 75.21 | 99.32 / 75.63 |
-| concatenated | 16 µm | 99.64 / 75.45 | 99.63 / 76.07 |
+| data | resolution | baseline precision / recall | ties only (margin 0) | default (margin 3, CI baselines) |
+|---|---|---|---|---|
+| non-concatenated (`correct_struct`) | 8 µm | 99.29 / 75.98 | 99.28 / 76.42 | 99.16 / 78.82 |
+| non-concatenated | 16 µm | 99.60 / 76.21 | 99.59 / 76.88 | 99.49 / 79.30 |
+| concatenated (2.2 molecules/read) | 8 µm | 99.32 / 75.21 | 99.32 / 75.63 | 99.21 / 77.95 |
+| concatenated | 16 µm | 99.64 / 75.45 | 99.63 / 76.07 | — |
 
 Without a mapping, Visium HD output (split and non-split, 100K reads) is byte-identical to `visium_hd_split`.
 Cost (800K non-concatenated, 16 threads): 3:59.7 → 4:05 wall clock (mapping load 12 s), peak RSS
@@ -77,4 +77,34 @@ IDs, count matrices keyed by spot, no `barcode_barcode_col*` outputs; `:0:1,2,3`
   barcode length; the true BC2 starts 1–3 bases off the window in ~40% of failed reads (polyT start estimate),
   and two sequencing errors in a 15 bp part already drop the score below 13.
 - Spot-level calling makes looser matching safer (extra ties between neighbours resolve to one spot), so
-  wider windows and/or a lower min_score in spot mode are the natural next step; not done here.
+  wider windows and/or a lower min_score in spot mode are the natural next step — see below.
+
+## Looser matching in spot mode (window margin, min score)
+
+Spot mode only (`VisiumHDBarcodeDetector.SPOT_WINDOW_MARGIN`, `SPOT_MIN_SCORE`; without a mapping nothing
+changes): the BC2 window is widened by the margin on both sides (the bases after BC2 are T-rich and cannot
+match a barcode), the BC1 window to the left only (BC2 follows, and part 2 barcodes are part 1 barcodes minus
+their first base). When tied candidates disagree on their position the part is assumed at the expected offset.
+
+Sweep on template-disjoint dev sets (100K non-concatenated reads 800,001–900,000 of the 10M `correct_struct`
+simulation; 100K concatenated `dev.100K`), scored at 8 µm; baseline = 2 µm calls mapped afterwards:
+
+| margin, min score | non-concat precision / recall | concat precision / recall |
+|---|---|---|
+| baseline (2 µm) | 99.29 / 75.87 | 99.32 / 75.40 |
+| 0, 13 | 99.28 / 76.28 | 99.31 / 75.82 |
+| 2, 13 | 99.20 / 78.41 | 99.24 / 77.94 |
+| **3, 13 (default)** | **99.18 / 78.69** | **99.21 / 78.20** |
+| 5, 13 | 99.15 / 78.86 | 99.16 / 78.38 |
+| 0, 12 | 98.70 / 81.06 | 98.72 / 80.32 |
+| 3, 12 | 98.30 / 82.89 | 98.34 / 82.11 |
+| 3, 11 | 95.76 / 84.60 | 95.88 / 83.64 |
+
+At 16 µm: baseline 99.61 / 76.11, (0,13) 99.60 / 76.73, **(3,13) 99.50 / 79.14**, (5,13) 99.48 / 79.32,
+(0,12) 99.11 / 81.81, (3,12) 98.71 / 83.62 (non-concatenated; concatenated alike).
+
+Marginal precision of what each step adds (non-concatenated, 8 µm): margin 3 vs 0: +2,409 correct /
++99 wrong (96%); min score 12 on top: +4,201 / +776 (84%); 11 on top of 12: +1,712 / +2,313, i.e. more wrong
+than right, and excessive molecules jump from 4 to 445 — rejected. Margin 3 is the knee (5 adds 0.2% recall for
+more errors) and stays within the ≤0.2% precision cost agreed for this feature, so it is the default;
+min score 12 (+4.2% recall for −0.9% precision) is left as a decision for the user. Runtime is unchanged.
