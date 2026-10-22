@@ -11,16 +11,18 @@ Supports 10x Genomics v3 single-cell and Visium HD spatial platforms.
 """
 
 import logging
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from .. import ArrayKmerIndexer, Array2BitKmerIndexer
 from ..indexers import KmerIndexer
 from ..common import (
     find_polyt_start, reverese_complement,
     find_candidate_with_max_score_ssw, find_candidate_with_max_score_ssw_var_len,
+    find_tied_candidates_ssw_var_len,
     detect_exact_positions, detect_first_exact_positions, str_to_2bit,
     find_optimal_kmer_size,
 )
+from ..spot_mapping import JOINT_BARCODE_SEPARATOR, SpotMapping
 from .base import (TenXBarcodeDetectionResult, TenXSplitBarcodeDetectionResult,
                    VisiumHDSplitBarcodeDetectionResult, SplittingBarcodeDetectionResult)
 
@@ -339,17 +341,20 @@ class VisiumHDBarcodeDetector:
     TERMINAL_MATCH_DELTA = 2
     STRICT_TERMINAL_MATCH_DELTA = 1
 
-    def __init__(self, barcode_pair_list: List[List[str]]):
+    def __init__(self, barcode_pair_list: List[List[str]], spot_mapping: Optional[SpotMapping] = None):
         """
         Initialize Visium HD detector.
 
         Args:
             barcode_pair_list: List of two lists [part1_barcodes, part2_barcodes]
+            spot_mapping: when set, report spot IDs instead of PART1|PART2 barcodes; a part whose best
+                candidates tie is then resolved if all tied pairs fall into one spot
         """
         assert len(barcode_pair_list) == 2
         self.r1_indexer = KmerIndexer([VisiumHDBarcodeDetector.R1], kmer_size=7)
         self.part1_list = barcode_pair_list[0]
         self.part2_list = barcode_pair_list[1]
+        self.spot_mapping = spot_mapping
 
         self.part1_barcode_indexer = ArrayKmerIndexer(self.part1_list, kmer_size=7)
         self.part2_barcode_indexer = ArrayKmerIndexer(self.part2_list, kmer_size=7)
@@ -358,6 +363,39 @@ class VisiumHDBarcodeDetector:
         self.min_score = 13
 
         logger.debug("Min score set to %d" % self.min_score)
+
+    def _match_part(self, indexer: ArrayKmerIndexer,
+                    window: str) -> Tuple[Optional[str], int, int, int, List[str]]:
+        """Match one barcode part in window: (barcode, score, start, end, tied barcodes).
+
+        barcode is None when nothing matches well enough or the best candidates tie. With a spot
+        mapping the tied candidates are returned too, so that their spot can still be resolved; their
+        position is used only when they all agree on it.
+        """
+        matching_barcodes = indexer.get_occurrences(window, max_hits=self.max_barcodes_hits)
+        barcode, score, start, end = \
+            find_candidate_with_max_score_ssw_var_len(matching_barcodes, window, min_score=self.min_score)
+        if barcode is not None or self.spot_mapping is None:
+            return barcode, score, start, end, []
+
+        tie_score, ties = find_tied_candidates_ssw_var_len(matching_barcodes, window, min_score=self.min_score)
+        if not ties:
+            return None, 0, 0, 0, []
+        positions = {(tie_start, tie_end) for _, tie_start, tie_end in ties}
+        if len(positions) == 1:
+            start, end = positions.pop()
+        return None, tie_score, start, end, [tie_barcode for tie_barcode, _, _ in ties]
+
+    def _resolve_barcode(self, barcode1: Optional[str], ties1: List[str],
+                         barcode2: Optional[str], ties2: List[str]) -> Optional[str]:
+        """PART1|PART2, or with a spot mapping the spot shared by all candidate pairs."""
+        if self.spot_mapping is None:
+            if barcode1 is None or barcode2 is None:
+                return None
+            return barcode1 + JOINT_BARCODE_SEPARATOR + barcode2
+        candidates1 = [barcode1] if barcode1 is not None else ties1
+        candidates2 = [barcode2] if barcode2 is not None else ties2
+        return self.spot_mapping.unique_spot(candidates1, candidates2)
 
     def find_barcode_umi(self, read_id: str, sequence: str) -> TenXBarcodeDetectionResult:
         """Detect barcode and UMI in a read sequence."""
@@ -428,24 +466,23 @@ class VisiumHDBarcodeDetector:
             barcode1_start = r1_end + self.UMI_LEN_VIS + 1
             barcode1_end = barcode1_start + self.BARCODE1_LEN_VIS - 1
             potential_barcode1 = sequence[barcode1_start:barcode1_end + 1]
-            matching_barcodes1 = self.part1_barcode_indexer.get_occurrences(potential_barcode1, max_hits=self.max_barcodes_hits)
-            barcode1, bc1_score, bc1_start, bc1_end = \
-                find_candidate_with_max_score_ssw_var_len(matching_barcodes1, potential_barcode1, min_score=self.min_score)
+            barcode1, bc1_score, bc1_start, bc1_end, ties1 = \
+                self._match_part(self.part1_barcode_indexer, potential_barcode1)
             logger.debug("Barcode 1: %s, %s" % (potential_barcode1, barcode1))
             real_bc1_end = barcode1_start + bc1_end
 
             barcode2_start = real_bc1_end + 1
             barcode2_end = barcode2_start + self.BARCODE2_LEN_VIS - 1
             potential_barcode2 = sequence[barcode2_start:barcode2_end + 1]
-            matching_barcodes2 = self.part2_barcode_indexer.get_occurrences(potential_barcode2, max_hits=self.max_barcodes_hits)
-            barcode2, bc2_score, bc2_start, bc2_end = \
-                find_candidate_with_max_score_ssw_var_len(matching_barcodes2, potential_barcode2, min_score=self.min_score)
+            barcode2, bc2_score, bc2_start, bc2_end, ties2 = \
+                self._match_part(self.part2_barcode_indexer, potential_barcode2)
             logger.debug("Barcode 2: %s, %s" % (potential_barcode2, barcode2))
 
-            if barcode1 is None or barcode2 is None:
+            barcode = self._resolve_barcode(barcode1, ties1, barcode2, ties2)
+            if barcode is None:
                 return TenXBarcodeDetectionResult(read_id, polyT=polyt_start, r1=r1_end)
 
-            return TenXBarcodeDetectionResult(read_id, barcode1 + "|" + barcode2, potential_umi, bc1_score + bc2_score,
+            return TenXBarcodeDetectionResult(read_id, barcode, potential_umi, bc1_score + bc2_score,
                                               UMI_good=True, polyT=polyt_start, r1=r1_end)
 
         return self._extract_barcodes_near_polyt(read_id, sequence, polyt_start, r1_end)
@@ -456,18 +493,16 @@ class VisiumHDBarcodeDetector:
         barcode2_end = polyt_start - 1 - self.SEPARATOR_BASES
         barcode2_start = barcode2_end - self.BARCODE2_LEN_VIS + 1
         potential_barcode2 = sequence[barcode2_start:barcode2_end + 1]
-        matching_barcodes2 = self.part2_barcode_indexer.get_occurrences(potential_barcode2, max_hits=self.max_barcodes_hits)
-        barcode2, bc2_score, bc2_start, bc2_end = \
-            find_candidate_with_max_score_ssw_var_len(matching_barcodes2, potential_barcode2, min_score=self.min_score)
+        barcode2, bc2_score, bc2_start, bc2_end, ties2 = \
+            self._match_part(self.part2_barcode_indexer, potential_barcode2)
         logger.debug("Barcode 2: %s, %s" % (potential_barcode2, barcode2))
 
         real_bc2_start = barcode2_start + bc2_start
         barcode1_end = real_bc2_start - 1
         barcode1_start = barcode1_end - self.BARCODE1_LEN_VIS + 1
         potential_barcode1 = sequence[barcode1_start:barcode1_end + 1]
-        matching_barcodes1 = self.part1_barcode_indexer.get_occurrences(potential_barcode1, max_hits=self.max_barcodes_hits)
-        barcode1, bc1_score, bc1_start, bc1_end = \
-            find_candidate_with_max_score_ssw_var_len(matching_barcodes1, potential_barcode1, min_score=self.min_score)
+        barcode1, bc1_score, bc1_start, bc1_end, ties1 = \
+            self._match_part(self.part1_barcode_indexer, potential_barcode1)
         logger.debug("Barcode 1: %s, %s" % (potential_barcode1, barcode1))
         real_bc1_start = barcode1_start + bc1_start
 
@@ -480,10 +515,11 @@ class VisiumHDBarcodeDetector:
         potential_umi = sequence[potential_umi_start:potential_umi_end + 1]
         logger.debug("Potential UMI: %s" % potential_umi)
 
-        if barcode1 is None or barcode2 is None:
+        barcode = self._resolve_barcode(barcode1, ties1, barcode2, ties2)
+        if barcode is None:
             return TenXBarcodeDetectionResult(read_id, polyT=polyt_start, r1=r1_end if r1_end is not None else -1)
 
-        return TenXBarcodeDetectionResult(read_id, barcode1 + "|" + barcode2, potential_umi, bc1_score + bc2_score,
+        return TenXBarcodeDetectionResult(read_id, barcode, potential_umi, bc1_score + bc2_score,
                                           UMI_good=umi_good, polyT=polyt_start, r1=r1_end if r1_end is not None else -1)
 
     def find_barcode_umi_no_polya(self, read_id: str, sequence: str) -> TenXBarcodeDetectionResult:
@@ -724,8 +760,8 @@ class VisiumHDSplittingBarcodeDetector(SplittingScanMixin, VisiumHDBarcodeDetect
     # R1 end -> polyT start beyond which the relaxed polyT search near R1 is tried
     R1_POLYT_RESCUE_DISTANCE = VisiumHDBarcodeDetector.TOTAL_BARCODE_LEN_VIS + VisiumHDBarcodeDetector.UMI_LEN_VIS + 10
 
-    def __init__(self, barcode_pair_list: List[List[str]]):
-        super().__init__(barcode_pair_list)
+    def __init__(self, barcode_pair_list: List[List[str]], spot_mapping: Optional[SpotMapping] = None):
+        super().__init__(barcode_pair_list, spot_mapping)
         self.tso_indexer = KmerIndexer([self.TSO], kmer_size=9)
 
     def _find_barcode_umi_fwd_local(self, read_id: str, sequence: str) -> TenXBarcodeDetectionResult:

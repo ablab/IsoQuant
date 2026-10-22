@@ -34,6 +34,8 @@ from isoquant_lib.barcode_calling.options import (
     resolve_deprecated_mode,
     resolve_split_molecules,
 )
+from isoquant_lib.barcode_calling.spot_mapping import parse_spot_mapping_spec
+from isoquant_lib.utils.file_utils import check_file_exists
 
 logger = logging.getLogger('IsoQuant')
 
@@ -70,6 +72,10 @@ def parse_args(sys_argv):
                              "that cannot [%s]" % (SPLIT_MOLECULES_AUTO, SPLIT_MOLECULES_TRUE,
                                                    SPLIT_MOLECULES_AUTO))
     parser.add_argument("--molecule", type=str, help="MDF files with molecule description (for custom_sc mode only)")
+    parser.add_argument("--barcode2barcode", type=str,
+                        help="TSV mapping barcodes to spot IDs, FILE[:barcode_col:spot_col] (visium_hd only); "
+                             "barcodes are reported as spot IDs, and a read whose barcode is ambiguous is "
+                             "still assigned when all candidates belong to the same spot")
 
     parser.add_argument("--input", "-i", nargs='+', type=str, help="input reads in [gzipped] FASTA, FASTQ, BAM",
                         required=True)
@@ -128,6 +134,12 @@ def main(sys_argv):
     resolve_split_molecules(args)
     check_args(args)
     resolve_barcode_correction(args, whitelist_option='--barcodes')
+    if args.barcode2barcode:
+        if args.mode != IsoQuantMode.visium_hd:
+            logger.critical("--barcode2barcode is supported only for --mode %s" % IsoQuantMode.visium_hd.name)
+            sys.exit(IsoQuantExitCode.INCOMPATIBLE_OPTIONS)
+        mapping_file, _, _ = parse_spot_mapping_spec(args.barcode2barcode)
+        check_file_exists(mapping_file, "Barcode to spot mapping file")
 
     out_dir = os.path.dirname(args.output)
     if out_dir and not os.path.exists(out_dir):

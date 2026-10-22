@@ -354,7 +354,9 @@ def parse_args(cmd_args=None, namespace=None):
     add_additional_option_to_group(sc_args_group, "--strip_barcode_suffix", action='store_true', default=False,
                                    help='remove suffix after dash from barcodes extracted from BAM tag')
     add_additional_option_to_group(sc_args_group, "--barcode2barcode", type=str,
-                                   help='TSV file mapping barcode to spot IDs for UMI deduplication')
+                                   help='TSV file mapping barcode to spot IDs, FILE[:barcode_col:spot_cols]; '
+                                        'when IsoQuant calls Visium HD barcodes, they are reported as spot IDs '
+                                        '(one spot column), otherwise used for UMI deduplication')
 
     # ALGORITHM
     add_additional_option_to_group(algo_args_group, "--report_novel_unspliced", "-u", type=bool_str,
@@ -1059,8 +1061,11 @@ def set_data_dependent_options(args):
             args.read_group.append("barcode_spot")
 
     if hasattr(args, 'barcode2barcode') and args.barcode2barcode:
-        # Automatically add barcode_barcode grouping when --barcode2barcode is set
-        if args.read_group is None:
+        # Automatically add barcode_barcode grouping when --barcode2barcode is set, unless barcodes
+        # were called as spot IDs already: then the default barcode grouping is per spot
+        if getattr(args, "spot_barcode_calling", False):
+            pass
+        elif args.read_group is None:
             args.read_group = ["barcode_barcode"]
         elif "barcode_barcode" not in args.read_group and "no_auto" not in args.read_group:
             args.read_group.append("barcode_barcode")
