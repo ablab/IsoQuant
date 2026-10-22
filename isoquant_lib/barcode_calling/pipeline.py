@@ -14,6 +14,7 @@ barcode windows, the second matches reads against the barcodes that pass selecti
 import concurrent.futures
 import logging
 from concurrent.futures import ProcessPoolExecutor
+from typing import Optional
 
 from ..common import setup_worker_logging, _get_log_params
 from ..utils.checkpoints import CheckpointStore, checkpoint_name, run_checkpoint_dir, run_stage
@@ -25,7 +26,8 @@ logger = logging.getLogger('IsoQuant')
 
 class BarcodeCallingArgs:
     def __init__(self, input, barcode_whitelist, mode, output, out_fasta, tmp_dir, threads,
-                 molecule: str = None, whitelist_matching: bool = True, split_molecules: bool = False):
+                 molecule: str = None, whitelist_matching: bool = True, split_molecules: bool = False,
+                 barcode2barcode: Optional[str] = None):
         self.input = input  # Can be a single file (str) or list of files
         self.barcodes = barcode_whitelist
         self.mode = mode
@@ -38,6 +40,8 @@ class BarcodeCallingArgs:
         self.whitelist_matching = whitelist_matching
         # selects the splitting detector, and makes the caller expect one result per molecule
         self.split_molecules = split_molecules
+        # FILE[:barcode_col:spot_col]: report spot IDs instead of barcodes (Visium HD)
+        self.barcode2barcode = barcode2barcode
 
 
 def run_barcode_calling(bc_args, threads):
@@ -129,7 +133,9 @@ def call_barcodes(args):
             bc_args = BarcodeCallingArgs(input_files, barcode_files, args.mode,
                                          output_barcodes_list, output_fasta_list, sample.aux_dir, bc_threads,
                                          molecule=getattr(args, 'molecule', None),
-                                         split_molecules=args.split_molecules)
+                                         split_molecules=args.split_molecules,
+                                         barcode2barcode=args.barcode2barcode
+                                         if getattr(args, "spot_barcode_calling", False) else None)
             logger.info("Detecting barcodes for %d file(s)" % len(input_files))
             run_barcode_calling(bc_args, bc_threads)
             for input_file, output_barcodes in zip(input_files, output_barcodes_list):

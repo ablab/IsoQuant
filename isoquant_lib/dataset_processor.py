@@ -720,8 +720,9 @@ class DatasetProcessor:
                       cleanup=partial(self.remove_umi_fragments, sample.out_umi_filtered_tmp, edit_distance),
                       keep_tmp=keep_tmp)
 
-        # Barcode2barcode spot-based UMI dedup rounds
-        if not getattr(self.args, 'barcode2barcode', None):
+        # Barcode2barcode spot-based UMI dedup rounds; not needed when barcodes were called as spot IDs,
+        # the rounds above are spot-level already
+        if not getattr(self.args, 'barcode2barcode', None) or getattr(self.args, 'spot_barcode_calling', False):
             return
         from .assignment.read_groups import parse_barcode2spot_spec, load_barcode2barcode_mapping
         filename, barcode_col, spot_cols = parse_barcode2spot_spec(self.args.barcode2barcode)

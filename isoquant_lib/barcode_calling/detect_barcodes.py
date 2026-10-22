@@ -32,6 +32,7 @@ from isoquant_lib.utils.file_utils import (GZIP_SUFFIX, open_text_write, read_st
                                            strip_compression_suffix)
 from .common import reverese_complement, load_barcodes
 from .cell_selection import NOSEQ, CellBarcodeSelector, select_cell_barcodes
+from .spot_mapping import SpotMapping, parse_spot_mapping_spec
 from . import (
     TenXBarcodeDetector,
     TenXv2BarcodeDetector,
@@ -476,9 +477,19 @@ def create_barcode_caller(args):
                 logger.info("Loaded %d barcodes from %s" % (len(bc), args.barcodes[i]))
         barcodes = tuple(barcodes)
 
-    barcode_detector = barcode_detector_class(args.mode, split_molecules)(barcodes)
+    detector_class = barcode_detector_class(args.mode, split_molecules)
+    spot_mapping_spec = getattr(args, "barcode2barcode", None)
+    if not spot_mapping_spec:
+        return detector_class(barcodes)
 
-    return barcode_detector
+    if args.mode != IsoQuantMode.visium_hd:
+        logger.critical("Barcodes can be mapped to spots during barcode calling only in %s mode"
+                        % IsoQuantMode.visium_hd.name)
+        sys.exit(IsoQuantExitCode.INCOMPATIBLE_OPTIONS)
+    mapping_file, barcode_col, spot_col = parse_spot_mapping_spec(spot_mapping_spec)
+    logger.info("Barcodes will be reported as spot IDs from column %d of %s" % (spot_col, mapping_file))
+    spot_mapping = SpotMapping(barcodes[0], barcodes[1], mapping_file, barcode_col, spot_col)
+    return detector_class(barcodes, spot_mapping=spot_mapping)
 
 
 def process_single_thread(args):
