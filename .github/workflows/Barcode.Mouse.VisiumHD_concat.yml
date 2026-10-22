@@ -73,3 +73,12 @@ jobs:
         run: |
           export PATH=$PATH:${{env.BIN_PATH}}
           python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.yaml -o ${{env.OUTPUT_BASE}}
+
+      - name: 'Mouse Visium HD concat 8um spots'
+        if: always()
+        shell: bash
+        env:
+          STEP_NAME: Mouse.VisiumHD_concat.v1.s1.800K.8um
+        run: |
+          export PATH=$PATH:${{env.BIN_PATH}}
+          python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.yaml -o ${{env.OUTPUT_BASE}}

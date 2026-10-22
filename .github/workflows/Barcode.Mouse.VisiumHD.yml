@@ -82,3 +82,21 @@ jobs:
         run: |
           export PATH=$PATH:${{env.BIN_PATH}}
           python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.yaml -o ${{env.OUTPUT_BASE}}
+
+      - name: 'Mouse Visium HD 8um spots'
+        if: always()
+        shell: bash
+        env:
+          STEP_NAME: Mouse.VisiumHD.v1.s1.sep.10M.correct_struct.8um
+        run: |
+          export PATH=$PATH:${{env.BIN_PATH}}
+          python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.yaml -o ${{env.OUTPUT_BASE}}
+
+      - name: 'Mouse Visium HD 16um spots'
+        if: always()
+        shell: bash
+        env:
+          STEP_NAME: Mouse.VisiumHD.v1.s1.sep.10M.correct_struct.16um
+        run: |
+          export PATH=$PATH:${{env.BIN_PATH}}
+          python3 ${{env.LAUNCHER}} ${{env.CFG_DIR}}/${{env.STEP_NAME}}.yaml -o ${{env.OUTPUT_BASE}}
