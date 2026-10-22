@@ -466,6 +466,15 @@ However, only the main (barcode-based) UMI-deduplicated reads will be used for q
 When `--barcode2barcode` is set, `--read_group barcode_barcode` will be set automatically.
 Grouping by raw barcode sequences will be disabled in this case, use `--read_group barcode` to enable it.
 
+**Visium HD barcode calling.** When IsoQuant calls Visium HD barcodes itself (`--mode visium_hd` with
+`--barcode_whitelist`), the mapping is applied already during barcode calling: barcodes are reported as
+spot IDs, and a read whose barcode is ambiguous between neighbouring 2 µm barcodes is still assigned when
+all candidates belong to the same spot. Exactly one spot column must be selected, e.g.
+`barcode2spot.tsv:0:2`; several columns stop IsoQuant with an error. UMI deduplication and the default
+`--read_group barcode` then work on spot IDs, no extra deduplication rounds are run, and
+`--read_group barcode_barcode` cannot be used. With `--barcoded_reads` or `--barcoded_bam` the mapping is
+used for UMI deduplication as described above.
+
 For Visium HD composite barcodes, use `isoquant_lib/scripts/prepare_visium_spot_ids.py` to generate the mapping file.
 
 

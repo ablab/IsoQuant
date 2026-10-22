@@ -6,6 +6,8 @@
   - `-m visium_hd` with aligned input (`--bam`, including `--barcoded_bam` and `--barcoded_reads`) now requires `--split_molecules false`;
   - `isoquant_detect_barcodes.py --mode visium_hd` now reports one row per detected molecule and writes a split reads FASTA, use `--split_molecules false` for the previous output.
 - Fixed Visium HD UMI extraction when the R1 primer is not detected (the UMI was one base too long).
+- Spot-level barcode calling for Visium HD: when IsoQuant calls the barcodes, `--barcode2barcode` is applied during barcode calling, barcodes are reported as spot IDs, and reads whose barcode is ambiguous between neighbouring 2 µm barcodes of the same spot are assigned;
+  - in this case exactly one spot column must be selected (e.g. `barcode2spot.tsv:0:2`), and `--read_group barcode_barcode` cannot be used; with `--barcoded_reads`/`--barcoded_bam` the mapping is still used for UMI deduplication only.
 
 ## IsoQuant 4.1.0, 19 October 2026
 

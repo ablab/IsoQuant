@@ -327,6 +327,15 @@ Groups read counts by cell type/spatial region instead of individual barcodes.
 
 Enables spot-level UMI deduplication: reads with different barcodes but the same spatial spot ID are grouped together for dedup.
 
+**Two routes** (decided by `resolve_spot_barcode_calling` in `barcode_calling/options.py`, stored in `.params`
+as `args.spot_barcode_calling`, read everywhere with `getattr(..., False)` so old runs resume unchanged):
+- **During barcode calling** — `visium_hd` + `--barcode_whitelist`: the Visium HD detector reports spot IDs and
+  resolves best-score ties whose pairs all map to one spot (`SpotMapping`, `spot_mapping.py`; design and
+  measurements in `.claude/VISIUM_HD_SPOT_CALLING.md`). Exactly one spot column (else abort),
+  `--read_group barcode_barcode` aborts, the `barcode_barcode` group is not auto-added (default `barcode`
+  grouping is per spot), and `filter_umis` skips the extra rounds below. `allinfo` is still auto-added.
+- **During UMI deduplication** (everything below) — any other mode, or barcodes from `--barcoded_reads`/`--barcoded_bam`.
+
 **CLI**: `--barcode2barcode file.tsv` or `--barcode2barcode file.tsv:barcode_col:spot_cols`
 
 **File format**: Same TSV spec as `--barcode2spot`:
