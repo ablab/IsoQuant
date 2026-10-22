@@ -10,14 +10,14 @@ threads: '8'
 qa_mode: visium_hd_split
 baselines:
   barcode:
-    all_correct_reads: 615003.0
-    assignment_precision: 99.59
-    assignment_recall: 76.88
-    correct_assignments: 615003.0
-    excessive_assignments: 23.0
-    incorrect_assignments: 2501.0
-    no_barcodes_assigned: 182519.0
-    pct_all_correct: 76.88
-    pct_no_barcodes: 22.81
+    all_correct_reads: 634360.0
+    assignment_precision: 99.49
+    assignment_recall: 79.3
+    correct_assignments: 634360.0
+    excessive_assignments: 25.0
+    incorrect_assignments: 3224.0
+    no_barcodes_assigned: 162441.0
+    pct_all_correct: 79.3
+    pct_no_barcodes: 20.31
     total_reads: 800000.0
     total_true_barcodes: 800000.0
