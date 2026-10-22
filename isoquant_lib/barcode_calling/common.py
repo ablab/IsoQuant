@@ -207,6 +207,33 @@ def find_candidate_with_max_score_ssw_var_len(barcode_matches: list, read_sequen
     return best_barcode, best_match[0], best_match[1], best_match[2]
 
 
+def find_tied_candidates_ssw_var_len(barcode_matches: list, read_sequence, min_score=14):
+    """All barcodes sharing the best alignment score, for when the best one cannot be told apart.
+
+    Returns (best_score, [(barcode, start, end), ...]) with positions in read_sequence as in
+    find_candidate_with_max_score_ssw_var_len, or (0, []) if no barcode reaches min_score.
+    """
+    best_score = 0
+    ties = []
+
+    align_mgr = AlignmentMgr(match_score=1, mismatch_penalty=1)
+    align_mgr.set_reference(read_sequence)
+    for barcode_match in barcode_matches:
+        barcode = barcode_match[0]
+        align_mgr.set_read(barcode)
+        alignment = align_mgr.align(gap_open=1, gap_extension=1)
+        if alignment.optimal_score < min_score or alignment.optimal_score < best_score:
+            continue
+        if alignment.optimal_score > best_score:
+            best_score = alignment.optimal_score
+            ties = []
+        ties.append((barcode,
+                     alignment.reference_start - alignment.read_start,
+                     alignment.reference_end + (len(barcode) - alignment.read_end)))
+
+    return best_score, ties
+
+
 def detect_exact_positions(sequence, start, end, kmer_size, pattern, pattern_occurrences: list,
                            min_score=0, start_delta=-1, end_delta=-1):
     pattern_index = None

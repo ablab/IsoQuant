@@ -23,6 +23,7 @@ from ..modes import (AUTO_BARCODES, BarcodeCorrectionMethod, DEPRECATED_MODE_ALI
 from ..utils.error_codes import IsoQuantExitCode
 from ..utils.file_utils import check_file_exists
 from .detect_barcodes import get_umi_length
+from .spot_mapping import parse_spot_mapping_spec
 
 logger = logging.getLogger('IsoQuant')
 
@@ -174,9 +175,33 @@ def validate_barcode_whitelist(args):
         sys.exit(IsoQuantExitCode.INCOMPATIBLE_OPTIONS)
 
 
+def resolve_spot_barcode_calling(args):
+    """Apply --barcode2barcode already during barcode calling when IsoQuant calls Visium HD barcodes.
+
+    The barcoded reads then carry spot IDs, so a read whose barcode is ambiguous between neighbouring
+    spots of one coarser spot is still assigned; the mapping is not applied again downstream. With
+    barcodes taken from --barcoded_reads/--barcoded_bam it keeps working at UMI deduplication.
+    Resolved before the parameters are saved, so that a resumed run keeps the decision of its start.
+    """
+    args.spot_barcode_calling = (bool(getattr(args, "barcode2barcode", None))
+                                 and args.mode == IsoQuantMode.visium_hd and bool(args.barcode_whitelist))
+    if not args.spot_barcode_calling:
+        return
+    # exits unless exactly one spot column is selected
+    parse_spot_mapping_spec(args.barcode2barcode)
+    if args.read_group and "barcode_barcode" in args.read_group:
+        logger.critical("--read_group barcode_barcode cannot be used when barcodes are called with "
+                        "--barcode2barcode: they are already spot IDs. The default barcode grouping "
+                        "counts reads per spot.")
+        sys.exit(IsoQuantExitCode.INCOMPATIBLE_OPTIONS)
+    logger.info("Barcodes will be reported as spot IDs from --barcode2barcode during barcode calling; "
+                "the mapping will not be applied again during UMI deduplication")
+
+
 def validate_barcode_calling(args):
     args.umi_length = 0
     args.detect_cell_barcodes = False
+    args.spot_barcode_calling = False
     if not args.mode.needs_barcode_calling():
         return
     validate_barcode_whitelist(args)
@@ -198,6 +223,7 @@ def validate_barcode_calling(args):
         args.umi_length = get_umi_length(args.mode)
 
     resolve_barcode_correction(args)
+    resolve_spot_barcode_calling(args)
 
 
 def detect_umi_length_from_bam(bam_path: str, umi_tag: str) -> int:
