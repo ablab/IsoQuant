@@ -475,7 +475,7 @@ class VisiumHDBarcodeDetector:
         if r1_end is not None:
             potential_umi_start = r1_end + 1
         else:
-            potential_umi_start = max(0, potential_umi_end - self.UMI_LEN_VIS)
+            potential_umi_start = max(0, potential_umi_end - self.UMI_LEN_VIS + 1)
         umi_good = abs(potential_umi_end - potential_umi_start + 1 - self.UMI_LEN_VIS) <= self.UMI_LEN_DELTA
         potential_umi = sequence[potential_umi_start:potential_umi_end + 1]
         logger.debug("Potential UMI: %s" % potential_umi)
