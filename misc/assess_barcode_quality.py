@@ -18,6 +18,7 @@ Usage:
 """
 
 import argparse
+import gzip
 import re
 import sys
 from collections import defaultdict
@@ -131,13 +132,40 @@ def extract_ground_truth_split(read_id: str, barcode_length: int = 25, joint_bar
     return barcodes
 
 
+def load_spot_map(spec: str) -> Dict[str, str]:
+    """Load FILE[:barcode_col:spot_col], a TSV mapping barcodes to spot IDs (gzip allowed)."""
+    parts = spec.split(':')
+    filename = parts[0]
+    barcode_col = int(parts[1]) if len(parts) > 1 else 0
+    spot_col = int(parts[2]) if len(parts) > 2 else 1
+    opener = gzip.open if filename.endswith('.gz') else open
+    spot_map = {}
+    with opener(filename, 'rt') as f:
+        for line in f:
+            if not line.strip() or line.startswith('#'):
+                continue
+            cols = line.rstrip('\n').split('\t')
+            if len(cols) > max(barcode_col, spot_col):
+                spot_map[cols[barcode_col]] = cols[spot_col]
+    print(f"Loaded {len(spot_map)} barcode-to-spot mappings from {filename}", file=sys.stderr)
+    return spot_map
+
+
+def to_spot(barcode: Optional[str], spot_map: Optional[Dict[str, str]]) -> Optional[str]:
+    """Translate a barcode into its spot; spot IDs reported by the caller pass through unchanged."""
+    if not spot_map or not barcode:
+        return barcode
+    return spot_map.get(barcode, barcode)
+
+
 def assess_single_barcode_mode(
     input_file: str,
     barcode_length: int,
     barcode_col: int = 1,
     umi_col: int = 2,
     score_col: int = 3,
-    min_score: Optional[int] = None
+    min_score: Optional[int] = None,
+    spot_map: Optional[Dict[str, str]] = None
 ) -> Dict[str, float]:
     """
     Assess barcode calling quality for single-barcode modes.
@@ -152,6 +180,7 @@ def assess_single_barcode_mode(
         score_col: Column index for barcode score
         min_score: Minimum score threshold for filtering. If None or -1,
                    all barcodes are loaded (* treated as false negative).
+        spot_map: if set, true and detected barcodes are compared as spots
     """
     _, score_thresholds = get_score_thresholds(barcode_length)
 
@@ -181,11 +210,12 @@ def assess_single_barcode_mode(
                 continue
 
             total_reads += 1
-            detected_bc = cols[barcode_col]
+            detected_bc = to_spot(cols[barcode_col], spot_map)
             detected_umi = cols[umi_col] if len(cols) > umi_col else None
 
             # Extract ground truth
             true_bc, true_umi = extract_ground_truth_single(cols[0])
+            true_bc = to_spot(true_bc, spot_map)
             if true_bc:
                 true_barcodes.add(true_bc)
 
@@ -292,14 +322,16 @@ def assess_split_barcode_mode(
     input_file: str,
     barcode_length: int = 25,
     barcode_col: int = 1,
-    joint_barcodes: bool = False
+    joint_barcodes: bool = False,
+    spot_map: Optional[Dict[str, str]] = None
 ) -> Dict[str, float]:
     """
     Assess barcode calling quality for split modes (stereo_split, tenX_v3_split, tenX_v2_split, visium_hd_split).
 
     Handles multiple barcode detections per read. Ground truth barcodes are extracted
     from the template read ID by matching fields of the expected barcode length
-    (or containing the part separator, with joint_barcodes).
+    (or containing the part separator, with joint_barcodes). With spot_map, true and detected
+    barcodes are compared as spots.
     """
     # Collect all detections per original read.
     # Strip the split-mode segment suffix (_{start}_{end}_{strand}) so that
@@ -318,7 +350,7 @@ def assess_split_barcode_mode(
                 continue
 
             read_id = _strip_split_segment_suffix(cols[0])
-            detected_bc = cols[barcode_col]
+            detected_bc = to_spot(cols[barcode_col], spot_map)
             read_detections[read_id].append(detected_bc)
 
     # Calculate statistics
@@ -335,6 +367,8 @@ def assess_split_barcode_mode(
 
     for read_id, detected_barcodes in read_detections.items():
         ground_truth = extract_ground_truth_split(read_id, barcode_length, joint_barcodes)
+        if spot_map:
+            ground_truth = {to_spot(bc, spot_map) for bc in ground_truth}
         total_true_barcodes += len(ground_truth)
 
         # Filter out non-detections
@@ -583,6 +617,9 @@ Ground truth is extracted from read IDs in format:
                         help='Column index for barcode in truth file (default: 4)')
     parser.add_argument('--truth_umi_col', type=int, default=7,
                         help='Column index for UMI in truth file (default: 7)')
+    parser.add_argument('--barcode2spot', type=str,
+                        help='FILE[:barcode_col:spot_col] mapping barcodes to spot IDs; true and detected '
+                             'barcodes are compared as spots (detected spot IDs pass through unchanged)')
     parser.add_argument('--quiet', '-q', action='store_true',
                         help='Suppress summary output to stderr')
 
@@ -600,6 +637,9 @@ def main():
 
     # Convert min_score: -1 means no filtering (None)
     min_score = args.min_score if args.min_score >= 0 else None
+    spot_map = load_spot_map(args.barcode2spot) if args.barcode2spot else None
+    if spot_map and args.truth_file:
+        sys.exit("--barcode2spot cannot be combined with --truth_file")
 
     # Run assessment
     if args.truth_file and args.mode in SPLIT_MODES:
@@ -616,7 +656,8 @@ def main():
             args.input,
             barcode_length=barcode_length,
             barcode_col=args.barcode_col,
-            joint_barcodes=args.mode in JOINT_BARCODE_MODES
+            joint_barcodes=args.mode in JOINT_BARCODE_MODES,
+            spot_map=spot_map
         )
     else:
         metrics = assess_single_barcode_mode(
@@ -625,7 +666,8 @@ def main():
             barcode_col=args.barcode_col,
             umi_col=args.umi_col,
             score_col=args.score_col,
-            min_score=min_score
+            min_score=min_score,
+            spot_map=spot_map
         )
 
     # Output

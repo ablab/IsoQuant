@@ -129,6 +129,11 @@ def parse_args():
     return parser.parse_args()
 
 
+def spot_mapping_spec(config_file, config_dict):
+    """FILE:0:COLUMN from the spot_mapping and spot_column config keys, used by calling and QA alike."""
+    return "%s:0:%s" % (fix_path(config_file, config_dict["spot_mapping"]), config_dict.get("spot_column", "1"))
+
+
 def run_detect_barcodes(args, config_dict):
     """Run isoquant_detect_barcodes.py with configuration options."""
     source_dir = os.path.dirname(os.path.realpath(__file__))
@@ -174,6 +179,10 @@ def run_detect_barcodes(args, config_dict):
     if "molecule" in config_dict:
         molecule_file = fix_path(config_file, config_dict["molecule"])
         detect_command.extend(["--molecule", molecule_file])
+
+    # Report barcodes as spot IDs (visium_hd)
+    if "spot_mapping" in config_dict:
+        detect_command.extend(["--barcode2barcode", spot_mapping_spec(config_file, config_dict)])
 
     # Add optional parameters
     if "threads" in config_dict:
@@ -278,6 +287,8 @@ def run_barcode_quality(args, config_dict, baselines=None):
         qa_command.extend(["--truth_barcode_col", config_dict["truth_barcode_col"]])
     if "truth_umi_col" in config_dict:
         qa_command.extend(["--truth_umi_col", config_dict["truth_umi_col"]])
+    if "spot_mapping" in config_dict:
+        qa_command.extend(["--barcode2spot", spot_mapping_spec(config_file, config_dict)])
 
     log.info("QA command line: " + " ".join(qa_command))
     result = subprocess.run(qa_command)
