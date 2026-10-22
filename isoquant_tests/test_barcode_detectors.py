@@ -659,6 +659,20 @@ class TestVisiumHDBarcodeDetector:
         assert result.barcode == true_barcode
         assert result.UMI == true_umi
 
+    def test_umi_without_r1(self):
+        """Without R1 the UMI is the UMI_LEN_VIS bases right before BC1."""
+        umi = "ACGTACGTA"
+        read = ("GATCGATCGATCGATCGATCGA" + umi + VISIUM_HD_BC1_WHITELIST[0] + VISIUM_HD_BC2_WHITELIST[0] +
+                "GC" + "T" * 30 + "GCTAGCATCGATCGGATCCAGTACGTAGCTAGGCTAACGTAGGCATGCAAGTCGACG" * 3)
+        detector = VisiumHDBarcodeDetector([VISIUM_HD_BC1_WHITELIST, VISIUM_HD_BC2_WHITELIST])
+        result = detector.find_barcode_umi("test_read", read)
+
+        assert result.is_valid()
+        assert result.r1 == -1
+        assert result.barcode == VISIUM_HD_BC1_WHITELIST[0] + "|" + VISIUM_HD_BC2_WHITELIST[0]
+        assert result.UMI == umi
+        assert result.UMI_good
+
 
 # =============================================================================
 # Curio Detector Tests
@@ -973,12 +987,9 @@ class TestVisiumHDSplittingBarcodeDetector:
         first = self._molecule(0)
         read = first + self._molecule(1, r1="GATCGATCGATCGATCGATCGA")
         result = self._detector().find_barcode_umi("test_read", read)
-        assert sorted((p.get_barcode(), p.strand) for p in result.detected_patterns) == \
-            sorted((bc, strand) for bc, _, strand in self._expected("++"))
+        assert self._detections(result) == self._expected("++")
         second = max(result.detected_patterns, key=lambda p: p.polyT)
         assert second.r1 == -1
-        # without R1 the UMI window is taken backwards from BC1 (one base longer, as in the non-splitting detector)
-        assert second.get_umi().endswith(self.MOLECULES[1][2])
         # the segment starts where R1 would end, not at the read start
         assert second.get_fasta_segment_start() >= len(first)
 
