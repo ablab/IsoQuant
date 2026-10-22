@@ -129,6 +129,7 @@
 /abga/work/andreyp/data/sirvs/Lexogen.SIRVs.Set4.ONT_cDNA.R10.4.sorted.bam	188698817	2bbdd44958cfd1da36a21291563f2e90e9abbab7a80c6f878c1747ad03e781cb
 /abga/work/andreyp/data/sirvs/Lexogen.SIRVs.Set4.ONT_cDNA.R10.4.unmapped.bam	160625843	d49821aa3710b2e4e11b2ed9e9032519f8d2247524b2a111783ce0e88b46e930
 /abga/work/andreyp/data/sirvs/Lexogen.SIRVs.Set4.ONT_cDNA.R9.4.Q12.sorted.bam	305450053	16672d5c6a0a36b98ef2e970d7063565564ef2593f6934a3d9a9a9c1f78f6ba1
+/abga/work/andreyp/data/visium/spaceranger/barcode_seq_to_spots.tsv	1032470000	2deb3f1063d3b0200d736faa8c1ec6e7e9e377ba9f06f425aacbd4d9a64a23c3
 /abga/work/andreyp/simulation/data/10x/Mouse_M36.10x_v2.737K-august-2016.10M_aligned_reads.fasta.gz	5274605208	b45da8cd9c98ce92061c4109cd9872f5c43ec2e5028117560025593f7527667d
 /abga/work/andreyp/simulation/data/10x/Mouse_M36.10x_v3.3M-3pgex-may-2023.R9.10M_aligned_reads.fasta.gz	5290852152	7f308abe943ee725186b6a6fe482e078f1d67a5fa4fb3c0fa009e24797dc27cb
 /abga/work/andreyp/simulation/data/10x_concat_realistic/Human.10x_concat.curiole_trunc_aligned_reads.fasta.gz	1394925873	29516e614d633078735c6c460152b96f3b8f4e32ab56a55834a26fbb377f4385
