@@ -75,3 +75,38 @@ class TestAssessVisiumSplit:
         assert metrics["correct_assignments"] == 2
         assert metrics["incorrect_assignments"] == 1
         assert metrics["no_barcodes_assigned"] == 1
+
+
+# barcodes 0 and 1 share a spot, 2 and 3 have their own
+SPOTS = {VISIUM_BARCODES[0]: "s_008um_00000_00000", VISIUM_BARCODES[1]: "s_008um_00000_00000",
+         VISIUM_BARCODES[2]: "s_008um_00001_00000", VISIUM_BARCODES[3]: "s_008um_00002_00000"}
+
+
+class TestSpotLevelScoring:
+    def test_load_spot_map_column(self, tmp_path):
+        mapping = tmp_path / "map.tsv"
+        mapping.write_text("#barcode\t2um\t8um\n" + "".join("%s\tfine\t%s\n" % kv for kv in SPOTS.items()))
+        assert QA.load_spot_map(str(mapping) + ":0:2") == SPOTS
+
+    def test_to_spot(self):
+        assert QA.to_spot(VISIUM_BARCODES[1], SPOTS) == "s_008um_00000_00000"
+        assert QA.to_spot("s_008um_00000_00000", SPOTS) == "s_008um_00000_00000"  # caller reported spots
+        assert QA.to_spot(VISIUM_BARCODES[1], None) == VISIUM_BARCODES[1]
+
+    def test_single_mode_counts_neighbouring_barcode_as_correct(self, tmp_path):
+        read = visium_read_name(1)  # true barcode VISIUM_BARCODES[0]
+        tsv = tmp_path / "barcodes.tsv"
+        tsv.write_text("#read_id\tbarcode\tUMI\tBC_score\n%s\t%s\tAAATACCAC\t30\n" % (read, VISIUM_BARCODES[1]))
+        assert QA.assess_single_barcode_mode(str(tsv), 31)["correct_barcodes"] == 0
+        assert QA.assess_single_barcode_mode(str(tsv), 31, spot_map=SPOTS)["correct_barcodes"] == 1
+
+    def test_split_mode_with_spot_ids(self, tmp_path):
+        read = visium_read_name(3)
+        rows = ["%s_10_900_+\ts_008um_00000_00000\tAAATACCAC\t30" % read,
+                "%s_15_870_-\t%s\tAAATACCAC\t29" % (read, VISIUM_BARCODES[2])]
+        tsv = tmp_path / "barcodes.tsv"
+        tsv.write_text("#read_id\tbarcode\tUMI\tBC_score\n" + "\n".join(rows) + "\n")
+        metrics = QA.assess_split_barcode_mode(str(tsv), 31, joint_barcodes=True, spot_map=SPOTS)
+        # truth: barcodes 0 and 1 collapse into one spot, plus barcode 2
+        assert metrics["total_true_barcodes"] == 2
+        assert metrics["correct_assignments"] == 2

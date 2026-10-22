@@ -48,7 +48,7 @@ log = logging.getLogger('DataManifest')
 # Config keys holding a single path.
 SINGLE_PATH_KEYS: Set[str] = {
     "genome", "genedb", "reduced_db", "reference_tpm", "reference_gene_tpm",
-    "yaml", "molecule", "reference_polya_gtf", "truth_file",
+    "yaml", "molecule", "reference_polya_gtf", "truth_file", "spot_mapping",
 }
 # Config keys holding one or more space-separated paths.
 MULTI_PATH_KEYS: Set[str] = {"bam", "ubam", "reads", "barcodes"}
