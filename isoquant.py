@@ -954,13 +954,13 @@ def _check_annotation_files(args):
     if hasattr(args, 'junc_bed_file') and args.junc_bed_file:
         check_file_exists(args.junc_bed_file, "Junction BED file")
 
-    # Check CAGE file (currently not supported)
+    # Check CAGE file
     if args.cage is not None:
-        logger.critical("CAGE data is not supported yet")
-        sys.exit(IsoQuantExitCode.INVALID_PARAMETER)
-        if not os.path.isfile(args.cage):
-            logger.critical("Bed file with CAGE peaks " + args.cage + " does not exist")
+        matched_cage = glob.glob(args.cage) if ('*' in args.cage or '?' in args.cage) else [args.cage]
+        if not matched_cage or not all(os.path.isfile(f) for f in matched_cage):
+            logger.critical("Bed file(s) with CAGE peaks " + args.cage + " do not exist")
             sys.exit(IsoQuantExitCode.INPUT_FILE_NOT_FOUND)
+
 
     # Check gene database
     if args.genedb is not None:
