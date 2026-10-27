@@ -490,6 +490,8 @@ class TerminalCounter(AbstractCounter):
                     'prediction': peak['prediction'],
                     'counts': peak['counts'],
                     'flag': peak['flag'],
+                    'validated_by_cage': peak['validated_by_cage'],
+                    'dist_to_closest_cage': peak['dist_to_closest_cage'],
                     'counts_byGroup': count,
                     'group_id': self._group_name(gid),
                 })
