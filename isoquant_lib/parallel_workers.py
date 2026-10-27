@@ -7,6 +7,7 @@
 
 import logging
 import os
+from typing import Dict
 
 import gffutils
 import pysam
@@ -14,7 +15,9 @@ from pyfaidx import Fasta
 
 from isoquant_lib.utils.stats import EnumStats
 from .alignment.alignment_processor import AlignmentCollector
-from .assignment.assignment_io import IOSupport, TmpFileAssignmentPrinter, SqantiTSVPrinter, ReadInfoPrinter, VoidPrinter
+from .terminal_prediction.external_polya import ExternalPolyA
+from .terminal_prediction.external_polya import load_polya_read_dict as load_polya_table
+from .assignment.assignment_io import IOSupport, TmpFileAssignmentPrinter, ReadInfoPrinter, VoidPrinter
 from .assignment.assignment_loader import create_assignment_loader, BasicReadAssignmentLoader
 from .barcode_calling.umi_filtering import create_transcript_info_dict, UMIFilter
 from isoquant_lib.utils.file_naming import (
@@ -23,10 +26,10 @@ from isoquant_lib.utils.file_naming import (
     read_group_file_from_saves,
     dynamic_pools_file_name,
     saves_file_name,
-    reads_processed_lock_file_name,
     read_stat_file_name,
     transcript_stat_file_name,
-    umi_filtered_lock_file_name,
+    dedup_bam_fragment_name,
+    tagged_bam_fragment_name,
     allinfo_file_name,
     allinfo_stats_file_name,
 )
@@ -37,7 +40,10 @@ from .assignment.read_groups import create_read_grouper, get_grouping_strategy_n
 from isoquant_lib.model_construction.transcript_printer import GFFPrinter, VoidTranscriptPrinter, create_extended_storage
 from .assignment.assignment_aggregator import ReadAssignmentAggregator
 from isoquant_lib.utils.string_pools import setup_string_pools
+from isoquant_lib.utils.checkpoints import CheckpointStore, mark_done_with_debug_hook, checkpoint_name
 from .common import large_output_enabled
+from isoquant_lib.utils.bam_utils import (load_barcode_umi_tags, load_survivor_tags,
+                                         write_tagged_chromosome_bam)
 
 logger = logging.getLogger('IsoQuant')
 
@@ -112,18 +118,32 @@ def load_barcode_dict(sample, chr_id):
     return barcode_dict
 
 
-def collect_reads_in_parallel(sample, chr_id, chr_ids, args, processed_read_manager_type):
+def load_polya_read_dict(sample, chr_id: str, args) -> Dict[str, ExternalPolyA]:
+    """Load external polyA information (--polya_trimmed list:/flnc:) for a chromosome."""
+    if not args.polya_trimmed.uses_read_table():
+        return {}
+    polya_file = sample.get_polya_split_file(chr_id)
+    if not os.path.exists(polya_file):
+        return {}
+    polya_dict = load_polya_table(polya_file)
+    logger.debug("Loaded external polyA information for %d reads" % len(polya_dict))
+    return polya_dict
+
+
+def collect_reads_in_parallel(sample, chr_id, chr_ids, args, processed_read_manager_type,
+                              checkpoints: CheckpointStore, stage_name: str):
     current_chr_record = Fasta(args.reference, indexname=args.fai_file_name)[chr_id]
     if args.high_memory:
         current_chr_record = str(current_chr_record)
     read_grouper = create_read_grouper(args, sample, chr_id)
-    lock_file = sample.get_collected_lock_file(chr_id)
+    chr_checkpoint = stage_name + "/" + checkpoint_name(chr_id)  # stage_name may already be nested
     save_file = sample.get_save_file(chr_id)
     group_file = read_groups_file_name(save_file)
     bamstat_file = bamstat_file_name(save_file)
     processed_reads_manager = processed_read_manager_type(sample, args.multimap_strategy, chr_ids, args.genedb)
 
-    if os.path.exists(lock_file) and args.resume:
+    # a done chromosome is reloaded, not skipped: multimapper resolution needs every chromosome
+    if checkpoints.is_done(chr_checkpoint):
         logger.info("Detected processed reads for " + chr_id)
         if os.path.exists(group_file) and os.path.exists(save_file):
             load_read_groups(group_file, read_grouper)
@@ -142,6 +162,11 @@ def collect_reads_in_parallel(sample, chr_id, chr_ids, args, processed_read_mana
                 for read_assignment in loader.get_next():
                     if read_assignment is None: continue
                     processed_reads_manager.load_read(read_assignment)
+            # ProcessedReadsManagerNoSecondary (the default) counts assignments and resolves
+            # multimappers per chromosome in finalize(); without it a reloaded chromosome adds
+            # nothing to the _info totals. Redoing it is safe: it re-reads the unchanged save
+            # file and rewrites the same multimappers file. A no-op for the other managers.
+            processed_reads_manager.finalize(chr_id)
             logger.info("Loaded data for " + chr_id)
             return chr_id, read_grouper.read_groups, alignment_stat_counter, processed_reads_manager
         else:
@@ -150,10 +175,6 @@ def collect_reads_in_parallel(sample, chr_id, chr_ids, args, processed_read_mana
                 logger.warning("%s does not exist" % group_file)
             if not os.path.exists(save_file):
                 logger.warning("%s does not exist" % save_file)
-            os.remove(lock_file)
-
-    if os.path.exists(lock_file):
-        os.remove(lock_file)
 
     tmp_printer = TmpFileAssignmentPrinter(save_file, args)
     bam_files = list(map(lambda x: x[0], sample.file_list))
@@ -167,11 +188,13 @@ def collect_reads_in_parallel(sample, chr_id, chr_ids, args, processed_read_mana
 
     # Load barcode dict for this chromosome if available
     barcode_dict = load_barcode_dict(sample, chr_id)
+    polya_read_dict = load_polya_read_dict(sample, chr_id, args)
 
     logger.info("Processing chromosome " + chr_id)
     alignment_collector = \
         AlignmentCollector(chr_id, bam_file_pairs, args, illumina_bam, gffutils_db, current_chr_record, read_grouper,
-                           barcode_dict, args.max_coverage_small_chr, args.max_coverage_normal_chr, string_pools)
+                           barcode_dict, args.max_coverage_small_chr, args.max_coverage_normal_chr, string_pools,
+                           polya_read_dict=polya_read_dict)
 
     for gene_info, assignment_storage in alignment_collector.process():
         tmp_printer.add_gene_info(gene_info)
@@ -194,14 +217,21 @@ def collect_reads_in_parallel(sample, chr_id, chr_ids, args, processed_read_mana
         string_pools.save_barcode_umi_pools(sample.get_barcode_pools_file(chr_id))
 
     processed_reads_manager.finalize(chr_id)
+    mark_done_with_debug_hook(checkpoints, chr_checkpoint)
+    # logged after the checkpoint: the resume tests stop on this line
     logger.info("Finished processing chromosome " + chr_id)
-    open(lock_file, "w").close()
 
     return chr_id, read_grouper.read_groups, alignment_collector.alignment_stat_counter, processed_reads_manager
 
 
-def construct_models_in_parallel(sample, chr_id, chr_ids, saves_prefix, args, read_groups):
+def construct_models_in_parallel(sample, chr_id, chr_ids, saves_prefix, args,
+                                 checkpoints: CheckpointStore, stage_name: str):
     from .assignment.read_groups import get_grouping_pool_types
+    # checked before any setup: string pools, the genedb and the reference are expensive to load
+    chr_checkpoint = stage_name + "/" + checkpoint_name(chr_id)  # stage_name may already be nested
+    if checkpoints.is_done(chr_checkpoint):
+        logger.info("Processed assignments from chromosome " + chr_id + " detected")
+        return
     logger.info("Processing chromosome " + chr_id)
     use_filtered_reads = args.mode.needs_pcr_deduplication()
 
@@ -232,18 +262,9 @@ def construct_models_in_parallel(sample, chr_id, chr_ids, saves_prefix, args, re
     loader = create_assignment_loader(chr_id, saves_prefix, args.genedb, args.reference, args.fai_file_name, string_pools, use_filtered_reads)
 
     chr_dump_file = saves_file_name(saves_prefix, chr_id)
-    lock_file = reads_processed_lock_file_name(saves_prefix, chr_id)
     chr_read_stat_file = read_stat_file_name(chr_dump_file)
     chr_transcript_stat_file = transcript_stat_file_name(chr_dump_file)
     construct_models = not args.no_model_construction
-
-    if os.path.exists(lock_file):
-        if args.resume:
-            logger.info("Processed assignments from chromosome " + chr_id + " detected")
-            read_stat = EnumStats(chr_read_stat_file)
-            transcript_stat = EnumStats(chr_transcript_stat_file) if construct_models else EnumStats()
-            return read_stat, transcript_stat
-        os.remove(lock_file)
 
     grouping_strategy_names = get_grouping_strategy_names(args)
     aggregator = ReadAssignmentAggregator(args, sample, string_pools, loader.genedb, chr_id,
@@ -258,7 +279,7 @@ def construct_models_in_parallel(sample, chr_id, chr_ids, saves_prefix, args, re
     chr_prefix = sample.get_chr_prefix(chr_id)
 
     if construct_models:
-        tmp_gff_printer = GFFPrinter(sample.out_dir, chr_prefix, exon_id_storage,
+        tmp_gff_printer = GFFPrinter(sample.chr_fragment_dir, chr_prefix, exon_id_storage,
                                      check_canonical=args.check_canonical)
     else:
         tmp_gff_printer = VoidTranscriptPrinter()
@@ -274,14 +295,15 @@ def construct_models_in_parallel(sample, chr_id, chr_ids, saves_prefix, args, re
     else:
         model_reads_printer = VoidPrinter()
     if construct_models and args.genedb:
-        tmp_extended_gff_printer = GFFPrinter(sample.out_dir, chr_prefix, exon_id_storage,
+        tmp_extended_gff_printer = GFFPrinter(sample.chr_fragment_dir, chr_prefix, exon_id_storage,
                                               gtf_suffix=".extended_annotation.gtf",
                                               check_canonical=args.check_canonical)
     else:
         tmp_extended_gff_printer = VoidTranscriptPrinter()
 
-    sqanti_t2t_printer = SqantiTSVPrinter(sample.get_t2t_tsv_file(chr_id), args, IOSupport(args)) \
-        if args.sqanti_output else VoidTranscriptPrinter()
+    # the aggregator already opened this chromosome's t2t fragment; a second printer on the
+    # same path would truncate it and leave two handles writing to one file
+    sqanti_t2t_printer = aggregator.t2t_sqanti_printer
     novel_model_storage = []
 
     while loader.has_next():
@@ -343,25 +365,29 @@ def construct_models_in_parallel(sample, chr_id, chr_ids, saves_prefix, args, re
         aggregator.transcript_model_global_counter.dump()
         aggregator.gene_model_global_counter.dump()
         transcript_stat_counter.dump(chr_transcript_stat_file)
-        model_reads_printer.flush()
+    # every per-chromosome fragment must be complete on disk before the checkpoint
+    aggregator.global_printer.close()
+    sqanti_t2t_printer.close()
+    model_reads_printer.close()
+    tmp_gff_printer.close()
+    tmp_extended_gff_printer.close()
+    mark_done_with_debug_hook(checkpoints, chr_checkpoint)
+    # logged after the checkpoint: the resume tests stop on this line
     logger.info("Finished processing chromosome " + chr_id)
-    open(lock_file, "w").close()
-
-    return aggregator.read_stat_counter, transcript_stat_counter
 
 
-def filter_umis_in_parallel(sample, chr_id, chr_ids, args, edit_distance, output_filtered_reads=False,
+def filter_umis_in_parallel(sample, chr_id, chr_ids, args, edit_distance, checkpoints: CheckpointStore,
+                            stage_name: str, output_filtered_reads=False,
                             barcode_remap=None, output_prefix_override=None):
-    transcript_type_dict = create_transcript_info_dict(args.genedb, [chr_id])
-    out_prefix = output_prefix_override if output_prefix_override else sample.out_umi_filtered_done
-    umi_filtered_done = umi_filtered_lock_file_name(out_prefix, chr_id, edit_distance)
+    out_prefix = output_prefix_override if output_prefix_override else sample.out_umi_filtered_tmp
     all_info_file_name = allinfo_file_name(out_prefix, chr_id, edit_distance)
     stats_output_file_name = allinfo_stats_file_name(out_prefix, chr_id, edit_distance)
+    chr_checkpoint = stage_name + "/" + checkpoint_name(chr_id)  # stage_name may already be nested
+    if checkpoints.is_done(chr_checkpoint):
+        logger.info("PCR duplicates were filtered for chromosome %s during the previous run" % chr_id)
+        return all_info_file_name, stats_output_file_name
 
-    if os.path.exists(umi_filtered_done):
-        if args.resume:
-            return all_info_file_name, stats_output_file_name, umi_filtered_done
-        os.remove(umi_filtered_done)
+    transcript_type_dict = create_transcript_info_dict(args.genedb, [chr_id])
 
     logger.info("Filtering PCR duplicates for chromosome " + chr_id)
     barcode_feature_table = {}
@@ -392,7 +418,11 @@ def filter_umis_in_parallel(sample, chr_id, chr_ids, args, edit_distance, output
     # When using barcode_remap (spot-based dedup), never produce filtered reads
     if barcode_remap:
         output_filtered_reads = False
-    umi_filter = UMIFilter(args.umi_length, edit_distance, barcode_remap=barcode_remap)
+    # a deduplicated BAM needs the tags of every surviving read, and this is the only place
+    # where the assignments carrying them are already loaded
+    output_read_tags = output_filtered_reads and large_output_enabled(args, "deduplicated_bam")
+    umi_filter = UMIFilter(args.umi_length, edit_distance, barcode_remap=barcode_remap,
+                           output_read_tags=output_read_tags)
     filtered_reads = sample.get_filtered_reads_file(chr_id) if output_filtered_reads else None
     umi_filter.process_single_chr(chr_id, sample.out_raw_file,
                                   transcript_type_dict,
@@ -401,7 +431,41 @@ def filter_umis_in_parallel(sample, chr_id, chr_ids, args, edit_distance, output
                                   filtered_reads,
                                   stats_output_file_name,
                                   string_pools)
-    open(umi_filtered_done, "w").close()
+    mark_done_with_debug_hook(checkpoints, chr_checkpoint)
+    # logged after the checkpoint: the resume tests stop on this line
     logger.info("PCR duplicates filtered for chromosome " + chr_id)
 
-    return all_info_file_name, stats_output_file_name, umi_filtered_done
+    return all_info_file_name, stats_output_file_name
+
+
+def write_deduplicated_bam_in_parallel(sample, chr_id, args):
+    """Write one chromosome of the deduplicated BAM: primary alignments of surviving reads.
+
+    Returns the fragment path, or None when nothing survived on this chromosome.
+    """
+    read_tags = load_survivor_tags(sample.get_filtered_reads_file(chr_id))
+    if not read_tags:
+        return None
+
+    bam_files = [f[0] for f in sample.file_list]
+    fragment = dedup_bam_fragment_name(sample.out_raw_file, chr_id)
+    written = write_tagged_chromosome_bam(bam_files, fragment, chr_id, read_tags,
+                                          barcode_tag=args.barcode_tag, umi_tag=args.umi_tag,
+                                          primary_only=True, keep_untagged=False)
+    logger.info("Deduplicated %d alignments for chromosome %s" % (written, chr_id))
+    return fragment
+
+
+def write_tagged_bam_in_parallel(sample, chr_id, args):
+    """Write one chromosome of the tagged BAM: every alignment, barcoded ones carrying tags.
+
+    A chromosome whose reads were all unbarcoded has no split table; its alignments are still
+    copied, just without tags, so no alignment is lost for want of a barcode.
+    """
+    read_tags = load_barcode_umi_tags(sample.get_barcodes_split_file(chr_id))
+    bam_files = [f[0] for f in sample.file_list]
+    fragment = tagged_bam_fragment_name(sample.out_raw_file, chr_id)
+    written = write_tagged_chromosome_bam(bam_files, fragment, chr_id, read_tags,
+                                          barcode_tag=args.barcode_tag, umi_tag=args.umi_tag)
+    logger.info("Tagged %d alignments for chromosome %s" % (written, chr_id))
+    return fragment

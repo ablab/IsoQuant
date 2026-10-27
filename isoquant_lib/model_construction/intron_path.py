@@ -99,8 +99,19 @@ class IntronPathProcessor:
                 # read end lies within next exon and has no polyA
                 return None
 
+        # A confirmed 5' TSS vertex claims only the reads that actually end at it
+        # (same rule as the trusted-polyA lookup above). It must NOT enter the
+        # extreme/second-last comparison below: it is attached without a coverage
+        # cutoff, so a 2-read TSS vertex sitting past a dominant read-end vertex
+        # would otherwise disqualify the whole read-end population.
+        for v in self.intron_graph.get_outgoing(intron, TerminalVertex.tss_right):
+            if abs(v[1] - end) <= self.params.apa_delta:
+                return v
+
         # consider all terminal position available for intron (bare read ends,
-        # confirmed 5' TSS ends for '-' transcripts, and confirmed polyA ends)
+        # confirmed 5' TSS ends, and confirmed polyA ends). A TSS vertex is safe
+        # to compare against here because the bare read-end cluster is now built
+        # only from termini beyond every confirmed site on this side.
         all_possible_ends = sorted(list(self.intron_graph.get_outgoing(intron, TerminalVertex.read_end)) +
                                    list(self.intron_graph.get_outgoing(intron, TerminalVertex.tss_right)) +
                                    list(possible_polyas), key=lambda x: x[1])
@@ -132,6 +143,10 @@ class IntronPathProcessor:
             if not trusted and start >= leftmost_exon_start - self.params.delta:
                 # read start lies within previous exon and has no polyA
                 return None
+
+        for v in self.intron_graph.get_incoming(intron, TerminalVertex.tss_left):
+            if abs(v[1] - start) <= self.params.apa_delta:
+                return v
 
         all_possible_starts = sorted(list(self.intron_graph.get_incoming(intron, TerminalVertex.read_start)) +
                                      list(self.intron_graph.get_incoming(intron, TerminalVertex.tss_left)) +

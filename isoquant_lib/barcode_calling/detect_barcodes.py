@@ -28,7 +28,10 @@ from Bio import SeqIO, Seq, SeqRecord
 from ..modes import IsoQuantMode
 from isoquant_lib.utils.error_codes import IsoQuantExitCode
 from ..common import setup_worker_logging, _get_log_params
+from isoquant_lib.utils.file_utils import (GZIP_SUFFIX, open_text_write, read_stats_tsv,
+                                           strip_compression_suffix)
 from .common import reverese_complement, load_barcodes
+from .cell_selection import NOSEQ, CellBarcodeSelector, select_cell_barcodes
 from . import (
     TenXBarcodeDetector,
     TenXv2BarcodeDetector,
@@ -50,28 +53,39 @@ READ_CHUNK_SIZE = 100000
 BARCODE_CALLING_MODES = {
     IsoQuantMode.tenX_v3: TenXBarcodeDetector,
     IsoQuantMode.tenX_v2: TenXv2BarcodeDetector,
-    IsoQuantMode.tenX_v3_split: TenXSplittingBarcodeDetector,
-    IsoQuantMode.tenX_v2_split: TenXv2SplittingBarcodeDetector,
     IsoQuantMode.curio: CurioBarcodeDetector,
-    IsoQuantMode.stereoseq_nosplit: SharedMemoryStereoBarcodeDetector,
-    IsoQuantMode.stereoseq: SharedMemoryStereoSplittingBarcodeDetector,
+    IsoQuantMode.stereoseq: SharedMemoryStereoBarcodeDetector,
     IsoQuantMode.visium_5prime: TenXBarcodeDetector,
     IsoQuantMode.visium_hd: VisiumHDBarcodeDetector,
     IsoQuantMode.custom_sc: UniversalSingleMoleculeExtractor
 }
 
+# Detectors that find several cDNA molecules per read, used when --split_molecules is on.
+# Keys must match IsoQuantMode.supports_molecule_splitting().
+SPLITTING_BARCODE_CALLING_MODES = {
+    IsoQuantMode.tenX_v3: TenXSplittingBarcodeDetector,
+    IsoQuantMode.tenX_v2: TenXv2SplittingBarcodeDetector,
+    IsoQuantMode.stereoseq: SharedMemoryStereoSplittingBarcodeDetector,
+    # same chemistry as 10x 3', so the same splitting detector applies
+    IsoQuantMode.visium_5prime: TenXSplittingBarcodeDetector,
+}
+
 BARCODE_FILES_REQUIRED = {
     IsoQuantMode.tenX_v3: [1],
     IsoQuantMode.tenX_v2: [1],
-    IsoQuantMode.tenX_v3_split: [1],
-    IsoQuantMode.tenX_v2_split: [1],
     IsoQuantMode.curio: [1, 2],
-    IsoQuantMode.stereoseq_nosplit: [1],
     IsoQuantMode.stereoseq: [1],
     IsoQuantMode.visium_5prime: [1],
     IsoQuantMode.visium_hd: [2],
     IsoQuantMode.custom_sc: [0]
 }
+
+
+def barcode_detector_class(isoquant_mode: IsoQuantMode, split_molecules: bool):
+    """Detector for a mode, splitting molecules or not."""
+    if split_molecules:
+        return SPLITTING_BARCODE_CALLING_MODES[isoquant_mode]
+    return BARCODE_CALLING_MODES[isoquant_mode]
 
 
 def stats_file_name(file_name):
@@ -83,6 +97,16 @@ def get_umi_length(isoquant_mode: IsoQuantMode):
         return 0
     try:
         return BARCODE_CALLING_MODES[isoquant_mode].UMI_LEN
+    except AttributeError:
+        return 0
+
+
+def get_barcode_length(isoquant_mode: IsoQuantMode):
+    """Barcode length for modes that support graph-based correction."""
+    if isoquant_mode not in BARCODE_CALLING_MODES:
+        return 0
+    try:
+        return BARCODE_CALLING_MODES[isoquant_mode].BARCODE_LEN_10X
     except AttributeError:
         return 0
 
@@ -116,16 +140,25 @@ class SimpleReadStorage:
 
 
 class BarcodeCaller:
-    def __init__(self, output_file_name, barcode_detector, header=False, output_sequences=None):
+    def __init__(self, output_file_name, barcode_detector, header=False, output_sequences=None,
+                 split_reads=False, barcode_counter=None):
+        """
+        Args:
+            split_reads: use the per-molecule path; must match the detector, and cannot be
+                inferred from output_sequences (pass 1 splits but writes no FASTA)
+            barcode_counter: when set, tally detections into it instead of writing them;
+                output_file_name and output_sequences are then unused
+        """
         self.barcode_detector = barcode_detector
+        self.barcode_counter = barcode_counter
+        self.counting_only = barcode_counter is not None
         self.output_file_name = output_file_name
-        self.output_file = open(self.output_file_name, "w")
-        self.output_sequences = output_sequences
+        self.output_file = None if self.counting_only else open(self.output_file_name, "w")
+        self.output_sequences = None if self.counting_only else output_sequences
         self.output_sequences_file = None
-        self.process_function = self._process_read_normal
+        self.process_function = self._process_read_split if split_reads else self._process_read_normal
         if self.output_sequences:
-            self.output_sequences_file = open(self.output_sequences, "w")
-            self.process_function = self._process_read_split
+            self.output_sequences_file = open_text_write(self.output_sequences)
         if header:
             self.output_file.write(barcode_detector.header() + "\n")
         self.read_stat = ReadStats()
@@ -140,13 +173,23 @@ class BarcodeCaller:
         stat_out.write(str(self.read_stat))
         stat_out.close()
 
+    def _emit(self, result):
+        """Record one detection: tally its barcode, or write it out."""
+        if self.counting_only:
+            barcode = result.get_barcode()
+            if barcode != NOSEQ:
+                self.barcode_counter.add_barcode(barcode)
+            return
+        self.output_file.write("%s\n" % str(result))
+
     def close(self):
-        self.output_file.close()
+        if self.output_file:
+            self.output_file.close()
         if self.output_sequences_file:
             self.output_sequences_file.close()
 
     def __del__(self):
-        if not self.output_file.closed:
+        if self.output_file and not self.output_file.closed:
             self.output_file.close()
         if self.output_sequences_file and not self.output_sequences_file.closed:
             self.output_sequences_file.close()
@@ -205,7 +248,12 @@ class BarcodeCaller:
         for r in barcode_result.detected_patterns:
             self.read_stat.add_read(r)
             if not r.is_valid():
-                self.output_file.write("%s\n" % str(r))
+                self._emit(r)
+                continue
+            if self.counting_only:
+                # the FASTA segment and its coordinates are output-only
+                self._emit(r)
+                valid_patterns.append(r)
                 continue
 
             read_segment_start = r.get_fasta_segment_start()
@@ -216,7 +264,7 @@ class BarcodeCaller:
             else:
                 new_read_seq = reverese_complement(read_sequence)[read_segment_start:read_segment_end]
             valid_patterns.append(r)
-            self.output_file.write("%s\n" % str(r))
+            self._emit(r)
             if self.output_sequences and (not require_tso or r.get_tso_position() != -1):
                 seq_records.append(SeqRecord.SeqRecord(seq=Seq.Seq(new_read_seq), id=r.read_id, description=""))
 
@@ -247,7 +295,7 @@ class BarcodeCaller:
             return
         barcode_result = self.barcode_detector.find_barcode_umi(read_id, read_sequence)
 
-        self.output_file.write("%s\n" % str(barcode_result))
+        self._emit(barcode_result)
         self.read_stat.add_read(barcode_result)
 
     def process_chunk(self, read_chunk):
@@ -280,13 +328,38 @@ def bam_file_chunk_reader(handler):
     yield current_chunk
 
 
-def process_chunk(barcode_detector, read_chunk, output_file, num, out_fasta=None):
+# Per worker process rather than passed to every task: the detector owns the whitelist
+# index, which is hundreds of megabytes for a stock 10x whitelist.
+_WORKER_DETECTOR = {}
+
+
+def setup_detector_worker(log_file, log_level, barcode_detector):
+    setup_worker_logging(log_file, log_level)
+    _WORKER_DETECTOR["detector"] = barcode_detector
+
+
+def numbered_chunk_name(file_name, num):
+    """Append a chunk index, keeping the extensions last.
+
+    The suffixes have to survive: a chunk of a FASTA is still a FASTA, and that is what decides
+    its compression level.
+    """
+    base = strip_compression_suffix(file_name)
+    compression = file_name[len(base):]
+    root, extension = os.path.splitext(base)
+    return "%s_%d%s%s" % (root, num, extension, compression)
+
+
+def process_chunk(read_chunk, output_file, num, out_fasta=None, split_reads=False, barcode_detector=None):
     output_file += "_" + str(num)
     if out_fasta:
-        out_fasta += "_" + str(num)
+        out_fasta = numbered_chunk_name(out_fasta, num)
     counter = 0
 
-    barcode_caller = BarcodeCaller(output_file, barcode_detector, output_sequences=out_fasta)
+    if barcode_detector is None:
+        barcode_detector = _WORKER_DETECTOR["detector"]
+    barcode_caller = BarcodeCaller(output_file, barcode_detector, output_sequences=out_fasta,
+                                   split_reads=split_reads)
     counter += barcode_caller.process_chunk(read_chunk)
     read_chunk.clear()
     barcode_caller.dump_stats()
@@ -295,8 +368,80 @@ def process_chunk(barcode_detector, read_chunk, output_file, num, out_fasta=None
     return output_file, out_fasta, counter
 
 
+def count_chunk(read_chunk, split_reads=False, barcode_length=16, barcode_detector=None):
+    """Worker: tally the barcodes in one chunk. Returns (counts, malformed, reads)."""
+    if barcode_detector is None:
+        barcode_detector = _WORKER_DETECTOR["detector"]
+    selector = CellBarcodeSelector(barcode_length)
+    barcode_caller = BarcodeCaller(None, barcode_detector, split_reads=split_reads,
+                                   barcode_counter=selector)
+    reads = barcode_caller.process_chunk(read_chunk)
+    read_chunk.clear()
+    # a chunk holds at most READ_CHUNK_SIZE reads, so this dict stays small enough to pickle
+    return dict(selector.counts), selector.malformed_count, reads
+
+
+def count_barcodes_in_reads(args, barcode_length):
+    """Extract barcodes from every input file and return their counts.
+
+    Nothing is written: a barcode per read would cost gigabytes of intermediate.
+    """
+    barcode_detector = create_barcode_caller(args)
+    split_reads = bool(getattr(args, "split_molecules", False))
+    selector = CellBarcodeSelector(barcode_length)
+    single_thread = args.threads == 1 or args.mode.enforces_single_thread()
+
+    for input_file in args.input:
+        logger.info("Extracting barcodes from %s" % input_file)
+        read_chunk_gen = open_read_chunks(input_file)
+        if single_thread:
+            barcode_caller = BarcodeCaller(None, barcode_detector, split_reads=split_reads,
+                                           barcode_counter=selector)
+            for chunk in read_chunk_gen:
+                barcode_caller.process_chunk(chunk)
+                chunk.clear()
+            continue
+
+        def submit(pool, chunk, num):
+            return pool.submit(count_chunk, chunk, split_reads, barcode_length)
+
+        def handle_result(result, chunk_index):
+            counts, malformed, reads = result
+            # order-insensitive: the counts are summed and CellBarcodeSelector sorts them by
+            # (count, barcode), so the chunk index is of no use here
+            selector.merge_counts(counts, malformed)
+            return reads
+
+        run_chunks_in_parallel(read_chunk_gen, args, barcode_detector, submit, handle_result)
+
+    logger.info("Extracted %d distinct barcodes" % len(selector.counts))
+    return selector
+
+
+def detect_cell_barcode_list(args, output_file, barcode_length, n_cells, n_cells_interval,
+                             stats_file=None):
+    """Count barcodes across the reads and write out the detected cell barcodes.
+
+    One unit, so the count table never leaves the process that built it.
+    """
+    selector = count_barcodes_in_reads(args, barcode_length)
+    return select_cell_barcodes(selector, output_file, args.barcodes,
+                                n_cells=n_cells, n_cells_interval=n_cells_interval,
+                                stats_file=stats_file)
+
+
 def create_barcode_caller(args):
-    logger.info("Creating barcode detector for mode %s" % args.mode.name)
+    split_molecules = bool(getattr(args, "split_molecules", False))
+    logger.info("Creating barcode detector for mode %s%s" %
+                (args.mode.name, ", splitting molecules" if split_molecules else ""))
+
+    if not getattr(args, "whitelist_matching", True):
+        # pass 1 of cell barcode detection: emit barcode windows verbatim to be counted.
+        # The whitelist is only used afterwards, to filter the candidates.
+        if not args.mode.supports_cell_barcode_detection():
+            logger.critical("Mode %s cannot extract barcodes without a whitelist" % args.mode.name)
+            sys.exit(IsoQuantExitCode.INCOMPATIBLE_OPTIONS)
+        return barcode_detector_class(args.mode, split_molecules)(None, whitelist_matching=False)
 
     if args.mode == IsoQuantMode.custom_sc:
         if not args.molecule:
@@ -306,7 +451,7 @@ def create_barcode_caller(args):
             logger.critical("Molecule file %s does not exist" % args.molecule)
             sys.exit(IsoQuantExitCode.INPUT_FILE_NOT_FOUND)
 
-        return BARCODE_CALLING_MODES[args.mode](MoleculeStructure(open(args.molecule)))
+        return barcode_detector_class(args.mode, split_molecules)(MoleculeStructure(open(args.molecule)))
 
     logger.info("Using barcodes from %s" % ", ".join(args.barcodes))
     barcode_files = len(args.barcodes)
@@ -329,13 +474,14 @@ def create_barcode_caller(args):
                 logger.info("Loaded %d barcodes from %s" % (len(bc), args.barcodes[i]))
         barcodes = tuple(barcodes)
 
-    barcode_detector = BARCODE_CALLING_MODES[args.mode](barcodes)
+    barcode_detector = barcode_detector_class(args.mode, split_molecules)(barcodes)
 
     return barcode_detector
 
 
 def process_single_thread(args):
     barcode_detector = create_barcode_caller(args)
+    split_reads = bool(getattr(args, "split_molecules", False))
 
     # args.input, args.output_tsv are always lists
     # args.out_fasta is a list or None
@@ -344,7 +490,8 @@ def process_single_thread(args):
     for idx, (input_file, output_tsv, out_fasta) in enumerate(zip(args.input, args.output_tsv, out_fastas)):
         if len(args.input) > 1:
             logger.info("Processing file %d/%d: %s" % (idx + 1, len(args.input), input_file))
-        barcode_caller = BarcodeCaller(output_tsv, barcode_detector, header=True, output_sequences=out_fasta)
+        barcode_caller = BarcodeCaller(output_tsv, barcode_detector, header=True, output_sequences=out_fasta,
+                                       split_reads=split_reads)
         barcode_caller.process(input_file)
         barcode_caller.dump_stats()
         for stat_line in barcode_caller.get_stats():
@@ -353,9 +500,8 @@ def process_single_thread(args):
     logger.info("Finished barcode calling")
 
 
-def _process_single_file_in_parallel(input_file, output_tsv, out_fasta, args, barcode_detector):
-    """Process a single file in parallel (internal helper function)."""
-    logger.info("Processing " + input_file)
+def open_read_chunks(input_file):
+    """Chunked reader for a [gzipped] FASTA/FASTQ or a BAM/SAM."""
     fname, outer_ext = os.path.splitext(os.path.basename(input_file))
     low_ext = outer_ext.lower()
 
@@ -367,51 +513,40 @@ def _process_single_file_in_parallel(input_file, output_tsv, out_fasta, args, ba
         low_ext = outer_ext.lower()
 
     if low_ext in ['.fq', '.fastq']:
-        read_chunk_gen = fastx_file_chunk_reader(SeqIO.parse(handle, "fastq"))
-    elif low_ext in ['.fa', '.fasta']:
-        read_chunk_gen = fastx_file_chunk_reader(SeqIO.parse(handle, "fasta"))
-    elif low_ext in ['.bam', '.sam']:
-        read_chunk_gen = bam_file_chunk_reader(pysam.AlignmentFile(input_file, "rb", check_sq=False))
-    else:
-        logger.error("Unknown file format " + input_file)
-        sys.exit(IsoQuantExitCode.INVALID_FILE_FORMAT)
+        return fastx_file_chunk_reader(SeqIO.parse(handle, "fastq"))
+    if low_ext in ['.fa', '.fasta']:
+        return fastx_file_chunk_reader(SeqIO.parse(handle, "fasta"))
+    if low_ext in ['.bam', '.sam']:
+        return bam_file_chunk_reader(pysam.AlignmentFile(input_file, "rb", check_sq=False))
+    logger.error("Unknown file format " + input_file)
+    sys.exit(IsoQuantExitCode.INVALID_FILE_FORMAT)
 
-    tmp_dir = "barcode_calling_%x" % random.randint(0, 1 << 32)
-    while os.path.exists(tmp_dir):
-        tmp_dir = "barcode_calling_%x" % random.randint(0, 1 << 32)
-    if args.tmp_dir:
-        tmp_dir = os.path.join(args.tmp_dir, tmp_dir)
-    else:
-        tmp_dir = os.path.join(os.path.dirname(args.output), tmp_dir)
-    os.makedirs(tmp_dir)
 
-    tmp_barcode_file = os.path.join(tmp_dir, "bc")
-    tmp_fasta_file = os.path.join(tmp_dir, "subreads") if out_fasta else None
-    chunk_counter = 0
-    future_results = []
-    output_files = []
+def run_chunks_in_parallel(read_chunk_gen, args, barcode_detector, submit, handle_result):
+    """Feed read chunks to a worker pool, keeping args.threads tasks in flight.
 
+    Results are handed to handle_result in completion order, so a consumer whose output depends
+    on the order gets the chunk index and has to reorder by it -- see _process_single_file_in_parallel.
+    Waiting for the chunks in order instead would idle the pool behind a single slow one.
+
+    Args:
+        submit: (pool, chunk, chunk_index) -> Future
+        handle_result: (result, chunk_index) -> number of reads processed
+    """
     # Clean up parent memory before spawning workers
     gc.collect()
     mp_context = multiprocessing.get_context('spawn')
     log_file, log_level = _get_log_params()
-    # max_tasks_per_child requires Python 3.11+
-    executor_kwargs = {
-        'max_workers': args.threads,
-        'mp_context': mp_context,
-        'initializer': setup_worker_logging,
-        'initargs': (log_file, log_level),
-    }
-    if sys.version_info >= (3, 11):
-        executor_kwargs['max_tasks_per_child'] = 20
-    with concurrent.futures.ProcessPoolExecutor(**executor_kwargs) as proc:
+    # no max_tasks_per_child: recycling a worker would re-pickle the detector
+    with concurrent.futures.ProcessPoolExecutor(
+            max_workers=args.threads,
+            mp_context=mp_context,
+            initializer=setup_detector_worker,
+            initargs=(log_file, log_level, barcode_detector)) as proc:
+        future_results = {}  # future -> the index of the chunk it is processing
+        chunk_counter = 0
         for chunk in read_chunk_gen:
-            future_results.append(proc.submit(process_chunk,
-                                              barcode_detector,
-                                              chunk,
-                                              tmp_barcode_file,
-                                              chunk_counter,
-                                              tmp_fasta_file))
+            future_results[submit(proc, chunk, chunk_counter)] = chunk_counter
             chunk_counter += 1
             if chunk_counter >= args.threads:
                 break
@@ -424,39 +559,68 @@ def _process_single_file_in_parallel(input_file, output_tsv, out_fasta, args, ba
             for c in completed_features:
                 if c.exception() is not None:
                     raise c.exception()
-                res = c.result()
-                tmp_out_file, tmp_out_fasta, read_count = res
-                read_counter += read_count
+                read_counter += handle_result(c.result(), future_results.pop(c))
                 sys.stdout.write("Processed %d reads\r" % read_counter)
-                output_files.append((tmp_out_file, tmp_out_fasta))
-                future_results.remove(c)
                 if reads_left:
                     try:
-                        chunk = next(read_chunk_gen)
-                        future_results.append(proc.submit(process_chunk,
-                                                          barcode_detector,
-                                                          chunk,
-                                                          tmp_barcode_file,
-                                                          chunk_counter,
-                                                          tmp_fasta_file))
+                        future_results[submit(proc, next(read_chunk_gen), chunk_counter)] = chunk_counter
                         chunk_counter += 1
                     except StopIteration:
                         reads_left = False
 
+
+def _process_single_file_in_parallel(input_file, output_tsv, out_fasta, args, barcode_detector):
+    """Process a single file in parallel (internal helper function)."""
+    split_reads = bool(getattr(args, "split_molecules", False))
+    logger.info("Processing " + input_file)
+    read_chunk_gen = open_read_chunks(input_file)
+
+    tmp_dir = "barcode_calling_%x" % random.randint(0, 1 << 32)
+    while os.path.exists(tmp_dir):
+        tmp_dir = "barcode_calling_%x" % random.randint(0, 1 << 32)
+    if args.tmp_dir:
+        tmp_dir = os.path.join(args.tmp_dir, tmp_dir)
+    else:
+        tmp_dir = os.path.join(os.path.dirname(args.output), tmp_dir)
+    os.makedirs(tmp_dir)
+
+    tmp_barcode_file = os.path.join(tmp_dir, "bc")
+    tmp_fasta_file = None
+    if out_fasta:
+        # compress the per-chunk temps exactly when the final file is compressed: the work
+        # then happens in the workers, and merging stays a byte concat
+        # named for what it holds, so the chunk inherits the FASTA compression level
+        tmp_fasta_file = os.path.join(tmp_dir, "subreads.fa")
+        if out_fasta.endswith(GZIP_SUFFIX):
+            tmp_fasta_file += GZIP_SUFFIX
+    chunk_outputs = {}
+
+    def submit(pool, chunk, num):
+        return pool.submit(process_chunk, chunk, tmp_barcode_file, num, tmp_fasta_file, split_reads)
+
+    def handle_result(result, chunk_index):
+        tmp_out_file, tmp_out_fasta, read_count = result
+        chunk_outputs[chunk_index] = (tmp_out_file, tmp_out_fasta)
+        return read_count
+
+    run_chunks_in_parallel(read_chunk_gen, args, barcode_detector, submit, handle_result)
+    # by chunk index, not by completion: the merge below defines the row order of the barcode
+    # table and the record order of the FASTA, and both have to be the same on every run
+    output_files = [chunk_outputs[i] for i in sorted(chunk_outputs)]
+
     with open(output_tsv, "w") as final_output_tsv:
-        final_output_fasta = open(out_fasta, "w") if out_fasta else None
+        # binary: concatenating gzip members byte-wise gives a valid multi-member stream,
+        # so per-chunk compression in the workers merges without re-compressing here
+        final_output_fasta = open(out_fasta, "wb") if out_fasta else None
         header = barcode_detector.header()
         final_output_tsv.write(header + "\n")
         stat_dict = defaultdict(int)
         for tmp_file, tmp_fasta in output_files:
             shutil.copyfileobj(open(tmp_file, "r"), final_output_tsv)
             if tmp_fasta and final_output_fasta:
-                shutil.copyfileobj(open(tmp_fasta, "r"), final_output_fasta)
-            for line in open(stats_file_name(tmp_file), "r"):
-                v = line.strip().split("\t")
-                if len(v) != 2:
-                    continue
-                stat_dict[v[0]] += int(v[1])
+                with open(tmp_fasta, "rb") as tmp_fasta_handle:
+                    shutil.copyfileobj(tmp_fasta_handle, final_output_fasta)
+            read_stats_tsv(stats_file_name(tmp_file), stat_dict)
 
         if final_output_fasta is not None:
             final_output_fasta.close()

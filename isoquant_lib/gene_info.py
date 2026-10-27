@@ -6,6 +6,7 @@
 ############################################################################
 
 import logging
+from bisect import bisect_left, bisect_right
 from enum import Enum, unique
 from functools import partial
 from collections import OrderedDict, defaultdict
@@ -145,23 +146,22 @@ class FeatureInfo:
         return "%s\t%d\t%d\t%s\t%s\t%s" % (self.chr_id, self.start, self.end, self.strand, self.type, ",".join(self.gene_ids))
 
 
-# group of overlapping annotated exons treated as a single quantification unit
-class ExonRegion:
-    def __init__(self, chr_id: str, start: int, end: int, strand: str):
-        self.chr_id: str = chr_id
-        self.start: int = start
-        self.end: int = end
-        self.strand: str = strand
-        self.member_exon_indices: list = []
-        # union of gene_ids across member exons; populated by build_exon_overlap_regions
-        self.gene_ids: set = set()
-
-    @property
-    def id(self):
-        # coordinate-based identity (matches FeatureInfo) so the same region merges
-        # across separate GeneInfo builds; computed lazily since `end` grows during
-        # region construction
-        return (self.chr_id, self.start, self.end, self.strand)
+# Lookup structure for per-exon usage counting: maps annotated exons
+# (exon_profiles.features) onto the split-exon segments (split_exon_profiles.features).
+# Segments are non-overlapping and sorted, so both their starts and ends are monotone.
+class ExonUsageIndex:
+    def __init__(self, segments: list, exon_segment_ranges: list, segment_exons: list,
+                 left_terminal: list, right_terminal: list):
+        self.segments: list = segments
+        self.segment_starts: list = [s[0] for s in segments]
+        self.segment_ends: list = [s[1] for s in segments]
+        # exon index -> (first, last) segment index (inclusive) or None if not tiled
+        self.exon_segment_ranges: list = exon_segment_ranges
+        # segment index -> exon indices containing it
+        self.segment_exons: list = segment_exons
+        # exon index -> whether the exon side has no splice site in any transcript (transcript start / end only)
+        self.left_terminal: list = left_terminal
+        self.right_terminal: list = right_terminal
 
 
 # overlapping candidate exons of a single gene on one strand, treated as one
@@ -231,9 +231,11 @@ class GeneInfo:
                          'tRNA', 'telomerase_RNA', 'Y_RNA', 'scRNA'}
 
     def __init__(self, gene_db_list, db, delta=0, prepare_profiles=True):
-        if db is None:
-            return
-
+        # db-less construction must go through an alternate constructor
+        # (from_region / from_models / from_model / deserialize): each of them sets
+        # every attribute, while returning early here used to leave the object
+        # half-built, e.g. without reference_region (see #425 and #427)
+        assert db is not None
         assert gene_db_list
         # gffutils main structure
         self.db = db
@@ -282,17 +284,23 @@ class GeneInfo:
         gene_info = cls.__new__(cls)
         gene_info.db = None
         gene_info.gene_db_list = []
-        if not transcript_model_storage:
-            return cls([], None, delta)
 
-        # gene region
-        gene_info.chr_id = transcript_model_storage[0].chr_id
-        gene_info.start = transcript_model_storage[0].get_start()
-        gene_info.end = transcript_model_storage[0].get_end()
+        # gene region; an empty model storage (a gene block where no model survived
+        # filtering) still yields a fully initialized, empty GeneInfo - it is set as
+        # gene_info of the resulting read assignments and must not miss attributes
+        if transcript_model_storage:
+            gene_info.chr_id = transcript_model_storage[0].chr_id
+            gene_info.start = transcript_model_storage[0].get_start()
+            gene_info.end = transcript_model_storage[0].get_end()
+        else:
+            gene_info.chr_id = None
+            gene_info.start = 0
+            gene_info.end = 0
         gene_info.delta = delta
         gene_info.all_isoforms_exons = {}
         gene_info.all_isoforms_introns = {}
         gene_info.isoform_strands = {}
+        gene_info.gene_strands = {}
         gene_info.sources = {}
         gene_info.other_features = {}
         gene_info.gene_id_map = {}
@@ -309,6 +317,7 @@ class GeneInfo:
             exons.update(gene_info.all_isoforms_exons[t_id])
             introns.update(gene_info.all_isoforms_introns[t_id])
             gene_info.isoform_strands[transcript_model.transcript_id] = transcript_model.strand
+            gene_info.gene_strands[transcript_model.gene_id] = transcript_model.strand
             gene_info.sources[transcript_model.transcript_id] = transcript_model.source
             gene_info.sources[transcript_model.gene_id] = transcript_model.source
             gene_info.other_features[transcript_model.transcript_id] = transcript_model.other_features
@@ -378,6 +387,7 @@ class GeneInfo:
         gene_info.split_exon_profiles.set_profiles(t_id, exons, transcript_region, contains)
 
         gene_info.isoform_strands = {transcript_model.transcript_id: transcript_model.strand}
+        gene_info.gene_strands = {transcript_model.gene_id: transcript_model.strand}
         gene_info.sources = {transcript_model.transcript_id: transcript_model.source,
                              transcript_model.gene_id: transcript_model.source}
         gene_info.other_features = {transcript_model.transcript_id: transcript_model.other_features}
@@ -417,6 +427,7 @@ class GeneInfo:
         gene_info.all_isoforms_exons = {}
         gene_info.all_isoforms_introns = {}
         gene_info.isoform_strands = {}
+        gene_info.gene_strands = {}
         gene_info.other_features = {}
         gene_info.sources = {}
         gene_info.gene_id_map = {}
@@ -705,7 +716,7 @@ class GeneInfo:
         # Group intervals (each a (start, end) tuple, sorted by start) into
         # overlap-connected components. Returns a list of [region_start, region_end,
         # positions] where positions are indices into `intervals`. Shared sweep kernel
-        # for build_exon_overlap_regions and build_exon_splice_site_regions.
+        # for build_exon_splice_site_regions.
         groups = []
         current = None  # [region_start, region_end, [positions]]
         for pos, (s, e) in enumerate(intervals):
@@ -718,46 +729,52 @@ class GeneInfo:
                     current[1] = e
         return groups
 
-    # Lazily built and cached view over exon_profiles.features: overlapping annotated
-    # exons grouped (within a strand) into ExonRegions. Empty when there are no exon
-    # profiles (e.g. de-novo gene_info). Consumed by JointExonCounter under --count_exons.
-    @property
-    def exon_overlap_regions(self):
-        regions = getattr(self, "_exon_overlap_regions", None)
-        if regions is None:
-            exon_property_map = getattr(self, "exon_property_map", None)
-            exon_profiles = getattr(self, "exon_profiles", None)
-            if not exon_property_map or exon_profiles is None or not exon_profiles.features:
-                regions = []
-            else:
-                regions, _ = self.build_exon_overlap_regions(exon_profiles.features, exon_property_map)
-            self._exon_overlap_regions = regions
-        return regions
+    # Lazily built and cached ExonUsageIndex, consumed by ExonUsageCounter under --count_exons.
+    # None when there are no exon profiles (e.g. de-novo gene_info).
+    def get_exon_usage_index(self):
+        if hasattr(self, "_exon_usage_index"):
+            return self._exon_usage_index
+        index = None
+        exon_property_map = getattr(self, "exon_property_map", None)
+        exon_profiles = getattr(self, "exon_profiles", None)
+        split_exon_profiles = getattr(self, "split_exon_profiles", None)
+        if exon_property_map and exon_profiles is not None and exon_profiles.features \
+                and split_exon_profiles is not None and split_exon_profiles.features:
+            index = self.build_exon_usage_index(exon_profiles.features, split_exon_profiles.features)
+        self._exon_usage_index = index
+        return index
 
-    # group annotated exons that mutually overlap (within a strand) into ExonRegions.
-    # Returns (regions, region_map) where region_map[i] gives the index into `regions`
-    # for the exon at exon_profiles.features[i].
-    def build_exon_overlap_regions(self, exon_features, exon_property_map):
-        n = len(exon_features)
-        region_map = [-1] * n
-        regions = []
-        # bucket exon indices by their strand_str, preserving sorted order from exon_features
-        by_strand = defaultdict(list)
-        for i in range(n):
-            by_strand[exon_property_map[i].strand].append(i)
+    def build_exon_usage_index(self, exon_features: list, segments: list) -> ExonUsageIndex:
+        segment_starts = [s[0] for s in segments]
+        segment_ends = [s[1] for s in segments]
+        exon_segment_ranges = []
+        segment_exons = [[] for _ in segments]
+        for i, (exon_start, exon_end) in enumerate(exon_features):
+            first = bisect_left(segment_starts, exon_start)
+            last = bisect_right(segment_ends, exon_end) - 1
+            if first > last or first >= len(segments) or last < 0 or \
+                    segment_starts[first] != exon_start or segment_ends[last] != exon_end:
+                # segments are split from the same exons, so this should never happen
+                logger.warning("Exon %s:%d-%d is not tiled by split exon segments and will not be counted" %
+                               (self.chr_id, exon_start, exon_end))
+                exon_segment_ranges.append(None)
+                continue
+            exon_segment_ranges.append((first, last))
+            for k in range(first, last + 1):
+                segment_exons[k].append(i)
 
-        for strand, idx_list in by_strand.items():
-            intervals = [exon_features[i] for i in idx_list]
-            for region_start, region_end, positions in self._group_overlapping_intervals(intervals):
-                region = ExonRegion(self.chr_id, region_start, region_end, strand)
-                region_index = len(regions)
-                regions.append(region)
-                for pos in positions:
-                    i = idx_list[pos]
-                    region.member_exon_indices.append(i)
-                    region.gene_ids.update(exon_property_map[i].gene_ids)
-                    region_map[i] = region_index
-        return regions, region_map
+        # an exon side is terminal only if no transcript has a splice site there,
+        # exons that are both terminal and internal are treated as internal
+        left_spliced = set()
+        right_spliced = set()
+        for exons in self.all_isoforms_exons.values():
+            for exon in exons[1:]:
+                left_spliced.add(tuple(exon))
+            for exon in exons[:-1]:
+                right_spliced.add(tuple(exon))
+        left_terminal = [tuple(e) not in left_spliced for e in exon_features]
+        right_terminal = [tuple(e) not in right_spliced for e in exon_features]
+        return ExonUsageIndex(list(segments), exon_segment_ranges, segment_exons, left_terminal, right_terminal)
 
     def build_exon_splice_site_regions(self) -> list:
         """Build per-gene exon splice-site regions for the exon splice-site counts output.

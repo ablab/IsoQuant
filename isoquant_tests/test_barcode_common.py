@@ -228,19 +228,87 @@ class TestFindCandidateSSW:
         assert barcode is None
 
     def test_find_candidate_score_diff(self):
-        """Test score difference threshold."""
-        # Two similar barcodes
+        """A runner-up too close to the winner makes the choice ambiguous."""
         barcode_matches = [
             ("ACTGACTG", 5, [0, 1, 2]),
             ("ACTGACTA", 5, [0, 1, 2]),
         ]
         read_seq = "NNACTGACTGNN"
 
-        # With high score_diff, should reject ambiguous
-        barcode, score, start, end = find_candidate_with_max_score_ssw(
+        barcode, _, _, _ = find_candidate_with_max_score_ssw(
             barcode_matches, read_seq, min_score=4, score_diff=3)
+        assert barcode is None
 
-        # Result depends on score difference
+        # the same pair is accepted when no margin is demanded
+        barcode, _, _, _ = find_candidate_with_max_score_ssw(
+            barcode_matches, read_seq, min_score=4, score_diff=0)
+        assert barcode == "ACTGACTG"
+
+
+class TestFindCandidateAmbiguity:
+    """Ties and runner-ups must be visible to the score_diff margin check.
+
+    Both were previously invisible: second_best_score was only assigned in the branches that
+    replaced the best, and a tie was only recorded when the newcomer aligned further left.
+    """
+
+    WINDOW = "ACGTACGTACGTACGT"
+
+    def _mutate(self, position, base):
+        return self.WINDOW[:position] + base + self.WINDOW[position + 1:]
+
+    def _tied_pair(self):
+        """Two barcodes scoring equally against WINDOW at the same alignment offset."""
+        return self._mutate(7, "A"), self._mutate(8, "T")
+
+    @pytest.mark.parametrize("reverse", [False, True])
+    def test_tie_is_rejected_regardless_of_order(self, reverse):
+        first, second = self._tied_pair()
+        matches = [(second, 0, []), (first, 0, [])] if reverse else [(first, 0, []), (second, 0, [])]
+        barcode, _, _, _ = find_candidate_with_max_score_ssw(
+            matches, self.WINDOW, min_score=14, score_diff=1)
+        assert barcode is None
+
+    def test_tie_accepted_when_no_margin_required(self):
+        """score_diff=0 keeps the old permissive behaviour for callers that rely on it."""
+        first, second = self._tied_pair()
+        barcode, _, _, _ = find_candidate_with_max_score_ssw(
+            [(first, 0, []), (second, 0, [])], self.WINDOW, min_score=14, score_diff=0)
+        assert barcode is not None
+
+    def test_clear_winner_over_runner_up(self):
+        winner, runner_up = self._mutate(15, "A"), self._mutate(3, "A")
+        barcode, score, _, _ = find_candidate_with_max_score_ssw(
+            [(winner, 0, []), (runner_up, 0, [])], self.WINDOW, min_score=14, score_diff=1)
+        assert barcode == winner
+        assert score == 15
+
+    def test_runner_up_is_tracked_when_it_comes_second(self):
+        """A lower-scoring candidate seen after the winner must still count as the runner-up."""
+        winner, runner_up = self.WINDOW, self._mutate(3, "A")
+        # score 16 vs 14 -> margin 2, accepted at score_diff 2 but not at 3
+        assert find_candidate_with_max_score_ssw(
+            [(winner, 0, []), (runner_up, 0, [])], self.WINDOW, min_score=14, score_diff=2)[0] == winner
+        assert find_candidate_with_max_score_ssw(
+            [(winner, 0, []), (runner_up, 0, [])], self.WINDOW, min_score=14, score_diff=3)[0] is None
+
+    def test_duplicate_entry_is_not_a_tie(self):
+        """The same barcode listed twice is one candidate, not two competing ones."""
+        winner = self._mutate(15, "A")
+        barcode, _, _, _ = find_candidate_with_max_score_ssw(
+            [(winner, 0, []), (winner, 0, [])], self.WINDOW, min_score=14, score_diff=1)
+        assert barcode == winner
+
+    def test_single_candidate_has_no_competition(self):
+        winner = self._mutate(15, "A")
+        barcode, _, _, _ = find_candidate_with_max_score_ssw(
+            [(winner, 0, [])], self.WINDOW, min_score=14, score_diff=1)
+        assert barcode == winner
+
+    def test_nothing_above_min_score(self):
+        barcode, _, _, _ = find_candidate_with_max_score_ssw(
+            [("TTTTTTTTTTTTTTTT", 0, [])], self.WINDOW, min_score=14, score_diff=1)
+        assert barcode is None
 
     def test_find_candidate_var_len(self):
         """Test variable length barcode matching."""

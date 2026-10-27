@@ -1,0 +1,28 @@
+name: SC.Human.Curio.custom_sc.allinfo
+output: /abga/work/andreyp/ci_isoquant/output
+run_type: allinfo
+genome: /abga/work/andreyp/data/reference/human/GRCh38.chr.fa
+genedb: /abga/work/andreyp/data/reference/human/gencode.v35.annotation.gtf.db
+bam: /abga/work/andreyp/ci_isoquant/data/reads/Human.Curio.Sim_Human.Curio.A0079_044.curio_mode.2M_1b2f39_1ca8a7_546f6a.bam
+datatype: ont
+isoquant_options: '"-m custom_sc --molecule /abga/work/andreyp/ci_isoquant/data/barcodes/curio.small.mdf
+  --complete_genedb --large_output allinfo read2transcripts --no_model_construction
+  -t 10"'
+label: Human.Curio.Sim
+edit_distance: '4'
+baselines:
+  allinfo:
+    Unique gene-barcodes pairs: 222037.0
+    Total reads saved: 224604.0
+    Spliced reads saved: 218949.0
+    Total assignments processed: 1997116.0
+    Assigned to any gene: 1987821.0
+    Assigned to any gene and barcoded: 1490096.0
+    Spliced: 1938251.0
+    Spliced and barcoded: 1452998.0
+    Uniquely assigned: 1987198.0
+    Uniquely assigned and barcoded: 1490096.0
+    Uniquely assigned and spliced: 1937754.0
+    Uniquely assigned and spliced and barcoded: 1452998.0
+    duplicate_triplets: 0.0
+    allinfo_stats_match: 1.0

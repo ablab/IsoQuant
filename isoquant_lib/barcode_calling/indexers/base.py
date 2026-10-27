@@ -15,6 +15,12 @@ import math
 from typing import List, Tuple, Iterable, Dict, DefaultDict
 from collections import defaultdict
 
+from ..common import NUCL2BIN as SHARED_NUCL2BIN
+
+# Returned for k-mers absent from an index. A shared empty tuple, so a miss costs no
+# allocation -- lookups run once per base of every scanned region.
+_NO_HITS: Tuple[int, ...] = ()
+
 
 class KmerIndexer:
     """
@@ -34,7 +40,10 @@ class KmerIndexer:
         """
         self.seq_list: List[str] = list(known_strings)
         self.k: int = kmer_size
-        self.index: DefaultDict[str, List[int]] = defaultdict(list)
+        # A plain dict, never a defaultdict: lookups scan whole cDNA regions, and a
+        # subscript read on a defaultdict would insert an entry per foreign k-mer,
+        # growing the index without bound for the life of the process.
+        self.index: Dict[str, List[int]] = {}
         self._index()
 
     def _get_kmers(self, seq: str) -> Iterable[str]:
@@ -51,14 +60,14 @@ class KmerIndexer:
         """Build k-mer index from all sequences."""
         for i, barcode in enumerate(self.seq_list):
             for kmer in self._get_kmers(barcode):
-                self.index[kmer].append(i)
+                self.index.setdefault(kmer, []).append(i)
 
     def append(self, barcode: str) -> None:
         """Add a new barcode to the index."""
         self.seq_list.append(barcode)
         index = len(self.seq_list) - 1
         for kmer in self._get_kmers(barcode):
-            self.index[kmer].append(index)
+            self.index.setdefault(kmer, []).append(index)
 
     def empty(self) -> bool:
         """Check if index is empty."""
@@ -84,7 +93,7 @@ class KmerIndexer:
         barcode_positions: DefaultDict[int, List[int]] = defaultdict(list)
 
         for pos, kmer in enumerate(self._get_kmers(sequence)):
-            for i in self.index[kmer]:
+            for i in self.index.get(kmer, _NO_HITS):
                 barcode_counts[i] += 1
                 barcode_positions[i].append(pos)
 
@@ -137,7 +146,7 @@ class KmerIndexer:
         barcode_positions: DefaultDict[int, List[int]] = defaultdict(list)
 
         for pos, kmer in enumerate(self._get_kmers_substr(sequence, start, end)):
-            for i in self.index[kmer]:
+            for i in self.index.get(kmer, _NO_HITS):
                 barcode_counts[i] += 1
                 barcode_positions[i].append(pos)
 
@@ -168,8 +177,8 @@ class ArrayKmerIndexer:
     Memory usage: O(4^k) array entries. Best for k <= 8.
     """
 
-    # Nucleotide to 2-bit encoding (A=00, C=01, G=10, T=11)
-    NUCL2BIN: Dict[str, int] = {'A': 0, 'C': 1, 'G': 2, 'T': 3, 'a': 0, 'c': 1, 'g': 2, 't': 3}
+    # the shared 2-bit encoding, so a code means the same thing here as everywhere else
+    NUCL2BIN: Dict[str, int] = SHARED_NUCL2BIN
 
     def __init__(self, known_strings: Iterable[str], kmer_size: int = 6):
         """

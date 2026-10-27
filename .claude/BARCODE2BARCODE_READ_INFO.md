@@ -73,8 +73,9 @@ does not depend on any subset property).
      (default on), run `write_read_info_in_parallel` across `chr_ids` (same
      `ProcessPoolExecutor` pattern as `filter_umis`), and `merge_files(...)` the per-chr
      files into `output_prefix + ".read_info.tsv"` (+`.gz`), matching the main merge
-     (`dataset_processor.py:738-739`, `copy_header=False, header_lines=3`). Add a lock
-     file for resume and remove per-chr read_info + column filtered-reads temps after merge.
+     (`copy_header=False, header_lines=3`). Run it as a `run_stage` unit (see
+     `.claude/RESUME_CHECKPOINTS.md`) whose cleanup removes the per-chr read_info + column
+     filtered-reads temps after its checkpoint.
 
 5. **Docs** — `docs/formats.md` (UMI section): document
    `SAMPLE_ID.UMI_filtered.barcode_barcode_col{C}.ED{N}.read_info.tsv[.gz]` as the
@@ -92,7 +93,7 @@ format the user is moving away from — not recommended.
 - Unit: extend `isoquant_tests/test_umi_filtering.py` — assert the extra round writes
   a column survivor-ID file and that `write_read_info_in_parallel` produces a
   header + one line per survivor with the 18-column `read_info` layout.
-- End-to-end (SC data on dx3/dx4): run a `visium_hd` sample with
+- End-to-end (SC data on a self-hosted runner): run a `visium_hd` sample with
   `--barcode2barcode file.tsv:0:1,2` **without** `--large_output allinfo`; confirm
   `…UMI_filtered.barcode_barcode_col0.ED4.read_info.tsv.gz` (and col1) exist,
   are non-empty, share the main read_info header, and that line counts match the

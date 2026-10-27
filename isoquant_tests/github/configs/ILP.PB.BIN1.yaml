@@ -1,0 +1,17 @@
+name: ILP.PB.BIN1
+output: /abga/work/andreyp/ci_isoquant/output
+run_type: transcripts
+genome: /abga/work/andreyp/ci_isoquant/data/ILP/ref/GRCm39.chr18.fa.gz
+genedb: /abga/work/andreyp/ci_isoquant/data/ILP/ref/reduced_db/BIN1.reduced.gtf
+bam: /abga/work/andreyp/ci_isoquant/data/ILP/pb_unifrom_cov/BIN1.bam
+datatype: pacbio
+isoquant_options: '"-t 6 --complete_genedb  --force "'
+reduced_db: /abga/work/andreyp/ci_isoquant/data/ILP/ref/reduced_db/BIN1
+baselines:
+  transcripts:
+    full_recall: 50.0
+    full_precision: 75.0
+    known_recall: 25.0
+    known_precision: 100.0
+    novel_recall: 100.0
+    novel_precision: 66.7

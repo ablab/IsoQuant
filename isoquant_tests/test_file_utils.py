@@ -61,6 +61,27 @@ class TestFileUtils(unittest.TestCase):
         expected = "#header\nchr1_content\nchr2_content\nchr3_content\n"
         self.assertEqual(content, expected)
 
+    def test_read_stats_tsv(self):
+        stats_file = os.path.join(self.test_dir, "chunk0.stats")
+        with open(stats_file, "w") as f:
+            f.write("Total reads\t10\nnot a stat line\nBad count\tNaN\nBarcode detected\t7\n")
+        self.assertEqual(read_stats_tsv(stats_file),
+                         {"Total reads": 10, "Barcode detected": 7})
+
+    def test_read_stats_tsv_accumulates(self):
+        # The stages write one stat file per chunk and sum them up.
+        stats = {}
+        for i, contents in enumerate(("Total reads\t10\n", "Total reads\t5\nSplit\t2\n")):
+            stats_file = os.path.join(self.test_dir, "chunk%d.stats" % i)
+            with open(stats_file, "w") as f:
+                f.write(contents)
+            read_stats_tsv(stats_file, stats)
+        self.assertEqual(stats, {"Total reads": 15, "Split": 2})
+
+    def test_read_stats_tsv_without_file(self):
+        self.assertEqual(read_stats_tsv(None), {})
+        self.assertEqual(read_stats_tsv(os.path.join(self.test_dir, "absent.stats")), {})
+
     def test_normalize_path(self):
         config_path = "/path/to/config/config.txt"
         rel_path = "data/file.txt"

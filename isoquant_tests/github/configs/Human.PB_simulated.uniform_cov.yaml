@@ -1,0 +1,16 @@
+name: Human.PB_simulated.uniform_cov
+output: /abga/work/andreyp/ci_isoquant/output
+run_type: assignment
+genome: /abga/work/andreyp/data/reference/human/GRCh38.chr.fa
+genedb: /abga/work/andreyp/data/reference/human/gencode.v36.annotation.db
+reads: /abga/work/andreyp/simulation/data/uniform_cov/Human.PacBio.uniform_cov.fasta.gz
+datatype: pacbio
+isoquant_options: '"-t 16 --complete_genedb --no_model_construction  --force "'
+baselines:
+  assignment:
+    mapping_precision: 99.24
+    mapping_recall: 94.1
+    assignment_precision: 99.55
+    assignment_recall: 95.68
+    overall_precision: 98.99
+    overall_recall: 90.45

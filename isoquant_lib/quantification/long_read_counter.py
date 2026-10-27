@@ -6,14 +6,18 @@
 ############################################################################
 
 import logging
+from bisect import bisect_left, bisect_right
 from collections import defaultdict, OrderedDict
 from enum import Enum, unique
+from functools import partial
+from typing import List, Optional, Set
 
 from isoquant_lib.assignment.isoform_assignment import (
     MatchEventSubtype,
     ReadAssignmentType,
 )
-from isoquant_lib.common import junctions_from_blocks
+from isoquant_lib.assignment.long_read_profiles import NonOverlappingFeaturesProfileConstructor
+from isoquant_lib.common import junctions_from_blocks, overlaps_at_least_when_overlap
 from isoquant_lib.gene_info import FeatureInfo
 from isoquant_lib.assignment.read_groups import AbstractReadGrouper
 from .convert_grouped_counts import (
@@ -188,12 +192,66 @@ class AbstractCounter:
         self.output_counts_file_name = counts_file_name(self.output_counts_prefix, linear=not ignore_read_groups)
         self.output_tpm_file_name = tpm_file_name(self.output_tpm_prefix)
         self.output_file = self.output_counts_file_name
-        open(self.output_file, "w").close()
+        # nothing is written here: see files_to_empty_before_counting()
         self.output_stats_file_name = None
         self.usable_file_name = None
+        # Grouped subclasses overwrite these right after calling us; the defaults
+        # keep the group-name helpers below well defined for ungrouped counters.
+        self.string_pools = None
+        self.group_index: int = 0
 
     def get_output_file_handler(self):
         return open(self.output_file, "a")
+
+    def files_to_empty_before_counting(self) -> list:
+        """Files this counter appends to.
+
+        A counter never empties them itself: the per-chromosome aggregator empties them
+        once before counting (ReadAssignmentAggregator.empty_counter_outputs), while the
+        merge builds counters for finished outputs and must leave them untouched. A
+        counter writing an extra file has to list it here.
+        """
+        return [self.output_file]
+
+    # ------------------------------------------------- read group names
+    # Two distinct contracts, deliberately separate methods:
+    #
+    #   _get_group_name(id)   resolution -- the id was *observed* on a read, so it
+    #                         may be unassigned or stale. Degrades, never raises.
+    #                         Delegates to StringPoolManager.resolve_read_group,
+    #                         the single owner of what a group id means.
+    #   _get_ordered_groups() enumeration -- walks the pool by position, so every
+    #   _get_num_groups()     index is valid by construction. A miss here is a real
+    #                         bug and is left to raise.
+    #
+    # Defined once here rather than per counter: five counter classes used to carry
+    # identical copies, and they drifted out of sync with resolve_read_group's
+    # guards (a negative id silently named the pool's last group).
+
+    def _get_group_name(self, group_id: int) -> str:
+        """Display name for a group id observed on a read."""
+        if self.string_pools is None:
+            return AbstractReadGrouper.default_group_id
+        return self.string_pools.resolve_read_group(self.group_index, group_id)
+
+    def _get_ordered_groups(self) -> list:
+        """All group names in pool order."""
+        if self.string_pools is None:
+            return [AbstractReadGrouper.default_group_id]
+        pool = self.string_pools.get_read_group_pool(self.group_index)
+        return [pool.get_str(i) for i in range(len(pool))]
+
+    def _get_column_order(self) -> Optional[List[str]]:
+        """Column order for grouped matrices: input order for file_name grouping, else None (sorted)."""
+        if self.string_pools is None:
+            return None
+        return self.string_pools.get_group_column_order(self.group_index)
+
+    def _get_num_groups(self) -> int:
+        """Number of groups in the pool."""
+        if self.string_pools is None:
+            return 1
+        return len(self.string_pools.get_read_group_pool(self.group_index))
 
     def add_read_info(self, read_assignment):
         raise NotImplementedError()
@@ -231,6 +289,9 @@ class CompositeCounter:
 
     def add_counter(self, counter):
         self.counters.append(counter)
+
+    def files_to_empty_before_counting(self) -> list:
+        return [path for p in self.counters for path in p.files_to_empty_before_counting()]
 
     def add_read_info(self, read_assignment):
         for p in self.counters:
@@ -378,27 +439,6 @@ class AssignedFeatureCounter(AbstractCounter):
             self.dump_grouped(all_features)
         self.dump_usable()
 
-    def _get_ordered_groups(self):
-        """Get ordered list of group names from string pool."""
-        if self.string_pools is None:
-            return [AbstractReadGrouper.default_group_id]
-        pool = self.string_pools.get_read_group_pool(self.group_index)
-        return [pool.get_str(i) for i in range(len(pool))]
-
-    def _get_group_name(self, group_id: int) -> str:
-        """Get group name from pool for a group ID."""
-        if self.string_pools is None:
-            return AbstractReadGrouper.default_group_id
-        pool = self.string_pools.get_read_group_pool(self.group_index)
-        return pool.get_str(group_id)
-
-    def _get_num_groups(self) -> int:
-        """Get number of groups from pool."""
-        if self.string_pools is None:
-            return 1
-        pool = self.string_pools.get_read_group_pool(self.group_index)
-        return len(pool)
-
     def dump_ungrouped(self, all_features):
         with self.get_output_file_handler() as output_file:
             default_group_id = 0  # Default group index
@@ -464,6 +504,7 @@ class AssignedFeatureCounter(AbstractCounter):
             return
 
         num_groups = self._get_num_groups()
+        group_order = self._get_column_order()
         counts_format = {GroupedOutputFormat[f] for f in args.counts_format}
         explicit_matrix = GroupedOutputFormat.matrix in counts_format
         default_format = GroupedOutputFormat.default in counts_format
@@ -476,7 +517,8 @@ class AssignedFeatureCounter(AbstractCounter):
                 logger.info("Skipping full matrix conversion: %d groups exceeds limit of %d. "
                             "Use '--counts_format matrix' to force conversion." % (num_groups, max_groups))
             else:
-                actual_num_groups = convert_to_matrix(self.output_file, self.output_counts_prefix, max_groups=max_groups) or num_groups
+                actual_num_groups = convert_to_matrix(self.output_file, self.output_counts_prefix, max_groups=max_groups,
+                                                      group_order=group_order) or num_groups
                 if normalization_method != NormalizationMethod.none:
                     reads_for_tpm = None
                     if normalization_method == NormalizationMethod.usable_reads:
@@ -484,18 +526,19 @@ class AssignedFeatureCounter(AbstractCounter):
                                          for group_id in range(num_groups)}
                     convert_to_matrix(self.output_file, self.output_tpm_prefix,
                                       convert_to_tpm=True, usable_reads_per_group=reads_for_tpm,
-                                      max_groups=max_groups)
+                                      max_groups=max_groups, group_order=group_order)
 
         if (GroupedOutputFormat.mtx in counts_format or
                 (default_format and actual_num_groups > GROUP_COUNT_CUTOFF)):
-            convert_to_mtx(self.output_file, self.output_counts_prefix)
+            convert_to_mtx(self.output_file, self.output_counts_prefix, group_order=group_order)
             if normalization_method != NormalizationMethod.none:
                 reads_for_tpm = None
                 if normalization_method == NormalizationMethod.usable_reads:
                     reads_for_tpm = {self._get_group_name(group_id): self.reads_for_tpm[group_id]
                                      for group_id in range(num_groups)}
                 convert_to_mtx(self.output_file, self.output_tpm_prefix,
-                               convert_to_tpm=True, usable_reads_per_group=reads_for_tpm)
+                               convert_to_tpm=True, usable_reads_per_group=reads_for_tpm,
+                               group_order=group_order)
 
 
 def create_gene_counter(output_file_name, strategy, complete_feature_list=None, string_pools=None, group_index: int = 0):
@@ -587,13 +630,6 @@ class ProfileFeatureCounter(AbstractCounter):
                 if feature_id not in self.feature_name_dict:
                     self.feature_name_dict[feature_id] = feature_property_map[i].to_str()
 
-    def _get_group_name(self, group_id: int) -> str:
-        """Get group name from pool for a group ID."""
-        if self.string_pools is None:
-            return AbstractReadGrouper.default_group_id
-        pool = self.string_pools.get_read_group_pool(self.group_index)
-        return pool.get_str(group_id)
-
     def dump(self):
         with open(self.output_counts_file_name, "w") as f:
             f.write(FeatureInfo.header() + "\tgroup_id\tinclude_counts\texclude_counts\n")
@@ -619,6 +655,7 @@ class ProfileFeatureCounter(AbstractCounter):
         default_format = GroupedOutputFormat.default in counts_format
         num_groups = (len(self.string_pools.get_read_group_pool(self.group_index))
                       if self.string_pools is not None else 1)
+        group_order = self._get_column_order()
         actual_num_groups = num_groups
         if explicit_matrix or default_format:
             max_groups = GROUP_COUNT_CUTOFF if default_format and not explicit_matrix else 0
@@ -631,11 +668,11 @@ class ProfileFeatureCounter(AbstractCounter):
                 actual_num_groups = convert_profile_to_matrix(
                     self.output_file, self.output_counts_prefix,
                     feature_type=self._feature_type(),
-                    max_groups=max_groups) or num_groups
+                    max_groups=max_groups, group_order=group_order) or num_groups
 
         if (GroupedOutputFormat.mtx in counts_format or
                 (default_format and actual_num_groups > GROUP_COUNT_CUTOFF)):
-            convert_profile_to_mtx(self.output_file, self.output_counts_prefix)
+            convert_profile_to_mtx(self.output_file, self.output_counts_prefix, group_order=group_order)
 
     @staticmethod
     def is_valid(assignment):
@@ -670,33 +707,37 @@ class ExonCounter(ProfileFeatureCounter):
                                         read_assignment.gene_info.exon_property_map, group_id)
 
 
-# Joint exon counter: groups overlapping annotated exons into regions.
-# Per region with N members, dumps N inclusion features + 1 region-exclusion feature.
-# A read either:
-#   - selects one (or more) inclusion variant (any profile[i] == +1), or
-#   - skips the entire region (all profile[i] == -1) → +1 to region exclusion, or
-#   - is ignored (any profile[i] == 0, i.e., insufficient info).
-class JointExonCounter(AbstractCounter):
-    def __init__(self, output_prefix, string_pools=None, group_index: int = 0):
-        AbstractCounter.__init__(self, output_prefix, string_pools is None)
-        self.string_pools = string_pools
-        self.group_index = group_index
-        # inclusion_counter[exon FeatureInfo.id] -> IncrementalDict(group_id -> count)
-        self.inclusion_counter = defaultdict(lambda: IncrementalDict(int))
-        # exclusion_counter[ExonRegion.id] -> IncrementalDict(group_id -> count)
-        self.exclusion_counter = defaultdict(lambda: IncrementalDict(int))
-        # ordered by first-seen; key = ("inc", exon_feature_id) or ("exc", region_id)
-        # value = preformatted row prefix (chr, region_start, region_end, strand, exon_start, exon_end, kind)
-        self.feature_row_prefix = OrderedDict()
-        self.encountered_group_ids = set()
+# Per-read exon states for ExonUsageCounter, indices into per-(exon, gene, group) count vectors.
+EXON_FULL, EXON_LEFT, EXON_RIGHT, EXON_SKIP, EXON_ALT = range(5)
+
+
+# Per-exon usage counts: every annotated exon is classified independently for each read as
+#   - full: a read exon matches both exon boundaries; for a transcript-terminal exon the read
+#     may start / end inside it (only the internal splice site has to match);
+#   - left / right: only the exon's left / right splice site is confirmed, the read starts / ends inside the exon;
+#   - skip: the exon lies within a read intron (all its split-exon segments are absent from the read);
+#   - alt: a read exon overlaps the exon, but with different boundaries (alternative splice site, intron retention).
+# include_counts = full + left + right, exclude_counts = skip, so include / (include + exclude) is the exon PSI.
+class ExonUsageCounter(ProfileFeatureCounter):
+    def __init__(self, output_prefix, string_pools=None, group_index: int = 0,
+                 delta: int = 0, minimal_exon_overlap: int = 5):
+        ProfileFeatureCounter.__init__(self, output_prefix, string_pools, group_index)
+        self.delta: int = delta
+        self.segment_comparator = partial(overlaps_at_least_when_overlap, delta=minimal_exon_overlap)
+        # (exon feature id, gene id) -> {group_id: [full, left, right, skip, alt]}
+        self.exon_counts: dict = defaultdict(dict)
+        # (exon feature id, gene id) -> feature columns, in first-seen order
+        self.exon_row_prefix: OrderedDict = OrderedDict()
+
+    def _feature_type(self) -> str:
+        return "exon"
 
     def add_read_info(self, read_assignment):
-        if not ProfileFeatureCounter.is_valid(read_assignment):
-            return
-        if not ProfileFeatureCounter.is_assigned_to_gene(read_assignment):
+        if not ProfileFeatureCounter.is_valid(read_assignment) or not ProfileFeatureCounter.is_assigned_to_gene(read_assignment):
             return
         gene_info = read_assignment.gene_info
-        if not getattr(gene_info, "exon_overlap_regions", None):
+        index = gene_info.get_exon_usage_index()
+        if index is None:
             return
         read_gene = None
         for m in read_assignment.isoform_matches:
@@ -705,79 +746,101 @@ class JointExonCounter(AbstractCounter):
                 break
         if read_gene is None:
             return
-        if self.ignore_read_groups:
-            group_id = 0
-        elif not read_assignment.read_group_ids:
+        blocks = read_assignment.corrected_exons if read_assignment.corrected_exons else read_assignment.exons
+        if not blocks or len(blocks) < 2:
+            # no splice sites, nothing to say about exon usage
+            return
+        if self.ignore_read_groups or not read_assignment.read_group_ids:
             group_id = 0
         else:
             group_id = read_assignment.read_group_ids[self.group_index]
-        self._classify(read_assignment.exon_gene_profile, read_assignment.strand,
-                       gene_info, group_id, read_gene)
-
-    def _classify(self, profile, read_strand, gene_info, group_id, read_gene):
         self.encountered_group_ids.add(group_id)
-        exon_features = gene_info.exon_profiles.features
-        property_map = gene_info.exon_property_map
-        for region in gene_info.exon_overlap_regions:
-            members = region.member_exon_indices
-            if not members:
-                continue
-            # all members share strand by construction
-            if read_strand not in property_map[members[0]].strand:
-                continue
-            states = [profile[i] for i in members]
-            if any(s == 0 for s in states):
-                continue
-            inclusions = [i for i, s in zip(members, states) if s == 1]
-            if inclusions:
-                for i in inclusions:
-                    # only attribute the inclusion to the read's assigned gene
-                    if read_gene not in property_map[i].gene_ids:
-                        continue
-                    feature_id = property_map[i].id
-                    counter_key = (feature_id, read_gene)
-                    self.inclusion_counter[counter_key].inc(group_id)
-                    row_key = ("inc", counter_key)
-                    if row_key not in self.feature_row_prefix:
-                        exon_start, exon_end = exon_features[i]
-                        self.feature_row_prefix[row_key] = "%s\t%d\t%d\t%s\t%d\t%d\t%s\tinclusion" % (
-                            region.chr_id, region.start, region.end, region.strand,
-                            exon_start, exon_end, read_gene)
-            else:
-                # all states == -1: region skipped entirely; attribute to the read's gene only
-                if read_gene not in region.gene_ids:
-                    continue
-                counter_key = (region.id, read_gene)
-                self.exclusion_counter[counter_key].inc(group_id)
-                row_key = ("exc", counter_key)
-                if row_key not in self.feature_row_prefix:
-                    self.feature_row_prefix[row_key] = "%s\t%d\t%d\t%s\t.\t.\t%s\texclusion" % (
-                        region.chr_id, region.start, region.end, region.strand, read_gene)
 
-    def _get_group_name(self, group_id: int) -> str:
-        if self.string_pools is None:
-            return AbstractReadGrouper.default_group_id
-        pool = self.string_pools.get_read_group_pool(self.group_index)
-        return pool.get_str(group_id)
+        property_map = gene_info.exon_property_map
+        exon_features = gene_info.exon_profiles.features
+        for exon_index, state in self._classify(blocks, index, exon_features):
+            exon_property = property_map[exon_index]
+            if read_assignment.strand not in exon_property.strand or read_gene not in exon_property.gene_ids:
+                continue
+            key = (exon_property.id, read_gene)
+            if key not in self.exon_row_prefix:
+                self.exon_row_prefix[key] = "%s\t%d\t%d\t%s\t%s\t%s" % (
+                    exon_property.chr_id, exon_property.start, exon_property.end,
+                    exon_property.strand, exon_property.type, read_gene)
+            group_counts = self.exon_counts[key]
+            state_counts = group_counts.get(group_id)
+            if state_counts is None:
+                state_counts = [0] * 5
+                group_counts[group_id] = state_counts
+            state_counts[state] += 1
+
+    # yields (exon index, state) for every exon the read is informative about
+    def _classify(self, blocks: list, index, exon_features: list):
+        # split-exon segments within the read span; everything outside is uninformative
+        first = bisect_left(index.segment_ends, blocks[0][0])
+        last = bisect_right(index.segment_starts, blocks[-1][1])
+        if first >= last:
+            return
+        segment_profile = NonOverlappingFeaturesProfileConstructor(
+            index.segments[first:last], comparator=self.segment_comparator).construct_profile(blocks).gene_profile
+
+        seen_exons = set()
+        for k in range(first, last):
+            if segment_profile[k - first] == 0:
+                continue
+            for exon_index in index.segment_exons[k]:
+                if exon_index in seen_exons:
+                    continue
+                seen_exons.add(exon_index)
+                seg_first, seg_last = index.exon_segment_ranges[exon_index]
+                states = segment_profile[max(seg_first, first) - first:min(seg_last, last - 1) - first + 1]
+                if 1 in states:
+                    exon_start, exon_end = exon_features[exon_index]
+                    yield exon_index, self._inclusion_state(blocks, exon_start, exon_end,
+                                                            index.left_terminal[exon_index],
+                                                            index.right_terminal[exon_index])
+                elif seg_first >= first and seg_last < last and all(s == -1 for s in states):
+                    yield exon_index, EXON_SKIP
+
+    # state of an exon overlapped by read blocks: full, left, right or alt
+    def _inclusion_state(self, blocks: list, exon_start: int, exon_end: int,
+                         left_terminal: bool, right_terminal: bool) -> int:
+        overlapping_blocks = [j for j, (block_start, block_end) in enumerate(blocks)
+                              if block_end >= exon_start and block_start <= exon_end]
+        if len(overlapping_blocks) != 1:
+            # read has an intron inside the exon, i.e. it uses a shorter variant
+            return EXON_ALT
+        j = overlapping_blocks[0]
+        block_start, block_end = blocks[j]
+        delta = self.delta
+        left_match = abs(block_start - exon_start) <= delta
+        right_match = abs(block_end - exon_end) <= delta
+        if 0 < j < len(blocks) - 1:
+            # both block borders are splice sites
+            return EXON_FULL if left_match and right_match else EXON_ALT
+        if j == 0:
+            # read starts inside the exon, only the right border is a splice site
+            if right_match and block_start >= exon_start - delta:
+                return EXON_FULL if left_terminal else EXON_RIGHT
+            return EXON_ALT
+        # read ends inside the exon, only the left border is a splice site
+        if left_match and block_end <= exon_end + delta:
+            return EXON_FULL if right_terminal else EXON_LEFT
+        return EXON_ALT
 
     def dump(self):
         with open(self.output_counts_file_name, "w") as f:
-            f.write("chr\tregion_start\tregion_end\tstrand\texon_start\texon_end\tgene_id\tfeature_kind\tgroup_id\tcount\n")
+            f.write(FeatureInfo.header() + "\tgroup_id\tinclude_counts\texclude_counts\tn_full\tn_left\tn_right\tn_alt\n")
             all_group_ids = sorted(self.encountered_group_ids)
-            for key, prefix in self.feature_row_prefix.items():
-                kind, fid = key
-                counter = self.inclusion_counter if kind == "inc" else self.exclusion_counter
+            for key, prefix in self.exon_row_prefix.items():
+                group_counts = self.exon_counts[key]
                 for group_id in all_group_ids:
-                    count = counter[fid].get(group_id)
-                    if count <= 0:
+                    state_counts = group_counts.get(group_id)
+                    if not state_counts or not any(state_counts):
                         continue
-                    f.write("%s\t%s\t%d\n" % (prefix, self._get_group_name(group_id), count))
-
-    def finalize(self, args=None):
-        # Matrix/MTX conversion is intentionally skipped: the joint counter's
-        # 9-column schema does not match the include/exclude pair layout used by
-        # convert_profile_to_matrix. Linear TSV is the primary output.
-        return
+                    full, left, right, skip, alt = state_counts
+                    f.write("%s\t%s\t%d\t%d\t%d\t%d\t%d\t%d\n" % (prefix, self._get_group_name(group_id),
+                                                              full + left + right, skip, full, left, right, alt))
 
     def add_confirmed_features(self, features):
         return
@@ -980,11 +1043,6 @@ class ExonSpliceSiteCounter(AbstractCounter):
         else:
             self._bump(rec["amb"], group_id, read_id)
 
-    def _get_group_name(self, group_id: int) -> str:
-        if self.string_pools is None:
-            return AbstractReadGrouper.default_group_id
-        return self.string_pools.get_read_group_pool(self.group_index).get_str(group_id)
-
     def _header(self) -> str:
         cols = ["region_gene_candidate", "n_full", "n_left", "n_right", "group_id"]
         if self.emit_read_ids:
@@ -1072,17 +1130,51 @@ class IntronCounter(ProfileFeatureCounter):
                                         read_assignment.gene_info.intron_property_map, group_id)
 
 
-INTRON_RETENTION_EVENT_TYPES = {
+# Intron-retention match events, i.e. the read physically covers intronic
+# sequence of the isoform it was compared against. Shared by
+# IntronRetentionCounter and RNAVelocityCounter.
+#
+# fake_micro_intron_retention is deliberately excluded: is_alignment_artifact()
+# classes it as an artifact, and it is the only IR-named event treated as a
+# *minor* error rather than a major inconsistency.
+#
+# The two incomplete_* variants carry a 50 bp floor by construction -- both
+# detection sites in junction_comparator.py gate them on
+# overlaps_at_least(read_region, intron, params.minor_exon_extension), and
+# args.minor_exon_extension is 50 (isoquant.py). A read end has to run at least
+# 50 bases into an intron to produce one, so no extra length check is needed (and
+# none is possible here: MatchEvent stores index pairs, not coordinates).
+INTRON_RETENTION_EVENTS = frozenset((
     MatchEventSubtype.intron_retention,
     MatchEventSubtype.unspliced_intron_retention,
-}
+    MatchEventSubtype.incomplete_intron_retention_left,
+    MatchEventSubtype.incomplete_intron_retention_right,
+))
 
 
 class IntronRetentionCounter(ProfileFeatureCounter):
-    def __init__(self, output_prefix, string_pools=None, group_index: int = 0):
+    """Per reference intron: reads retaining it (include) vs reads splicing it out (exclude).
+
+    include_counts -- reads with an intron-retention event (full, mono-exonic or a
+    >= 50 bp partial retention at a read end) on this intron, relative to the
+    isoform(s) the read was matched to. A read matched to several isoforms
+    sharing the intron is counted once.
+    exclude_counts -- reads having a junction that matches this intron (within
+    delta), i.e. exactly the splice junction include_counts for the same reads.
+    Reads skipping the intron via other junctions are counted in neither column.
+
+    Only the exclusion side is strand-filtered (as in IntronCounter): mono-exonic
+    retaining reads often have strand '.', and the retained intron is already tied
+    to the matched transcript.
+    """
+
+    def __init__(self, output_prefix: str, string_pools=None, group_index: int = 0) -> None:
         ProfileFeatureCounter.__init__(self, output_prefix, string_pools, group_index)
 
-    def add_read_info(self, read_assignment):
+    def _feature_type(self) -> str:
+        return "intron"
+
+    def add_read_info(self, read_assignment) -> None:
         if not ProfileFeatureCounter.is_valid(read_assignment) or not ProfileFeatureCounter.is_assigned_to_gene(read_assignment):
             return
         if not read_assignment.isoform_matches:
@@ -1096,34 +1188,56 @@ class IntronRetentionCounter(ProfileFeatureCounter):
             group_id = read_assignment.read_group_ids[self.group_index]
 
         gene_info = read_assignment.gene_info
-        intron_features = gene_info.intron_profiles.features
         property_map = gene_info.intron_property_map
         if not property_map:
             return
 
+        retained = self._retained_feature_indices(read_assignment)
+        spliced: Set[int] = set()
+        for i, value in enumerate(read_assignment.intron_gene_profile):
+            if value == 1 and read_assignment.strand in property_map[i].strand and i not in retained:
+                spliced.add(i)
+
+        if not retained and not spliced:
+            return
+        self.encountered_group_ids.add(group_id)
+        for feature_idx in retained:
+            feature_id = self._register_feature(property_map[feature_idx])
+            self.inclusion_feature_counter[feature_id].inc(group_id)
+        for feature_idx in spliced:
+            feature_id = self._register_feature(property_map[feature_idx])
+            self.exclusion_feature_counter[feature_id].inc(group_id)
+
+    def _register_feature(self, feature_property) -> int:
+        feature_id = feature_property.id
+        if feature_id not in self.feature_name_dict:
+            self.feature_name_dict[feature_id] = feature_property.to_str()
+        return feature_id
+
+    @staticmethod
+    def _retained_feature_indices(read_assignment) -> Set[int]:
+        """Gene intron feature indices retained by the read in any of its isoform matches."""
+        gene_info = read_assignment.gene_info
         # coords -> gene intron feature index, built once per gene_info and shared
         # across ungrouped + grouped IR counters (replaces per-lookup O(n) .index())
         feature_index = getattr(gene_info, "_intron_feature_index", None)
         if feature_index is None:
-            feature_index = {coords: i for i, coords in enumerate(intron_features)}
+            feature_index = {coords: i for i, coords in enumerate(gene_info.intron_profiles.features)}
             gene_info._intron_feature_index = feature_index
 
+        retained: Set[int] = set()
         for match in read_assignment.isoform_matches:
             if match.assigned_transcript is None:
                 continue
             isoform_introns = gene_info.all_isoforms_introns.get(match.assigned_transcript, [])
             for event in match.match_subclassifications:
-                if event.event_type not in INTRON_RETENTION_EVENT_TYPES:
+                if event.event_type not in INTRON_RETENTION_EVENTS:
                     continue
+                # alternative-structure retentions may span a range of isoform introns; all are counted
                 for idx in range(event.isoform_region[0], event.isoform_region[1] + 1):
                     if idx >= len(isoform_introns):
                         continue
-                    intron_coords = isoform_introns[idx]
-                    feature_idx = feature_index.get(intron_coords)
-                    if feature_idx is None:
-                        continue
-                    feature_id = property_map[feature_idx].id
-                    self.inclusion_feature_counter[feature_id].inc(group_id)
-                    self.encountered_group_ids.add(group_id)
-                    if feature_id not in self.feature_name_dict:
-                        self.feature_name_dict[feature_id] = property_map[feature_idx].to_str()
+                    feature_idx = feature_index.get(isoform_introns[idx])
+                    if feature_idx is not None:
+                        retained.add(feature_idx)
+        return retained

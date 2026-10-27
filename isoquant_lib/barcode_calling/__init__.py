@@ -65,10 +65,25 @@ from .detect_barcodes import (
     process_single_thread,
     process_in_parallel,
     get_umi_length,
+    get_barcode_length,
+    detect_cell_barcode_list,
+    count_barcodes_in_reads,
     create_barcode_caller,
     BARCODE_CALLING_MODES,
     BARCODE_FILES_REQUIRED,
 )
+
+# Cell barcode detection
+from .cell_selection import CellBarcodeSelector, estimate_cell_number, select_cell_barcodes
+
+# Command line resolution and the pipeline stage
+from .options import (
+    resolve_barcode_correction,
+    resolve_deprecated_mode,
+    resolve_split_molecules,
+    validate_barcode_calling,
+)
+from .pipeline import BarcodeCallingArgs, call_barcodes, detect_cell_barcodes
 
 __all__ = [
     # Indexers
@@ -115,7 +130,22 @@ __all__ = [
     'process_single_thread',
     'process_in_parallel',
     'get_umi_length',
+    'get_barcode_length',
+    'detect_cell_barcode_list',
+    'count_barcodes_in_reads',
     'create_barcode_caller',
     'BARCODE_CALLING_MODES',
     'BARCODE_FILES_REQUIRED',
+    # Cell barcode detection
+    'CellBarcodeSelector',
+    'estimate_cell_number',
+    'select_cell_barcodes',
+    # Command line resolution and the pipeline stage
+    'resolve_barcode_correction',
+    'resolve_deprecated_mode',
+    'resolve_split_molecules',
+    'validate_barcode_calling',
+    'BarcodeCallingArgs',
+    'call_barcodes',
+    'detect_cell_barcodes',
 ]

@@ -34,10 +34,10 @@ Requires `--analysis quantification`, which will be set by default.
 
 If `--analysis exon_quantification` is set, exon, splice junction and intron retention counts will be produced:
 
-* `SAMPLE_ID.exon_counts.tsv` - region-based exon counts: overlapping reference exons are grouped into regions, and each region reports per-variant inclusion counts plus one region-level exclusion count;
+* `SAMPLE_ID.exon_counts.tsv` - per-exon counts: number of reads including (fully or only one splice site), skipping, or using an alternative variant of each reference exon;
 * `SAMPLE_ID.exon_splice_site_counts.tsv` - exon splice-site counts: per-candidate full / left / right splice-site support and per-region exclusion / ambiguous counts, one row per feature and group;
 * `SAMPLE_ID.splice_junction_counts.tsv` - reference splice junction inclusion/exclusion read counts (previously named `SAMPLE_ID.intron_counts.tsv`);
-* `SAMPLE_ID.intron_retention_counts.tsv` - intron retention event counts per reference intron (same format as splice junction counts);
+* `SAMPLE_ID.intron_retention_counts.tsv` - per reference intron, the number of reads retaining it (`include_counts`) and splicing it out (`exclude_counts`); same layout as splice junction counts, see [formats](formats.md#splice-junctions-count-format);
 
 The old per-exon inclusion/exclusion counts (previous IsoQuant exon format) are no longer produced by default. 
 Use `--old_exon_count_format` to additionally output them as `SAMPLE_ID.old_exon_counts.tsv` (deprecated, will be removed in a future release).
@@ -61,6 +61,25 @@ The region-based `exon` and `exon_splice_site` grouped counts are produced in li
 The exon splice-site counts carry a `group_id` column (one row per feature and group; `NA` when ungrouped). 
 To reconstruct the per-molecule group-list format (one entry per read, e.g. barcodes for downstream cell/cell-type aggregation)
 use `isoquant_lib/scripts/exon_splice_site_to_group_lists.py`.
+
+
+#### RNA velocity counts
+
+In single-cell and spatial modes, when reads are grouped by cell barcode
+(`--read_group barcode`, `barcode_spot` or `barcode_barcode`) and an annotation is given,
+IsoQuant also writes spliced/unspliced counts per cell and gene for downstream RNA velocity analysis:
+
+* `SAMPLE_ID.RNA_velocity_grouped_<strategy>` - tab-separated `cell_id`, `gene_id`, `spliced`, `unspliced`, `ambiguous`;
+* `SAMPLE_ID.RNA_velocity_grouped_<strategy>.loom` - the same counts as a velocyto-style loom file
+  with `spliced`, `unspliced` and `ambiguous` layers (genes as rows, cells as columns), readable by scVelo.
+
+A read is counted as **unspliced** when it carries intronic sequence: either it lies inside an intron,
+or it retains one (an intron retention event against the isoform it matched; partial retention needs at
+least 50 intronic bases). A read matching only mature isoforms is **spliced**. A read that looks retained
+against one isoform and mature against another is **ambiguous**.
+
+Reads with no detected barcode, reads that could not be attributed to a gene or overlap a gene body without resembling any isoform are
+not counted.
 
 
 #### Grouped counts in matrix formats
@@ -173,7 +192,7 @@ Produced only when `fusion` is among the requested `--analysis` values.
 
 Fusion detection runs after the isoform pipeline and reports candidate gene fusions:
 
-* `fusion_<bam_basename>.tsv` - detected gene fusions, one file per input BAM, placed directly in `<output_dir>`;
+* `SAMPLE_ID.fusions.tsv` - detected gene fusions, one file per sample (combining all of the sample's BAM files), placed in the sample's output folder `<output_dir>/SAMPLE_ID/`;
 
 See [output formats](formats.md#fusion-prediction-format) for a description of the columns.
 
@@ -185,8 +204,17 @@ By default, in single-cell and spatial modes IsoQuant only performs quantificati
 UMI-filtered reads will be saved to the same [read_info format](#read-assignments). 
 All counts formats will also be identical (see above).
 
-If IsoQuant detects the barcodes, barcoded reads will be saved in [TSV format](barcode_calling.md#output).
-If barcode calling also splits the reads into individual cDNAs, a FASTA file with cDNAs will be produced.
+If IsoQuant detects the barcodes, barcoded reads will be saved in [TSV format](barcode_calling.md#output),
+gzipped once the run finishes unless `--no_gzip` is set.
+If barcode calling also splits the reads into individual cDNAs, a FASTA file with cDNAs will be
+produced, also gzipped unless `--no_gzip` is set.
+
+Two optional BAM outputs carry the same information on the alignments themselves
+(see [`--large_output`](cmd.md#--large_output) for details):
+
+* `SAMPLE_ID.tagged.bam` - all input alignments with barcode and UMI tags (only with `--large_output tagged_bam`);
+* `SAMPLE_ID.deduplicated.bam` - primary alignments of UMI-deduplicated reads, with barcode, UMI,
+  gene and transcript tags (only with `--large_output deduplicated_bam`).
 
 Note that transcript discovery is performed only in `bulk` mode by default.
 Single-cell and spatial modes require UMI deduplication.
@@ -197,10 +225,40 @@ We recommend using `bulk` mode for novel gene and transcript discovery.
 [Full documentation for single-cell and spatial modes](single_cell.md).
 
 
+## Run summary
+
+Produced for every experiment unless `--no_report` is set:
+
+* `SAMPLE_ID.summary.html` - QC summary of the run as a single self-contained page:
+  mapping rate, read assignment breakdown, counted reads per feature type, discovered
+  transcript models and, for single-cell / spatial runs, barcode detection rate,
+  UMI deduplication and per-barcode statistics;
+* `SAMPLE_ID.summary_stats.json` - the same numbers in machine-readable form.
+
+How the main numbers are defined:
+
+* **Input reads** are primary alignments plus unaligned reads (secondary and supplementary
+  alignments are extra records of the same reads); the mapping rate is primary alignments over that total.
+  When reads are split into cDNA molecules before mapping (`--split_molecules`), these are
+  **input molecules**.
+* When some references carrying alignments are not processed (`--process_only_chr`, `--discard_chr`,
+  or an annotation that does not cover the whole genome), primary alignments are only counted
+  on the processed references while unaligned reads are counted for the whole input.
+  The total is then reported as **reads on processed references**, and `covers_all_input_reads`
+  is `false` in the JSON file.
+* In single-cell and spatial modes the counts hold only the reads that survived UMI deduplication,
+  so counted reads are reported **after UMI deduplication**.
+* The **UMI duplication rate** is the share of deduplicated reads removed as duplicates.
+  Only reads assigned to a gene and carrying a barcode are deduplicated, so the rate is computed over them.
+
 ## Other files
 
 Additionally, an `isoquant.log` log file will be saved to the output directory.  
 
 If raw reads were provided, BAM file(s) will be stored in `<output_dir>/<SAMPLE_ID>/aux/`.  
-In case `--keep_tmp` option was specified this directory will also contain temporary files.
+In case `--keep_tmp` option was specified this directory will also contain temporary files, 
+including per-chromosome pieces of the final outputs in `<output_dir>/<SAMPLE_ID>/aux/chr_fragments/`.
+
+`<output_dir>/checkpoints/` and `<output_dir>/<SAMPLE_ID>/aux/checkpoints/` hold the checkpoints `--resume` uses 
+to skip finished stages; experiment names cannot be `checkpoints`.
 

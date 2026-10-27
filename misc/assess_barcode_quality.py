@@ -9,7 +9,7 @@
 Barcode calling quality assessment for simulated data.
 
 Compares detected barcodes against ground truth embedded in read IDs.
-Supports multiple barcode calling modes: tenX_v3, tenX_v3_split, tenX_v2_split, visium_hd, curio, stereo, stereo_split.
+Supports multiple barcode calling modes: tenX_v3, tenX_v2, tenX_v3_split, tenX_v2_split, visium_hd, curio, stereo, stereo_split.
 
 Usage:
     python assess_barcode_quality.py --mode stereo --input barcodes.tsv --output metrics.tsv
@@ -32,6 +32,7 @@ except ImportError:
 # Mode-specific barcode lengths
 MODE_BARCODE_LENGTHS = {
     'tenX_v3': 16,
+    'tenX_v2': 16,
     'tenX_v3_split': 16,
     'tenX_v2_split': 16,
     'visium_hd': 31,  # 16 + 15 (two-part)

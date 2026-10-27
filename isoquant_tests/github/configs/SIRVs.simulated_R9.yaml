@@ -1,0 +1,17 @@
+name: SRIV.simulated_R9
+output: /abga/work/andreyp/ci_isoquant/output
+run_type: transcripts
+genome: /abga/work/andreyp/ci_isoquant/data/ref/SIRV4/SIRV_isoforms_multi-fasta_200709a.fasta
+genedb: /abga/work/andreyp/ci_isoquant/data/ref/SIRV4/SIRV_isoforms_multi-fasta-annotation.reduced.gtf
+reads: /abga/work/andreyp/simulation/sirvs/SIRV.ONT_R9.artificial_exp.polyA.no_trunc_aligned_reads.fasta
+datatype: ont
+isoquant_options: '"-t 6 --complete_genedb --force "'
+reduced_db: /abga/work/andreyp/ci_isoquant/data/ref/SIRV4/SIRV_isoforms_multi-fasta-annotation
+baselines:
+  transcripts:
+    full_recall: 65.2
+    full_precision: 93.8
+    known_recall: 95.3
+    known_precision: 100.0
+    novel_recall: 15.4
+    novel_precision: 57.1

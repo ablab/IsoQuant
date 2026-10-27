@@ -26,13 +26,10 @@ which can also be used as a standalone tool.
 |---------------------|------------------------|-------------------------|------------|---------------------------------------------------------------------------|
 | `tenX_v3`           | 10x Genomics 3' v3     | 1                       | 12         | Single 16bp barcode                                                       |
 | `tenX_v2`           | 10x Genomics 3' v2     | 1                       | 10         | Single 16bp barcode (v2 chemistry)                                        |
-| `tenX_v3_split`     | 10x Genomics 3' v3     | 1                       | 12         | Concatenated reads: splits into individual cDNA molecules                 |
-| `tenX_v2_split`     | 10x Genomics 3' v2     | 1                       | 10         | Concatenated reads: splits into individual cDNA molecules (v2 chemistry)  |
 | `visium_5prime`     | 10x Genomics Visium 5' | 1                       | 12         | Same detector as tenX_v3                                                  |
 | `visium_hd`         | 10x Genomics Visium HD | 2                       | 9          | Two barcodes (15/16bp + 14/15bp)                                          |
 | `curio`             | Curio Bioscience       | 1                       | 9          | Double barcode (8bp + 6bp) with linker                                    |
-| `stereoseq`         | Stereo-seq             | 1                       | 10         | 25bp barcode, read splitting mode                                         |
-| `stereoseq_nosplit` | Stereo-seq             | 1                       | 10         | 25bp barcode, no read splitting                                           |
+| `stereoseq`         | Stereo-seq             | 1                       | 10         | 25bp barcode                                                              |
 | `custom_sc`         | Any protocol           | 0 (uses MDF)            | varies     | User-defined molecule structure via [MDF file](#molecule-description-format-mdf)                       |
 
 ## Quick start examples
@@ -78,16 +75,19 @@ IsoQuant processing mode. Available modes:
 * `bulk` -- standard bulk RNA-seq mode (default)
 * `tenX_v3` -- 10x Genomics single-cell 3' gene expression
 * `tenX_v2` -- 10x Genomics single-cell 3' v2 gene expression
-* `tenX_v3_split` -- 10x Genomics 3' v3 with read splitting for concatenated reads (see [below](#read-splitting-modes))
-* `tenX_v2_split` -- 10x Genomics 3' v2 with read splitting for concatenated reads
 * `curio` -- Curio Bioscience single-cell
 * `visium_hd` -- 10x Genomics Visium HD spatial transcriptomics
 * `visium_5prime` -- 10x Genomics Visium 5' spatial transcriptomics
-* `stereoseq` -- Stereo-seq spatial transcriptomics, with read splitting
-* `stereoseq_nosplit` -- Stereo-seq without read splitting
+* `stereoseq` -- Stereo-seq spatial transcriptomics
 * `custom_sc` -- custom single-cell/spatial mode using a molecule definition file (MDF)
 
 All modes except `bulk` enable automatic barcode calling and UMI-based deduplication.
+
+`--split_molecules`
+
+Whether to split reads containing several cDNA molecules, see [read splitting](#read-splitting).
+`auto` (default) splits wherever the protocol supports it; `true` also fails for protocols that
+cannot split; `false` never splits.
 
 
 `--barcode_whitelist`
@@ -99,17 +99,38 @@ File should contain one barcode sequence per line.
 More than 1 tab-separated column is allowed, but only the first will be used.
 Supports plain text and gzipped files.
 
+Accepts the literal value `auto` instead of a file, see
+[detecting cell barcodes](#detecting-cell-barcodes).
+
 _Notes:_
-- Barcode calling is performed much better if the whitelist contains a small number of barcodes. 
-If you have a subset of barcodes from short-read data, provide them instead of the full whitelist;
+- What the whitelist means depends on `--n_cells`, see [detecting cell barcodes](#detecting-cell-barcodes).
+Without it the whitelist is taken to be the list of cell barcodes;
+- If you have a subset of barcodes from short-read data, providing them directly also works and
+skips the extra pass over the reads;
 - IsoQuant will perform per-barcode quantification automatically unless `--barcoded_reads` or  `--barcode2spot` are set.
 Use `--read_group barcode` to group reads by barcode explicitly. In case of a large number of barcodes, it may take a lot of time. 
 
 The number of whitelist files depends on the mode:
 
-* 1 file: `tenX_v3`, `tenX_v2`, `tenX_v3_split`, `tenX_v2_split`, `visium_5prime`, `stereoseq`, `stereoseq_nosplit`, `curio` (combined 14bp barcodes)
+* 1 file: `tenX_v3`, `tenX_v2`, `visium_5prime`, `stereoseq`, `curio` (combined 14bp barcodes)
 * 2 files: `visium_hd` (part 1 and part 2 barcode lists)
 * Not needed: `custom_sc` (barcode lists are specified inside the MDF file)
+
+`--n_cells`
+
+Expected number of cell-associated barcodes, or `auto` to estimate it from the data.
+Turns `--barcode_whitelist` into a pool of candidates rather than the cell list itself,
+see [detecting cell barcodes](#detecting-cell-barcodes).
+
+`--n_cells_interval`
+
+Percentage by which the number of selected barcodes may differ from `--n_cells` [25].
+
+`--barcode_correction`
+
+Overrides how the cell barcode list is obtained, which is otherwise decided by `--n_cells`:
+`auto` (default), `whitelist` (always use the whitelist as given), or `detect` (always detect
+cell barcodes from read counts).
 
 `--barcoded_reads`
 
@@ -271,20 +292,80 @@ UMI         VAR_ANY    12
 TSO       CONST      CCCATGTACTCTGCGTTGATACCACTGCTT
 ```
 
-## Read splitting modes
+## Detecting cell barcodes
 
-Oxford Nanopore long reads often contain 2 or more cDNA molecules.
-Usual non-split modes (`tenX_v3`, `tenX_v2`, `stereoseq_nosplit`) detect only the first
-barcode and the rest of the read is treated as a single cDNA.
-The split modes detect multiple barcode/UMI patterns within each read,
-split the read at molecule boundaries, and produce a new FASTA file
-with one record per cDNA molecule.
+A stock 10x whitelist has millions of entries, but a run has a few thousand cells. Matching
+every read against millions of candidates only means something if the match is exact, so any
+read carrying a sequencing error in the barcode is lost.
 
-The split modes produce an additional output file (`*.split_reads.fasta`)
-containing the extracted cDNA segments. Each segment is named with
-the original read ID plus coordinates and strand: `{read_id}_{start}_{end}_{strand}`.
+`--n_cells` changes what `--barcode_whitelist` means so that this is not necessary:
 
-These modes are recommended to use with ONT reads.
+| `--n_cells` | meaning of `--barcode_whitelist` | passes over the reads |
+|---|---|---|
+| not set | the list of cell barcodes; reads are matched against all of it | 1 |
+| a number, or `auto` | a pool to select the cell barcodes from | 2 |
+
+With `--n_cells` set, the first pass extracts barcode windows from the reads verbatim and counts
+them, the counts pick the cell barcodes out of the pool, and the second pass is ordinary barcode
+calling against that much shorter list. Correction itself is unchanged — only the list being
+matched against differs.
+
+```bash
+python isoquant.py --mode tenX_v3 \
+  --barcode_whitelist 3M-february-2018.txt.gz --n_cells auto \
+  --fastq reads.fastq.gz --reference genome.fa --genedb genes.gtf \
+  --data_type nanopore -o output_dir
+```
+
+`auto` is as accurate as giving the exact cell count, and selection tolerates being off by
+roughly ±25% (`--n_cells_interval`). Supported for `tenX_v3`, `tenX_v2` and `visium_5prime`.
+
+`--barcode_whitelist auto` detects cell barcodes with no pool at all. This is less accurate: a
+mis-anchored barcode window repeats across reads and looks exactly like an abundant cell,
+whereas a whitelist rejects it because it is not a valid protocol barcode.
+
+The detected list is written to `<prefix>.cell_barcodes.tsv`, with a summary of how many
+barcodes were extracted, skipped and selected in `<prefix>.cell_barcodes.stats`.
+
+## Read splitting
+
+Oxford Nanopore long reads often contain 2 or more cDNA molecules ligated end to end during
+library preparation. Without splitting, only the first barcode is detected and the rest of the
+read is treated as a single cDNA. With splitting, IsoQuant detects every barcode/UMI pattern in
+the read, cuts the read at molecule boundaries, and produces a new FASTA file with one record
+per cDNA molecule.
+
+Splitting is controlled by `--split_molecules`:
+
+| value | behaviour |
+|---|---|
+| `auto` (default) | split wherever the protocol supports it, do nothing where it does not |
+| `true` | split, and stop with an error if the protocol cannot split |
+| `false` | never split |
+
+Supported for `tenX_v3`, `tenX_v2`, `stereoseq` and `visium_5prime`. `--split_molecules true`
+with any other mode is an error rather than a silent no-op, so a request that cannot be
+honoured never passes unnoticed.
+
+When splitting, IsoQuant writes an additional output file (`*.split_reads_<i>.fa.gz`) containing
+the extracted cDNA segments, and uses it in place of the original reads for alignment. Each
+segment is named with the original read ID plus coordinates and strand:
+`{read_id}_{start}_{end}_{strand}`. The file is gzipped unless `--no_gzip` is set; minimap2
+reads it compressed, so alignment is not slowed down.
+
+Splitting rewrites the reads, so the pieces have to be aligned afresh. Supplying an aligned
+BAM (`--bam`) says the opposite - that no mapping should happen - so the two requests
+contradict each other and IsoQuant aborts rather than guessing. This applies to `auto` as well
+as `true`: pass the raw reads if you want the molecules split and re-aligned, or
+`--split_molecules false` to analyse the alignments as they are.
+
+Splitting is worth leaving on even for libraries you do not expect to be concatenated: measured
+on non-concatenated 10x data it recovers about one extra point of recall at unchanged precision
+(87.3% → 88.3% on ONT R9, 89.6% → 90.5% on ONT cDNA R10.4), at roughly twice the barcode
+calling runtime.
+
+The superseded mode names `tenX_v3_split`, `tenX_v2_split` and `stereoseq_nosplit` still work
+and are translated to the corresponding `--mode` plus `--split_molecules` combination.
 
 ## UMI deduplication
 

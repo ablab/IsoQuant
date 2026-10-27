@@ -97,6 +97,18 @@ Indicate that reads were poly-A trimmed. Possible values are:
   having a poly-A tail on the 3'; read direction will be based on the alignment strand flag. 
   Thus, when using this option, make sure read sequences are properly oriented, i.e. match the original mRNA strand.
   Use this option at your own risk.
+  - `tag:<TAG>`: read poly-A status from a BAM tag, e.g. `tag:pt` for Dorado (requires basecalling with `--estimate-poly-a`). A tail is considered present when the tag value >= 0.
+  If the read has a `TS:A` tag (transcript strand relative to the read), the tail is placed on the corresponding end. Otherwise internal IsoQuant strand detection is used.
+  The tag must be present in the aligned reads. When IsoQuant aligns the reads itself, tags are kept automatically (see [read tags](input.md#read-tags)); 
+  when providing your own alignments via `--bam`, make sure the aligner copies the tags, e.g. `samtools fastq -T pt,TS calls.bam | minimap2 -ax splice -y ...`.
+  IsoQuant warns if none of the checked alignments carry the tag.
+  - `list:<FILE>`: a file with IDs of reads that have a poly-A tail, one per line (may be gzipped).
+  An optional second column (tab or space separated) with `+` or `-` gives the transcript strand relative to the read, and is treated as `TS:A` above; any other value is ignored.
+  - `flnc:<FILE>`: `flnc.report.csv` produced by `isoseq refine`. Reads with `polyAlen` > 0 have a tail at their 3' end;
+  the side is taken from the `strand` column (FLNC reads are oriented, so it is normally `+`); reads with `polyAlen` 0 are treated as having no tail, and tails detected in their sequence are discarded.
+  Use this option only with `flnc.bam` input (where tails are removed).
+
+Note that IsoQuant still runs sequence-based polyA tail detection for every read. If the external information and the sequence disagree, the external information is used.
 
 `--prefix` or `-p`
     Prefix for all output files and subfolder name. `OUT` if not set.
@@ -179,6 +191,10 @@ original file name, and barcode property (e.g. cell type).
   * `corrected_bed` - BED file with corrected read exon coordinates (`*.corrected_reads.bed.gz`);
   * `read2transcripts` - reads assigned to discovered transcript models, in the unified read_info format (`*.transcript_model_reads.tsv.gz`);
   * `allinfo` - old format for UMI filtered reads for single-cell/spatial modes (`*.allinfo`);
+  * `tagged_bam` - single-cell/spatial modes only: a copy of the input alignments with the
+    detected barcode and UMI added as tags (`*.tagged.bam`), see below;
+  * `deduplicated_bam` - single-cell/spatial modes only: the UMI-deduplicated alignments with
+    barcode, UMI, gene and transcript tags (`*.deduplicated.bam`), see below;
   * `none` - do not generate any large output files (not compatible with other values).
 
 Example usage:
@@ -191,6 +207,38 @@ isoquant.py --large_output read_info read_assignments corrected_bed read2transcr
 isoquant.py --large_output none ...
 ```
 
+### Tagged and deduplicated BAM files
+
+Both are indexed BAM files written for single-cell and spatial modes only, and both are off by
+default. Alignment records are copied unchanged apart from the tags, so anything that reads the
+original BAM works on these too.
+
+`tagged_bam` keeps **every** alignment in the input - primary, secondary, supplementary and
+unmapped, across all references including unplaced scaffolds that IsoQuant does not analyse -
+and adds:
+
+  * `--barcode_tag` (`CB` by default) - the detected cell barcode;
+  * `--umi_tag` (`UB` by default) - the detected UMI.
+
+Unmapped reads are tagged like any other: the barcode is called from the read sequence and does
+not depend on the read having aligned. Reads with no barcode are kept without tags. The file is
+redundant when `--barcoded_bam` was used as input, since those alignments already carry the
+tags, and IsoQuant warns and skips.
+
+`deduplicated_bam` keeps only the **primary** alignments of the reads that survived UMI
+filtering - one read per detected molecule - and additionally tags:
+
+  * `GX` - the gene the read was assigned to;
+  * `TX` - the transcript the read was assigned to.
+
+A tag is omitted rather than given a placeholder value when the corresponding value is unknown,
+so novel and ambiguous reads have no `TX` tag.
+
+Note that this file is a **deduplicated** view, not a general-purpose replacement for the input
+alignments: it holds one read per detected molecule, keeps only reads assigned to a gene, and
+drops secondary and supplementary records. Analyses that depend on chimeric or otherwise
+inconsistent reads - fusion detection in particular - must keep reading the original BAM.
+
 The `read_info.tsv` format can be also converted to old formats using the conversion script:
 ```bash
 python -m isoquant_lib.scripts.convert_read_info --read_info SAMPLE.read_info.tsv.gz --format read_assignments --output SAMPLE.read_assignments.tsv
@@ -198,6 +246,10 @@ python -m isoquant_lib.scripts.convert_read_info --read_info SAMPLE.read_info.ts
 ```
 
 Note that large output files are gzipped by default unless `--no_gzip` is specified.
+
+`--no_report`
+    Do not write the per-experiment run summary (`SAMPLE_ID.summary.html` and `SAMPLE_ID.summary_stats.json`),
+    which is produced by default. See [output](output.md) for its contents.
 
 ## Pipeline options
 
@@ -219,10 +271,10 @@ Space-separated list of analyses to run. Supported values (short aliases in brac
   - Exon counts (`*.exon_counts.tsv`);
   - Exon splice-site counts (`*.exon_splice_site_counts.tsv`);
   - Splice junction counts (`*.splice_junction_counts.tsv`);
-  - Intron retention counts (`*.intron_retention_counts.tsv`);
+  - Intron retention counts (`*.intron_retention_counts.tsv`): reads retaining vs splicing out each reference intron;
   
 * `fusion` (requires gene annotation): fusion gene detection, produces:
-  - Fusion gene predictions (`fusion_<bam_basename>.tsv`, one file per input BAM).
+  - Fusion gene predictions (`SAMPLE_ID.fusions.tsv`, one file per sample combining all its BAM files).
 
 
 Defaults when `--analysis` is not set:
@@ -237,8 +289,9 @@ Feeding you data as pseudo-bulk (`--mode bulk`) is recommended for full transcri
 
 `--resume`
     Resume a previously unfinished run. The output folder with the previous run must be specified.
-    Allowed options are `--threads`, `--debug`, `--high_memory`; other options cannot be changed.
-    IsoQuant will run from the beginning if the output folder does not contain the previous run.
+    Allowed options are `--threads`, `--debug`, `--high_memory`, `--keep_tmp`; other options cannot be changed.
+    Every finished stage is skipped, including experiments that were fully processed.
+    IsoQuant 4.1 and above cannot run with `--resume` from a partial run generated with previous version.
 
 `--force`
     Force to overwrite the folder with previous run.
@@ -256,7 +309,7 @@ Feeding you data as pseudo-bulk (`--mode bulk`) is recommended for full transcri
 
 `--count_intron_retentions`
     _Deprecated_: use `--analysis exon_quantification` instead.
-    Count intron retention events per reference intron.
+    Count reads retaining and splicing out each reference intron.
 
 
 ## Single-cell and spatial transcriptomics options
@@ -271,16 +324,36 @@ IsoQuant mode for processing single-cell or spatial transcriptomics data. Availa
 * `bulk` - standard bulk RNA-seq mode (default)
 * `tenX_v3` - 10x Genomics single-cell 3' gene expression
 * `tenX_v2` - 10x Genomics single-cell 3' v2 gene expression
-* `tenX_v3_split` - 10x Genomics 3' v3 with [read splitting](single_cell.md#read-splitting-modes) for concatenated reads
-* `tenX_v2_split` - 10x Genomics 3' v2 with [read splitting](single_cell.md#read-splitting-modes) for concatenated reads
 * `visium_5prime` - 10x Genomics Visium 5' spatial transcriptomics
 * `visium_hd` - 10x Genomics Visium HD spatial transcriptomics
 * `curio` - Curio Bioscience spatial data
 * `stereoseq` - Stereo-seq spatial data
-* `stereoseq_nosplit` - Stereo-seq without read splitting
 * `custom_sc` - custom single-cell/spatial mode using a [molecule description file (MDF)](single_cell.md#molecule-description-format-mdf)
 
 Single-cell and spatial modes enable automatic barcode calling and UMI-based deduplication.
+
+`--split_molecules`
+
+Whether to split reads that contain several cDNA molecules ligated end to end during library
+preparation (see [read splitting](single_cell.md#read-splitting)). Accepts:
+
+* `auto` (default) - split whenever the protocol supports it, and do nothing where it does not
+* `true` - split, and stop with an error if the protocol has no splitting detector, so that a
+  request that cannot be honoured is never silently ignored
+* `false` - never split
+
+Splitting is supported for `tenX_v3`, `tenX_v2`, `stereoseq` and `visium_5prime`. It is worth
+enabling even on libraries without concatenated molecules: on non-concatenated 10x data it
+recovers about one extra point of recall at unchanged precision, at roughly twice the barcode
+calling runtime.
+
+Splitting requires raw reads. The split molecules have to be aligned, so requesting it
+alongside an already aligned input (`--bam`) is contradictory and IsoQuant stops with an error
+- under `auto` as well as `true`. Supply the reads as FASTQ/FASTA to have them split and
+mapped, or pass `--split_molecules false` to use the alignments as given.
+
+The superseded mode names `tenX_v3_split`, `tenX_v2_split` and `stereoseq_nosplit` still work
+and are translated to the corresponding `--mode` plus `--split_molecules` combination.
 
 `--barcode_whitelist`
 
@@ -291,10 +364,44 @@ File should contain one barcode sequence per line.
 More than 1 tab-separated column is allowed, but only the first will be used.
 Supports plain text and gzipped files.
 
+Accepts the literal value `auto` instead of a file, which detects the cell barcodes from the
+reads with no candidate list at all (see `--n_cells`). Supplying the protocol whitelist is more
+accurate, because counts alone cannot tell a cell from a recurring extraction artifact.
+
 _Notes:_
-- Barcode calling is performed much better if the whitelist contains a small number of barcodes. 
-If you have a subset of barcodes, for example, from short-read data, provide them instead of the full whitelist;
+- What the whitelist means depends on `--n_cells`. Without it the whitelist is taken to be the
+list of cell barcodes, and every read is matched against all of them. A stock whitelist has
+millions of entries but a run has a few thousand cells, and matching against millions of
+candidates effectively requires an exact match, so reads carrying a sequencing error in the
+barcode are lost. Set `--n_cells` to treat the whitelist as a pool instead;
+- If you have a subset of barcodes, for example from short-read data, providing them directly
+also works and skips the extra pass over the reads;
 - IsoQuant will perform per-barcode quantification automatically unless `--barcoded_reads` or  `--barcode2spot` are set.
+
+`--n_cells`
+
+Expected number of cell-associated barcodes, or `auto` to estimate it from the barcode count
+distribution. Setting it turns `--barcode_whitelist` into a pool of candidates: IsoQuant makes a
+first pass over the reads to extract and count barcode windows, picks the cell barcodes from
+those counts, and then matches the reads against that much shorter list.
+
+This costs one extra pass over the reads and is what makes a stock whitelist usable. `auto` is
+as accurate as giving the exact count, and selection tolerates being off by roughly ±25% (see
+`--n_cells_interval`).
+
+Supported for `tenX_v3`, `tenX_v2` and `visium_5prime`.
+
+`--n_cells_interval`
+
+Percentage by which the number of selected barcodes may differ from `--n_cells` [25].
+
+`--barcode_correction`
+
+Overrides how the cell barcode list is obtained, which is otherwise decided by `--n_cells`:
+
+* `auto` (default) - detect cell barcodes if `--n_cells` is set, otherwise use the whitelist as given
+* `whitelist` - always match reads against the whitelist as given
+* `detect` - always detect cell barcodes from read counts, estimating the count if `--n_cells` is not set
 
 `--barcoded_reads`
 
@@ -459,6 +566,12 @@ We recommend _not_ to modify these options unless you are clearly aware of their
 
 `--no_gzip`
     Do not compress large output files.
+    Compressed outputs use gzip level 6 for tables and level 4 for FASTA, which is where the
+    time/size trade-off sits for each kind of data.
+    This also covers the single-cell outputs: the split-reads FASTA (compressed as it is
+    written, in the barcode-calling workers) and the barcoded read tables (compressed once the
+    run finishes, so they stay readable while the pipeline needs them). Neither slows any
+    subsequent step down.
 
 `--no_gtf_check`
     Do not perform input GTF checks.

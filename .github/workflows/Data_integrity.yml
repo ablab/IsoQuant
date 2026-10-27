@@ -1,0 +1,42 @@
+name: CI Data Integrity
+
+# Re-hashes every test input referenced by the configs and compares against
+# isoquant_tests/github/configs/data_manifest.tsv. Catches an input that has been
+# replaced, truncated or corrupted on shared storage, which would otherwise show up
+# much later as an unexplained baseline drift.
+
+on:
+  workflow_dispatch:
+  schedule:
+  - cron: '0 3 * * 0'
+
+env:
+  BIN_PATH: /abga/work/andreyp/ci_isoquant/bin/
+
+concurrency:
+  group: ${{github.workflow}}
+  cancel-in-progress: false
+
+jobs:
+  verify-inputs:
+    runs-on:
+      labels: [isoquant]
+    name: 'Verify test input checksums'
+
+    steps:
+      - name: 'Cleanup'
+        run: >
+          set -e &&
+          shopt -s dotglob &&
+          rm -rf *
+
+      - name: 'Checkout'
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 1
+
+      - name: 'Deep verify against manifest'
+        shell: bash
+        run: |
+          export PATH=$PATH:${{env.BIN_PATH}}
+          python3 ${{github.workspace}}/isoquant_tests/github/data_manifest.py verify --deep

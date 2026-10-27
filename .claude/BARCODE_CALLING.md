@@ -2,10 +2,14 @@
 
 This document describes the barcode calling subsystem for single-cell and spatial transcriptomics.
 
+For cell barcode detection — how `--n_cells` turns the whitelist into a candidate pool rather
+than the cell list, used when the stock 10x whitelists make per-read matching degenerate into
+exact matching — see `.claude/CELL_BARCODE_SELECTION.md`.
+
 ## Directory Structure
 
 ```
-src/barcode_calling/
+isoquant_lib/barcode_calling/
 ├── __init__.py                    # Re-exports all public classes
 ├── common.py                      # Utilities (str_to_2bit, bit_to_str, find_polyt_start, etc.)
 │
@@ -36,6 +40,26 @@ src/barcode_calling/
 | Dict2BitKmerIndexer | Medium-large sets (10K-1M) | ~40% less than KmerIndexer | Good |
 | Array2BitKmerIndexer | Large fixed-length sets | Flat array | Fast |
 | SharedMemoryArray2BitKmerIndexer | Very large sets (>1M) with multiprocessing | Shared memory | Numba JIT optimized |
+
+### Invariant: a lookup must never grow the index
+
+`KmerIndexer.index` is a **plain `dict`, deliberately not a `defaultdict`** — do not "simplify"
+it back. An indexer is built once per worker process and then queried for every read that
+worker ever sees, so a subscript read (`self.index[kmer]`) on a defaultdict inserts a
+permanent `kmer -> []` entry for every *foreign* k-mer scanned, and the index grows for the
+life of the process, bounded only by 4^k. Build paths use `setdefault`; lookups use
+`.get(kmer, _NO_HITS)`. `Dict2BitKmerIndexer` already did this correctly;
+`ArrayKmerIndexer`/`Array2BitKmerIndexer` are immune (preallocated 4^k list, subscript is a
+list index, not a dict insert).
+
+This cost 173.7 GB in `custom_sc` — see [Cost of constant elements](#cost-of-constant-elements-and-where-they-sit)
+below for how it was reached and why only that mode paid it. Fixed in `d64a7726`; guarded by
+`test_query_does_not_grow_index` in `isoquant_tests/test_kmer_indexer.py`, which asserts
+`len(indexer.index)` is unchanged after querying foreign sequence.
+
+Ceiling arithmetic, useful whenever a leak like this is suspected: a leaked entry costs
+~161 bytes (13-mer key + empty list + dict slot), so saturation is `4^k × 161 B × n_workers`.
+For k=13 that is 10.8 GB per worker; at 16 workers, 172.8 GB.
 
 ### 2-Bit DNA Encoding
 
@@ -78,8 +102,8 @@ matches = indexer.get_occurrences(sequence, max_hits=10, min_kmers=2)
 
 **Curio Platform (formerly DoubleBarcodeDetector):**
 - `CurioBarcodeDetector` - Main detector
-- `CurioBruteForceDetector` - Exact linker matching (faster, less tolerant)
-- `CurioIlluminaDetector` - Optimized for Illumina short reads
+- `CurioIlluminaDetector` - Optimized for Illumina short reads (exported, but not reachable
+  from any `IsoQuantMode`)
 
 **Stereo-seq Platform:**
 - `StereoBarcodeDetector` - Standard single-barcode mode
@@ -206,11 +230,8 @@ The `BARCODE_CALLING_MODES` dictionary maps IsoQuantMode to detector class:
 BARCODE_CALLING_MODES = {
     IsoQuantMode.tenX_v3: TenXBarcodeDetector,
     IsoQuantMode.tenX_v2: TenXv2BarcodeDetector,
-    IsoQuantMode.tenX_v3_split: TenXSplittingBarcodeDetector,
-    IsoQuantMode.tenX_v2_split: TenXv2SplittingBarcodeDetector,
     IsoQuantMode.curio: CurioBarcodeDetector,
-    IsoQuantMode.stereoseq_nosplit: SharedMemoryStereoBarcodeDetector,
-    IsoQuantMode.stereoseq: SharedMemoryStereoSplittingBarcodeDetector,
+    IsoQuantMode.stereoseq: SharedMemoryStereoBarcodeDetector,
     IsoQuantMode.visium_5prime: TenXBarcodeDetector,
     IsoQuantMode.visium_hd: VisiumHDBarcodeDetector,
 }
@@ -240,23 +261,23 @@ BARCODE_CALLING_MODES = {
 1. Create result class in `callers/base.py` if needed
 2. Create detector class in appropriate file (or new file)
 3. Add to `callers/__init__.py` exports
-4. Add to `src/barcode_calling/__init__.py` exports
+4. Add to `isoquant_lib/barcode_calling/__init__.py` exports
 5. Add to `detect_barcodes.py` BARCODE_CALLING_MODES
 6. Update BARCODE_FILES_REQUIRED if whitelist format differs
 
 ## Barcode/UMI Pipeline Integration
 
 Barcode/UMI data is integrated into `ReadAssignment` objects (loaded once during read collection, persisted through pipeline):
-- `ReadAssignment.barcode` and `.umi` fields in `src/isoform_assignment.py`
-- Loaded from split barcode files during `collect_reads_in_parallel()` in `src/dataset_processor.py`
-- `AlignmentCollector` (`src/alignment_processor.py`) receives `barcode_dict`, populates fields
-- `UMIFilter` (`src/barcode_calling/umi_filtering.py`) reads barcode/umi directly from ReadAssignment
+- `ReadAssignment.barcode` and `.umi` fields in `isoquant_lib/assignment/isoform_assignment.py`
+- Loaded from split barcode files during `collect_reads_in_parallel()` in `isoquant_lib/dataset_processor.py`
+- `AlignmentCollector` (`isoquant_lib/alignment/alignment_processor.py`) receives `barcode_dict`, populates fields
+- `UMIFilter` (`isoquant_lib/barcode_calling/umi_filtering.py`) reads barcode/umi directly from ReadAssignment
 - Barcode table splitting at pipeline start (`split_read_barcode_table()`), each file loaded once
 
 ## Barcode-Spot Grouping
 
 Groups read counts by cell type/spatial region instead of individual barcodes.
-- `BarcodeSpotGrouper` in `src/read_groups.py` — maps read_id -> barcode -> spot/cell type
+- `BarcodeSpotGrouper` in `isoquant_lib/assignment/read_groups.py` — maps read_id -> barcode -> spot/cell type
 - CLI: `--read_group barcode_spot` or `--read_group barcode_spot:FILE`
 - Works with multi-grouping: `--read_group tag:CB file_name barcode_spot`
 
@@ -280,11 +301,11 @@ TTTTAAAA    spot_B    region_1
 
 **Implementation across files**:
 - `isoquant.py`: CLI argument + file existence check
-- `src/read_groups.py`: `barcode_barcode` handling in `parse_grouping_spec()`, `get_grouping_strategy_names()`, `get_grouping_pool_types()`. Reuses `BarcodeSpotGrouper` and `SharedTableData`. Also `load_barcode2barcode_mapping()` helper
-- `src/barcode_calling/umi_filtering.py`: `UMIFilter` accepts optional `barcode_remap: Dict[str, str]`. When set, `process_single_chr()` uses remapped key instead of barcode for grouping in `gene_barcode_dict`
-- `src/parallel_workers.py`: `filter_umis_in_parallel()` accepts `barcode_remap` and `output_prefix_override` params. Forces `output_filtered_reads=False` when remap is active
-- `src/dataset_processor.py`: After standard dedup loop, iterates spot columns calling `filter_umis_in_parallel()` with column-specific `barcode_remap` and prefix
-- `src/file_naming.py`: `umi_barcode2barcode_prefix()`, `umi_barcode2barcode_global_lock()` helpers
+- `isoquant_lib/assignment/read_groups.py`: `barcode_barcode` handling in `parse_grouping_spec()`, `get_grouping_strategy_names()`, `get_grouping_pool_types()`. Reuses `BarcodeSpotGrouper` and `SharedTableData`. Also `load_barcode2barcode_mapping()` helper
+- `isoquant_lib/barcode_calling/umi_filtering.py`: `UMIFilter` accepts optional `barcode_remap: Dict[str, str]`. When set, `process_single_chr()` uses remapped key instead of barcode for grouping in `gene_barcode_dict`
+- `isoquant_lib/parallel_workers.py`: `filter_umis_in_parallel()` accepts `barcode_remap` and `output_prefix_override` params. Forces `output_filtered_reads=False` when remap is active
+- `isoquant_lib/dataset_processor.py`: After standard dedup loop, iterates spot columns calling `filter_umis_in_parallel()` with column-specific `barcode_remap` and prefix
+- `isoquant_lib/utils/file_naming.py`: `umi_barcode2barcode_prefix()` helper (resume checkpoints: `umi_barcode2barcode/col<c>/ED<d>`, see `.claude/RESUME_CHECKPOINTS.md`)
 
 **Read grouping**: `--read_group barcode_barcode` works identically to `barcode_spot` but reads from `--barcode2barcode`. Auto-added when `--barcode2barcode` is set (same pattern as `--barcode2spot` auto-adds `barcode_spot`).
 
@@ -300,7 +321,7 @@ Reads barcodes and UMIs directly from BAM tags (e.g. cellranger output) instead 
 
 **Behavior**:
 - Bypasses barcode calling entirely — no FASTQ, no whitelist needed
-- `AlignmentCollector` (`src/alignment_processor.py`) reads `CB` and `UB` tags from each BAM record
+- `AlignmentCollector` (`isoquant_lib/alignment/alignment_processor.py`) reads `CB` and `UB` tags from each BAM record
 - If `--strip_barcode_suffix` is set, removes the portion after the last `-` in the barcode (e.g. `ATCG-1` → `ATCG`)
 - Barcode/UMI populated into `ReadAssignment` objects, same as normal barcode calling path
 - Compatible with all downstream features: UMI dedup, read grouping, barcode2barcode
@@ -308,9 +329,9 @@ Reads barcodes and UMIs directly from BAM tags (e.g. cellranger output) instead 
 
 **Implementation across files**:
 - `isoquant.py`: CLI arguments (`--barcoded_bam`, `--barcode_tag`, `--umi_tag`, `--strip_barcode_suffix`), validation
-- `src/alignment_processor.py`: `AlignmentCollector.__init__` stores tag names and suffix stripping flag; `_collect_alignments_with_barcodes()` and `_process_alignment_group()` read tags from `pysam.AlignedSegment`
-- `src/dataset_processor.py`: Skips barcode table loading when `barcoded_bam` is set
-- `src/read_groups.py`: `barcode_spot` and `barcode_barcode` grouping accept `barcoded_bam` as valid barcode source
+- `isoquant_lib/alignment/alignment_processor.py`: `AlignmentCollector.__init__` stores tag names and suffix stripping flag; `_collect_alignments_with_barcodes()` and `_process_alignment_group()` read tags from `pysam.AlignedSegment`
+- `isoquant_lib/dataset_processor.py`: Skips barcode table loading when `barcoded_bam` is set
+- `isoquant_lib/assignment/read_groups.py`: `barcode_spot` and `barcode_barcode` grouping accept `barcoded_bam` as valid barcode source
 
 **Data prep utility**: `misc/inject_bam_tags.py` — injects CB/UB tags from a `barcoded_reads.tsv` file into an existing BAM. Used to create test data from IsoQuant's own barcode calling output. Supports `--suffix` to add cellranger-style `-1` suffixes.
 
@@ -320,7 +341,7 @@ Custom molecule structures via Molecule Definition Files (MDF), any sequencing p
 
 **CLI**: `isoquant.py --molecule molecule_definition.mdf ...`
 
-**Location**: `src/barcode_calling/callers/`
+**Location**: `isoquant_lib/barcode_calling/callers/`
 
 **Key Files**:
 - `molecule_structure.py` - MDF parsing, ElementType enum, MoleculeElement/MoleculeStructure
@@ -406,6 +427,44 @@ Two types of linked elements for multi-part barcodes/UMIs. Both require:
    e. `process_concatenated_elements` — combine parts, correct against full whitelist
    f. `process_duplicated_elements` — majority vote across copies
 3. Choose strand by polyT presence, or by more detected elements
+
+### Cost of constant elements, and where they sit
+
+`detect_const_elements` searches **unbounded regions** in two cases, both easy to miss when
+reading an MDF:
+
+* **An element after cDNA** (e.g. 10x `R1:Barcode:UMI:PolyT:cDNA:TSO`) — the 3' loop searches
+  `[polyt_end+1, len(sequence)]`, i.e. the whole cDNA, thousands of bases. MDFs that stop at
+  cDNA (Curio, Visium HD) break out of that loop immediately and never pay it.
+* **The strand without polyT** — the 5' loop falls back to `search_end = len(sequence)`, so
+  5' constants scan the entire read. `find_barcode_umi` always tries both strands, so on a
+  stranded protocol one of the two passes takes this path on every read.
+
+Element k-mer size is derived, not tuned: `max(6, element_length // 2 - 2)`. A 30 bp TSO gets
+**k=13**. The hand-written `TenXSplittingBarcodeDetector` does the same cDNA-wide TSO scan
+with a hardcoded **k=9** (`tenx.py`), and that one constant is the whole difference in leak
+ceiling: 4^9 = 262 K entries (~40 MB) against 4^13 = 67 M (~10.8 GB).
+
+**Measured** (10x 3' v3, 4 M real reads, 16 threads, `custom_sc`): 137.0 GB with the TSO line
+in the MDF, 5.5 GB with it removed — 25x memory and 2.7x wall clock for one line. Detection
+changed by 0.24 %, slightly *in favour* of dropping it. At 108 M reads the figure was
+173.7 GB, which is the saturated ceiling (4^13 × 161 B × 16), not a per-read cost. Full
+report: `IsoQuant4_reproducibility/.claude/CUSTOM_SC_TSO_MEMORY.md`.
+
+**Two measurement traps** that made this look like something else:
+
+* Peak RAM is **not** monotonic in input-file count. `process_in_parallel` builds a new
+  `ProcessPoolExecutor` per input file, so worker teardown frees the leak; the same 4 M reads
+  split across two files measured 105.1 GB against 137.0 GB as one file. Splitting the input
+  is not a fix and the comparison says nothing about input layout.
+* Growth saturates, so a small pilot run under-reports badly while a large one looks like a
+  constant startup cost. Neither reading is right — check `len(indexer.index)` directly.
+
+Still open after `d64a7726` (which fixed only the unbounded *growth*, not the unbounded
+*scan*): whether to cap the derived k for constant elements, and whether a trailing constant
+should be searched in a window near the read end rather than across the whole cDNA. Both
+change detection results, so both need measuring against the `Barcode.Custom.*` CI baselines
+rather than being applied on reasoning alone.
 
 ### Test Data
 

@@ -168,6 +168,28 @@ Each extra round only writes UMI deduplicated reads in allinfo format to
 statistics to `SAMPLE_ID.UMI_filtered.barcode_barcode_col{C}.ED{N}.stats.tsv`
 (`{C}` = 0-based spot-column index).
 
+### Tagged and deduplicated BAM
+
+Two optional BAM outputs for single-cell and spatial modes, enabled with
+`--large_output tagged_bam` and `--large_output deduplicated_bam` respectively. Both are
+indexed, and alignment records are copied from the input unchanged apart from the added tags.
+
+`SAMPLE_ID.tagged.bam` holds every input alignment - primary, secondary, supplementary and
+unmapped, across all references including unplaced scaffolds - so its record count equals the
+input's. `SAMPLE_ID.deduplicated.bam` holds only the primary alignments of the reads that
+survived UMI deduplication - the same read set as `SAMPLE_ID.UMI_filtered.ED{N}.allinfo`.
+
+| Tag | Present in | Value |
+|-----|------------|-------|
+| `CB` (or `--barcode_tag`) | both | cell barcode |
+| `UB` (or `--umi_tag`) | both | UMI |
+| `GX` | deduplicated only | assigned gene ID |
+| `TX` | deduplicated only | assigned reference transcript ID |
+
+A tag is **omitted** when the value is unknown rather than being set to a placeholder, so a
+read with no barcode carries no `CB`, and a novel or ambiguous read carries no `TX` (`allinfo`
+writes `None` in the corresponding column).
+
 
 ## Quantification formats
 
@@ -224,21 +246,50 @@ Tab-separated values, the columns are:
 * `include_counts` - number of reads that include this feature;
 * `exclude_counts` - number of reads that span, but do not include this feature;
 
+In `intron_retention_counts.tsv` the two count columns have a different meaning:
+
+* `include_counts` - number of reads retaining this intron, i.e. covering it fully (spliced or mono-exonic reads)
+or running at least 50 bp into it from a read end; retention is detected relative to the isoform(s) the read was assigned to,
+and a read is counted once even when assigned to several isoforms sharing this intron;
+* `exclude_counts` - number of reads that splice this intron out, i.e. contain a matching splice junction;
+this equals `include_counts` of the same intron in `splice_junction_counts.tsv`.
+
+Thus, `include_counts / (include_counts + exclude_counts)` estimates the intron retention ratio.
+Reads skipping the intron via other splice junctions are counted in neither column.
+Reads consistent with an annotated intron-retaining isoform are not reported as retaining,
+and reads lying entirely within an intron are not counted.
+
 ### Exon count format
 
-This is the format of `exon_counts.tsv`. Overlapping reference exons are grouped
-into regions; each region emits one row per included exon variant plus one
-region-level exclusion row. Tab-separated values, the columns are:
+This is the format of `exon_counts.tsv`. Every reference exon is quantified independently;
+for each read it is classified as one of the following:
 
-* `chr` - chromosome ID;
-* `region_start` - region leftmost 1-based position;
-* `region_end` - region rightmost 1-based position;
-* `strand` - region strand;
-* `exon_start`, `exon_end` - exon variant coordinates for `inclusion` rows, `.` for `exclusion` rows;
-* `gene_id` - gene the read was assigned to;
-* `feature_kind` - `inclusion` (read selects this exon variant) or `exclusion` (read skips the whole region);
+* full inclusion - a read exon matches both exon splice sites; for the first and last exon of a transcript
+only the internal splice site needs to match, the read may start / end inside the exon
+(exons that are terminal in some isoforms and internal in others are treated as internal);
+* left / right half-inclusion - only the exon's left / right splice site is confirmed, 
+the read starts / ends inside this internal exon;
+* skipping - the exon lies within a read intron;
+* alternative usage - a read exon overlaps the reference exon but has alternative splice sites or a retained intron;
+* reads that do not overlap the exon are not counted.
+
+Only reads assigned to a single gene are used. Tab-separated values, the columns are:
+
+* `chr`, `start`, `end`, `strand`, `flags` - exon coordinates and flags, same as in the [splice junction count format](#splice-junctions-count-format);
+* `gene_ids` - gene id the reads were assigned to;
 * `group_id` - read group if provided (NA by default);
-* `count` - read count.
+* `include_counts` - total number of reads including this exon (`n_full + n_left + n_right`);
+* `exclude_counts` - total number of reads skipping this exon;
+* `n_full` - number of reads fully including this exon;
+* `n_left` - number of reads confirming only the left splice site of this exon;
+* `n_right` - number of reads confirming only the right splice site of this exon;
+* `n_alt` - number of reads using an overlapping exon with different boundaries.
+
+Exon inclusion level (PSI) can be computed as `include_counts / (include_counts + exclude_counts)`, 
+or `n_full / (n_full + exclude_counts)` to use only reads confirming both splice sites.
+Alternatively, `n_alt` can be added to the denominator to obtain the fraction of reads using this exact exon among all reads covering it.
+Note that PSI values are meaningful mostly for internal exons; counts for terminal exons are less reliable,
+e.g. reads extending beyond the annotated transcript start / end are counted as alternative usage.
 
 ### Exon splice-site count format
 
@@ -333,7 +384,7 @@ provides comparison between discovered novel transcripts vs reference transcript
 ## Fusion prediction format
 
 Produced only when fusion detection is requested via `--analysis fusion`.
-This option will result in one `fusion_<bam_basename>.tsv` file per input BAM with the following columns:
+This option will result in one `SAMPLE_ID.fusions.tsv` file per sample (all of the sample's BAM files are combined) with the following columns:
 
 * `LeftGene` / `RightGene` - gene symbols of the two fusion partners;
 * `LeftBiotype` / `RightBiotype` - biotype of each partner gene (e.g. `protein_coding`);

@@ -84,6 +84,52 @@ Users specify grouping strategies via `--read_group` (nargs='+'):
 - Line 262: `group_id = read_assignment.read_group[self.group_index]` - Extract specific group from list
 - Counters now iterate over `group_index` positions
 
+#### B2. Group id → name resolution (`isoquant_lib/utils/string_pools.py`)
+
+Group ids are interned integers; turning one back into a name is owned by
+**`StringPoolManager.resolve_read_group(spec_index, group_id)`** and nowhere else.
+Two contracts, deliberately separate methods on `AbstractCounter`:
+
+| method | contract | used by |
+|---|---|---|
+| `_get_group_name(id)` | **resolution** — id was *observed* on a read, so it may be unassigned or stale. Degrades, never raises. | `dump_grouped`, exon / joint-exon / splice-site / terminal dumps |
+| `_get_ordered_groups()`, `_get_num_groups()` | **enumeration** — walks the pool by position, every index valid by construction. Left to raise. | headers, `dump_usable`, matrix/MTX conversion |
+
+Group ids are a **closed set of valid pool indices**. `read_group_to_ids` interns
+a missing value under `UNASSIGNED_GROUP_NAME` (`= AbstractReadGrouper.default_group_id`,
+i.e. `'NA'`) rather than emitting a negative sentinel — the same name every grouper
+in `read_groups.py` already falls back to, so one semantic bucket gets one output
+label. `UNASSIGNED_GROUP_ID = -1` survives only for decoding data written before
+this, and `read_group_from_ids` still maps it to `None` because
+`ReadAssignment.read_group` must round-trip (`None` → ids → `None`); that is the
+property contract, not the display contract.
+
+**Why it is centralised.** Five counter classes (`AssignedFeatureCounter`,
+`ProfileFeatureCounter`, `JointExonCounter`, `ExonSpliceSiteCounter`,
+`TerminalCounter`) each carried an identical `pool.get_str(group_id)` copy, none of
+which had the guards `read_group_from_ids` grew. Consequences, all reproduced on
+master before the fix:
+
+- `-1` → `pool.get_str(-1)` indexes the list from the end → **a real barcode**,
+  silently. Not reachable today (every grouper falls back to `'NA'`; none returns
+  `None`), so this was a latent trap rather than active corruption.
+- `-1` → `write_int` is unsigned → **`OverflowError`** in `ReadAssignment.serialize`,
+  which would abort the run before any counter saw the id.
+- a stale id → **uncaught `IndexError`** in the counters, where
+  `read_group_from_ids` recovers with a warning. The `except IndexError` there
+  documents this as happening "during deserialization if pools weren't loaded".
+
+`resolve_read_group` warns **once per grouping spec**; the old per-occurrence
+warning meant one log line per read on a bad pool.
+
+`RNAVelocityCounter` (branch `rna_velocity_rebased`) deliberately *drops* reads
+with an unassigned group instead of resolving them to `'NA'`: its output is per
+cell, and `'NA'` is not a cell.
+
+Regression guard: `isoquant_tests/test_group_id_resolution.py` asserts all seven
+counter instances agree on valid / sentinel / stale ids, that the enumeration path
+is unchanged, and that no sixth copy of the helper drifts back in.
+
 #### C. File Naming (`src/file_naming.py`)
 
 **Strategy-Based Naming:**

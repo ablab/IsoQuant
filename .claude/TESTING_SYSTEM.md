@@ -19,8 +19,9 @@ The testing system validates IsoQuant's functionality across multiple dimensions
 1. **Main Test Runner**: `tests/github/run_pipeline.py`
 2. **Barcode Test Runner**: `tests/github/run_barcode_test.py`
 3. **Baseline Updater**: `tests/github/update_defaults.py`
+3b. **Input Manifest**: `isoquant_tests/github/data_manifest.py`
 4. **Config Converter**: `tests/github/cfg2yaml.py` (legacy `.cfg` → `.yaml`)
-5. **Config Files**: `/abga/work/andreyp/ci_isoquant/data/*.yaml` (YAML format with embedded baselines)
+5. **Config Files**: `isoquant_tests/github/configs/*.yaml` (in-repo, YAML with embedded baselines)
 6. **Evaluation Scripts**: `misc/assess_*.py`, `misc/*_stats.py`, `misc/*_gffcompare.py`
 7. **GitHub Actions**: `.github/workflows/*.yml`
 8. **Test Data**: `/abga/work/andreyp/ci_isoquant/data/` and `/abga/work/andreyp/data/`
@@ -124,6 +125,7 @@ Old `.cfg` files and their associated `.etl`/`.qnt`/`.prf` files are preserved i
 - `performance` - Track computational performance (memory, CPU, time)
 - `allinfo` - Evaluate UMI filtering quality (single-cell/spatial modes)
 - `polya_prediction` - Evaluate polyA-site prediction accuracy against a ground-truth GTF (requires `reference_polya_gtf` config key)
+- `summary` - Compare numbers of `{label}.summary_stats.json` (flattened as `section/key`, e.g. `assignment/total_assignments`) with `baselines.summary`; only listed metrics are checked, all numeric ones are written to `new_summary_etalon.tsv`. Used by the resume tests: the summary aggregates every stage, so state restored wrongly on `--resume` shows up even when all files exist
 
 Multiple run types can be combined: `run_type	transcripts,quantification_known,performance`
 
@@ -158,6 +160,9 @@ CI configs had to be corrected so enforcement wouldn't fail on wrong names:
 - **Retired the dead key** (removed, no replacement) — RESUME1-4 and RESUME_GR1-2, because
   they resume from **old-format checkpoints** (strategy-less names), so their outputs can't be
   re-pointed to current names without regenerating the checkpoints on the runner.
+  Since branch `resume_checkpoints` the checkpoints **must** be regenerated anyway
+  (`generate_resume_test.sh` on the CI host): a run without `<output>/checkpoints/` exits with 26
+  on `--resume` (see `.claude/RESUME_CHECKPOINTS.md`).
 
 Validated on `doc_update_4.0` via `gh workflow run` of `Group_tests` / `Resume_tests` /
 `Stereo_toy` — all green (a wrong name now fails with `-5`).
@@ -353,7 +358,7 @@ Each `.github/workflows/*.yml` file:
 2. Sets environment variables:
    - `RUN_NAME` - Test name
    - `LAUNCHER` - Path to `run_pipeline.py`
-   - `CFG_DIR` - Path to config directory
+   - `CFG_DIR` - `${{github.workspace}}/isoquant_tests/github/configs` (in-repo)
    - `BIN_PATH` - Path to external tools (minimap2, samtools, gffcompare)
    - `OUTPUT_BASE` - Base output directory
 3. Runs on self-hosted runner with label `isoquant`
@@ -385,9 +390,8 @@ All barcode tests check for commits in last 7 days before running (skip if no ch
 
 ### Self-Hosted Runners
 
-Tests run on servers with label `isoquant`:
-- `dx3` - dx3-523-28534.ad.helsinki.fi
-- `dx4` - Available for SSH access
+Tests run on the lab's self-hosted runners, registered with the label `isoquant`.
+Ask a maintainer for the host names and SSH access.
 
 Data and configs are shared via `/abga/work/andreyp/ci_isoquant/`
 
@@ -436,15 +440,62 @@ Data and configs are shared via `/abga/work/andreyp/ci_isoquant/`
 
 ### 4. Resume Tests
 
-**Purpose**: Test checkpoint/resume functionality
+**Purpose**: Test checkpoint/resume functionality (`.claude/RESUME_CHECKPOINTS.md`): a partial run,
+killed at a chosen point, is copied into the output folder and finished with `--resume`; the
+result is checked with the usual baselines (`transcripts` / `allinfo`), `summary` baselines and
+`check_input_files`. The `summary` check is what catches a resumed stage restoring wrong in-memory
+state (e.g. the read totals of reloaded chromosomes) -- `allinfo` alone is copied from the partial run
+once UMI filtering is done.
 
-**Examples**:
-- `RESUME1.SIRVs.R10.yaml` - Resume from assignment step
-- `RESUME2.SIRVs.R10.yaml` - Resume from construction step
-- `RESUME3.SIRVs.R10.yaml` - Resume from multimapper step
-- `RESUME_GR1.SIRVs.R10.yaml` - Resume with read groups
+**Special config keys**: `resume` points to the partial run (copied, then `isoquant.py -o <out> --resume`),
+`label` names the checked experiment, `extra_labels` (space-separated) are further experiments whose
+`check_input_files` are checked too.
 
-**Special config key**: `resume` points to directory with previous run
+**Partial runs** live in `/abga/work/andreyp/ci_isoquant/data/resume_checkpoints/` and are produced by
+`isoquant_tests/github/generate_resume_test.sh <isoquant_dir> [sirv|sc|all]` on the CI host. Regenerate
+them whenever `CHECKPOINT_FORMAT` (`isoquant_lib/utils/checkpoints.py`) is bumped: stores of another format, or
+without a checkpoint record tied to `.params`, are refused with exit code 26.
+Each run is stopped by `run_until.py`:
+- the command runs in its own process group; on the stop line the whole group is frozen (SIGSTOP)
+  and killed (SIGKILL), so no worker keeps writing into the test data;
+- `--after` lines (in order) arm the stop, `--occurrence N` picks the N-th match after that -- needed
+  because e.g. "Finished processing chromosome" is printed by both read collection and construction;
+- exit code 3 when the run ends before the stop point, so a finished run is never stored as partial;
+- per-chromosome completion lines are logged after the chromosome's checkpoint, so "killed after the 2nd
+  `Finished processing chromosome`" means 2 chromosomes are marked;
+- `--log` keeps the output (`<name>.run_until.log` next to the partial run).
+
+Killing on a log line is not exact (other workers keep running while the line travels through the pipe),
+so after every partial run `generate_resume_test.sh` checks the expected checkpoints (`expect`,
+`expect_count`) and exits with 4 if a scenario drifted, e.g. SC4 ("all chromosomes collected, `collect` not
+marked") getting `collect.done` would otherwise silently duplicate SC5's starting state.
+`generate_resume_test.sh <isoquant_dir> check` only runs these checks against the stored data.
+
+**SIRV configs** (bulk, `transcripts` baselines): `RESUME1` in read collection, `RESUME2` in model
+construction, `RESUME3` after read collection, `RESUME4` in construction with `--count_exons
+--sqanti_output --check_canonical`, `RESUME_GR1` in read collection with 2 BAMs, `RESUME_GR2` with TSV read groups.
+
+**Single-cell configs** (`allinfo` baselines + `check_input_files`): data from
+`prepare_sc_resume_data.sh` -- 100k reads of `Mouse.10x.5k.ONT_cDNA.R10.4.no_trunc.bam` on chr14/16/18/19
+(genome and GTF cut to them, `data/sc_resume/`), `-m tenX_v3 --large_output allinfo read2transcripts
+tagged_bam deduplicated_bam -t 4`. Baselines come from the reference runs `SC.Mouse.10x.4chr.allinfo`
+and `SC.Mouse.10x.4chr.2samples.allinfo` (YAML input, experiments S1/S2), which run in the same workflow.
+
+| Config | Killed at |
+|---|---|
+| `RESUME_SC1` | barcode calling (nothing marked) |
+| `RESUME_SC2` | tagged BAM, 2 of 4 fragments |
+| `RESUME_SC3` | read collection, 2 of 4 chromosomes |
+| `RESUME_SC4` | before multimapper resolution (`collect` not marked) |
+| `RESUME_SC5` | UMI filtering, 2 of 4 chromosomes |
+| `RESUME_SC6` | deduplicated BAM, 2 of 4 fragments |
+| `RESUME_SC7` | assignment processing, 2 of 4 chromosomes |
+| `RESUME_SC8` | merge: gene counts converted, transcript counts not |
+| `RESUME_SC9` | after the run summary, before the sample checkpoint and cleanup |
+| `RESUME_SC10` | not killed: resuming a finished run |
+| `RESUME_SC_2S` | 2 experiments: S1 complete (must be skipped), S2 in read collection |
+
+`run_pipeline.py` accepts `yaml:` input for fresh runs (then `label` must be set).
 
 ### 5. Performance Tests
 
@@ -519,10 +570,16 @@ See `.claude/BARCODE_CALLING.md` for detailed documentation of universal calling
 
 ### Server Locations
 
-**Config files** (with embedded baselines):
+**Config files** (with embedded baselines) are in the repository:
+```
+isoquant_tests/github/configs/
+  *.yaml                   # Test configurations with embedded baselines
+  data_manifest.tsv        # size + SHA-256 of every referenced input file
+```
+
+**Input data** stays on the runners' shared storage:
 ```
 /abga/work/andreyp/ci_isoquant/data/
-  *.yaml                   # Test configurations with embedded baselines
   _depr/                   # Deprecated .cfg/.etl/.qnt/.prf files
   ref/                     # Reference genomes and annotations
   mouse/                   # Mouse-specific data
@@ -556,17 +613,17 @@ See `.claude/BARCODE_CALLING.md` for detailed documentation of universal calling
 ### Single Test
 
 ```bash
-# On dx3 or dx4 server
+# On a self-hosted runner
 cd /path/to/IsoQuant2
 export PATH=$PATH:/abga/work/andreyp/ci_isoquant/bin/
 
 # Run a specific pipeline test
-python3 tests/github/run_pipeline.py \
+python3 isoquant_tests/github/run_pipeline.py \
   /abga/work/andreyp/ci_isoquant/data/Mouse.ONT_simulated.R10.reduced_db.yaml \
   -o /abga/work/andreyp/ci_isoquant/output/test_run/
 
 # Run a specific barcode test
-python3 tests/github/run_barcode_test.py \
+python3 isoquant_tests/github/run_barcode_test.py \
   /abga/work/andreyp/ci_isoquant/data/barcodes/Mouse.10x.custom_sc.small.yaml \
   -o /abga/work/andreyp/ci_isoquant/output/test_run/
 ```
@@ -574,7 +631,7 @@ python3 tests/github/run_barcode_test.py \
 ### With Additional Options
 
 ```bash
-python3 tests/github/run_pipeline.py \
+python3 isoquant_tests/github/run_pipeline.py \
   /abga/work/andreyp/ci_isoquant/data/SIRVs.Set4.R10.opts1.yaml \
   -o /tmp/test_output \
   -a "--threads 4 --debug"
@@ -584,10 +641,46 @@ python3 tests/github/run_pipeline.py \
 
 ```bash
 # From another machine
-ssh dx3  # or ssh dx4
+ssh <runner-host>
 cd /home/andreyp/IsoQuant2
 # Run tests as above
 ```
+
+## Input Data Integrity
+
+The large test inputs (genomes, BAMs, annotations, ground-truth tables) live on the
+runners' shared storage and are not version-controlled - roughly 316 GB across 146
+files referenced by the configs. `isoquant_tests/github/data_manifest.py` records each
+one's size and SHA-256 in `isoquant_tests/github/configs/data_manifest.tsv`, which
+*is* committed.
+
+This gives two things the configs alone cannot:
+
+- **provenance** - a baseline can be tied to the exact input bytes that produced it;
+- **integrity** - an input replaced or truncated under CI is caught immediately,
+  instead of surfacing later as an unexplained baseline drift.
+
+```bash
+# regenerate after adding or replacing an input (reuses unchanged entries)
+python3 isoquant_tests/github/data_manifest.py generate
+
+# verify: size only (seconds)
+python3 isoquant_tests/github/data_manifest.py verify
+
+# verify: re-hash everything (~16 min at ~330 MB/s)
+python3 isoquant_tests/github/data_manifest.py verify --deep
+```
+
+`run_pipeline.py` runs the fast check for the config it is about to execute, before
+launching IsoQuant. Control it with `--verify_inputs {off,fast,deep}` (default
+`fast`). A missing manifest is not an error - the check no-ops.
+
+Why a manifest rather than DVC or git-annex: the input data is effectively immutable.
+Excluding regenerated `resume/` checkpoints, only a few dozen files changed in a
+month, and 57% have not been touched in over a year. A data-versioning system
+versions change; there is very little here to version, so the manifest buys the
+provenance and integrity benefits without the cache duplication, read-only working
+trees and operational surface those tools bring at multi-TB scale.
 
 ## Updating Baselines
 
@@ -601,26 +694,26 @@ IsoQuant includes a utility script to automate baseline updates: `tests/github/u
 
 ```bash
 # Update baselines from master branch output
-python3 tests/github/update_defaults.py \
+python3 isoquant_tests/github/update_defaults.py \
   /abga/work/andreyp/ci_isoquant/data/Mouse.ONT_simulated.R10.reduced_db.yaml
 
 # Update baselines from specific branch
-python3 tests/github/update_defaults.py \
+python3 isoquant_tests/github/update_defaults.py \
   --branch sc_3.9 \
   /abga/work/andreyp/ci_isoquant/data/Mouse.ONT_simulated.R10.reduced_db.yaml
 
 # Update multiple tests at once
-python3 tests/github/update_defaults.py \
+python3 isoquant_tests/github/update_defaults.py \
   --branch master \
   /abga/work/andreyp/ci_isoquant/data/Mouse.*.yaml
 
 # Update barcode test baselines
-python3 tests/github/update_defaults.py \
+python3 isoquant_tests/github/update_defaults.py \
   --branch master \
   /abga/work/andreyp/ci_isoquant/data/barcodes/Mouse.10x.custom_sc.small.yaml
 
 # Use custom output folder
-python3 tests/github/update_defaults.py \
+python3 isoquant_tests/github/update_defaults.py \
   --output /custom/output/path \
   /abga/work/andreyp/ci_isoquant/data/SIRVs.Set4.R10.yaml
 ```
@@ -644,20 +737,24 @@ python3 tests/github/update_defaults.py \
 
 ```bash
 # 1. Run test on current branch
-python3 tests/github/run_pipeline.py \
-  /abga/work/andreyp/ci_isoquant/data/MyTest.yaml
+python3 isoquant_tests/github/run_pipeline.py \
+  isoquant_tests/github/configs/MyTest.yaml
 
 # 2. If changes are acceptable, update baselines in-place
-python3 tests/github/update_defaults.py \
+python3 isoquant_tests/github/update_defaults.py \
   --branch sc_3.9 \
-  /abga/work/andreyp/ci_isoquant/data/MyTest.yaml
+  isoquant_tests/github/configs/MyTest.yaml
 
-# 3. Review the updated YAML
-cat /abga/work/andreyp/ci_isoquant/data/MyTest.yaml
+# 3. Review the diff - this is the record of why the baseline moved
+git diff isoquant_tests/github/configs/MyTest.yaml
 
 # 4. Re-run the test to verify it passes
-python3 tests/github/run_pipeline.py \
-  /abga/work/andreyp/ci_isoquant/data/MyTest.yaml
+python3 isoquant_tests/github/run_pipeline.py \
+  isoquant_tests/github/configs/MyTest.yaml
+
+# 5. Commit, explaining the change. CI reads this file directly, so the
+#    new baselines take effect on the next run.
+git commit -am "update MyTest baselines: <why>"
 ```
 
 **Best practices**:
@@ -679,8 +776,8 @@ python3 tests/github/run_pipeline.py \
 ### Step 2: Create Config File
 
 ```bash
-# Create .yaml file in /abga/work/andreyp/ci_isoquant/data/
-nano /abga/work/andreyp/ci_isoquant/data/MyTest.yaml
+# Create .yaml file in isoquant_tests/github/configs/
+nano isoquant_tests/github/configs/MyTest.yaml
 ```
 
 Example minimal config:
@@ -698,8 +795,8 @@ isoquant_options: '"-t 8 --complete_genedb"'
 ### Step 3: Run Initial Test
 
 ```bash
-python3 tests/github/run_pipeline.py \
-  /abga/work/andreyp/ci_isoquant/data/MyTest.yaml
+python3 isoquant_tests/github/run_pipeline.py \
+  isoquant_tests/github/configs/MyTest.yaml
 ```
 
 ### Step 4: Add Baselines
@@ -715,9 +812,9 @@ After successful run, the test generates `new_*_etalon.tsv` files in the output 
 #     performance: {}
 
 # Then update baselines from output
-python3 tests/github/update_defaults.py \
+python3 isoquant_tests/github/update_defaults.py \
   --branch <branch> \
-  /abga/work/andreyp/ci_isoquant/data/MyTest.yaml
+  isoquant_tests/github/configs/MyTest.yaml
 ```
 
 This updates the `baselines:` section in-place in the YAML file.
@@ -770,8 +867,8 @@ on:
 
 env:
   RUN_NAME: MyTest
-  LAUNCHER: ${{github.workspace}}/tests/github/run_pipeline.py
-  CFG_DIR: /abga/work/andreyp/ci_isoquant/data
+  LAUNCHER: ${{github.workspace}}/isoquant_tests/github/run_pipeline.py
+  CFG_DIR: ${{github.workspace}}/isoquant_tests/github/configs
   BIN_PATH: /abga/work/andreyp/ci_isoquant/bin/
   OUTPUT_BASE: /abga/work/andreyp/ci_isoquant/output/${{github.ref_name}}/
 
@@ -875,7 +972,6 @@ git push
 - Unit tests in `tests/test_ci_config.py` validate config loading and conversion
 
 **Remaining issues:**
-- Config files still stored outside repository in `/abga/work/andreyp/ci_isoquant/data/`
 - No schema validation for YAML configs
 - Could benefit from moving configs into repo for version control
 
@@ -891,7 +987,6 @@ git push
 - Still requires manual review to decide when to update baselines
 - No diff preview before updating
 - No validation that metrics actually improved
-- Baselines still outside repo (no git history)
 
 **Potential improvements:**
 - Add interactive mode or diff preview to `update_defaults.py`
@@ -973,9 +1068,9 @@ git push
 
 **Potential Improvements:**
 - Centralize test data with clear organization
-- Implement data versioning (e.g., DVC, git-lfs)
+- ~~Implement data versioning (e.g., DVC, git-lfs)~~ - **Addressed** by `data_manifest.tsv`; see *Input Data Integrity*
 - Create "test data catalog" documenting all datasets
-- Add data validation checks (checksums, format validation)
+- ~~Add data validation checks (checksums)~~ - **Done**: `data_manifest.py verify`
 - Develop minimal test datasets that can run locally without server
 - Share common reference files across tests
 
@@ -1027,7 +1122,7 @@ git push
 ### Priority Recommendations
 
 **High Priority (Quick Wins):**
-1. Move config files into repository for version control
+1. ~~Move config files into repository for version control~~ - **Done**: configs live in `isoquant_tests/github/configs/` and CI reads them via `CFG_DIR`
 2. Add detailed error messages with metric comparisons
 3. Implement parallel test execution in GitHub Actions
 4. ~~Standardize config format~~ — **Done**: migrated to YAML with embedded baselines

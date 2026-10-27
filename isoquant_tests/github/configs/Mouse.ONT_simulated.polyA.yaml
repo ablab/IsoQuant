@@ -1,0 +1,40 @@
+name: Mouse.ONT_simulated.polyA
+output: /abga/work/andreyp/ci_isoquant/output
+run_type: transcripts,polya_prediction
+genome: /abga/work/andreyp/data/reference/mouse/GRCm39.primary_assembly.genome.fa
+genedb: /abga/work/andreyp/data/reference/mouse/gencode.vM36.basic.annotation.db
+bam: /abga/work/andreyp/ci_isoquant/data/polya/Mouse.ONT_simulated.polyA_simulated_aligned_reads_mouse_1_ce2bb9_ff5ba6_c9b1bb.bam
+simulated_counts: /abga/work/andreyp/ci_isoquant/data/polya/simulated_aligned_reads_mouse_1.tsv
+reference_polya_gtf: /abga/work/andreyp/ci_isoquant/data/polya/updated_mouse_polya_1.gtf
+reduced_db: /abga/work/andreyp/ci_isoquant/data/simulated_truth/Mouse.ONT_simulated.polyA
+datatype: ont
+isoquant_options: '"-t 16 --complete_genedb --force "'
+baselines:
+  transcripts:
+    full_recall: 59.7
+    full_precision: 72.8
+    known_recall: 85.5
+    known_precision: 80.5
+    novel_recall: 19.3
+    novel_precision: 41.7
+  transcripts_td50:
+    full_recall: 59.2
+    full_precision: 72.3
+    known_recall: 85.5
+    known_precision: 80.5
+    novel_recall: 19.1
+    novel_precision: 41.2
+  transcripts_td10:
+    full_recall: 58.3
+    full_precision: 71.1
+    known_recall: 85.5
+    known_precision: 80.5
+    novel_recall: 18.5
+    novel_precision: 39.9
+  polya_prediction:
+    precision: 96.7156
+    recall: 83.1247
+    precision_known: 96.5694
+    recall_known: 80.5705
+    precision_novel: 98.378
+    recall_novel: 88.5984

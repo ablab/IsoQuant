@@ -7,6 +7,7 @@
 
 import os
 import gffutils
+import pytest
 from isoquant_lib.gene_info import *
 
 
@@ -77,6 +78,44 @@ class TestGeneInfo:
         assert gene_info.gene_id_map["test_transcript"] == "test_gene"
         assert gene_info.isoform_strands["test_transcript"] == "+"
         assert gene_info.all_isoforms_exons["test_transcript"] == [(100, 200), (300, 400)]
+
+    def test_from_models_empty(self):
+        # a gene block where no model survived filtering still yields a fully
+        # initialized GeneInfo (it is set as gene_info of the resulting read
+        # assignments, which the printers then query)
+        gene_info = GeneInfo.from_models([])
+
+        assert gene_info.empty()
+        assert gene_info.reference_region is None
+        assert gene_info.all_isoforms_exons == {}
+        assert gene_info.all_isoforms_introns == {}
+        assert gene_info.gene_id_map == {}
+        assert gene_info.db is None
+        assert gene_info.gene_db_list == []
+
+    def test_init_requires_db(self):
+        # the main constructor is only for gffutils-backed gene lists; every db-less
+        # case has its own constructor that initializes the object completely
+        with pytest.raises(AssertionError):
+            GeneInfo([], None)
+
+    def test_init_requires_gene_list(self):
+        with pytest.raises(AssertionError):
+            GeneInfo([], self.gffutils_db)
+
+    def test_alternate_constructors_set_all_attributes(self):
+        # every db-less constructor must initialize at least what the gffutils-backed
+        # one does: these objects end up as ReadAssignment.gene_info and are queried by
+        # the very same printers and counters (a missing attribute caused #425 / #427)
+        transcript_model = TranscriptModel("chr1", "+", "test_transcript", "test_gene",
+                                           [(100, 200), (300, 400)], TranscriptModelType.known)
+        expected_attributes = set(vars(GeneInfo([self.gene_db], self.gffutils_db)))
+
+        for gene_info in [GeneInfo.from_region("chr1", 100, 400),
+                          GeneInfo.from_models([transcript_model]),
+                          GeneInfo.from_models([]),
+                          GeneInfo.from_model(transcript_model)]:
+            assert not expected_attributes - set(vars(gene_info))
 
     def test_serialization(self):
         import io

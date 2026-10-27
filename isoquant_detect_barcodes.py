@@ -18,12 +18,21 @@ import os
 import sys
 from traceback import print_exc
 
-from isoquant_lib.modes import IsoQuantMode
+from isoquant_lib.modes import (IsoQuantMode, BarcodeCorrectionMethod, AUTO_BARCODES,
+                                DEPRECATED_MODE_ALIASES, SPLIT_MOLECULES_CHOICES,
+                                SPLIT_MOLECULES_TRUE, SPLIT_MOLECULES_AUTO)
 from isoquant_lib.utils.error_codes import IsoQuantExitCode
 from isoquant_lib.barcode_calling.detect_barcodes import (
     process_single_thread,
     process_in_parallel,
+    get_barcode_length,
+    detect_cell_barcode_list,
     BARCODE_CALLING_MODES,
+)
+from isoquant_lib.barcode_calling.options import (
+    resolve_barcode_correction,
+    resolve_deprecated_mode,
+    resolve_split_molecules,
 )
 
 logger = logging.getLogger('IsoQuant')
@@ -51,17 +60,34 @@ def parse_args(sys_argv):
     parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--output", "-o", type=str, help="output prefix name", required=True)
     parser.add_argument("--barcodes", "-b", nargs='+', type=str, help="barcode whitelist(s)", required=False)
-    parser.add_argument("--mode", type=str, help="mode to be used", choices=[x.name for x in BARCODE_CALLING_MODES.keys()])
+    mode_names = [x.name for x in BARCODE_CALLING_MODES.keys()]
+    parser.add_argument("--mode", type=str, help="mode to be used",
+                        choices=mode_names + list(DEPRECATED_MODE_ALIASES),
+                        metavar="{%s}" % ",".join(mode_names))
+    parser.add_argument("--split_molecules", type=str, choices=SPLIT_MOLECULES_CHOICES, default=None,
+                        help="split reads containing several cDNA molecules ligated end to end: "
+                             "%s splits wherever the protocol allows it, %s also fails for protocols "
+                             "that cannot [%s]" % (SPLIT_MOLECULES_AUTO, SPLIT_MOLECULES_TRUE,
+                                                   SPLIT_MOLECULES_AUTO))
     parser.add_argument("--molecule", type=str, help="MDF files with molecule description (for custom_sc mode only)")
 
     parser.add_argument("--input", "-i", nargs='+', type=str, help="input reads in [gzipped] FASTA, FASTQ, BAM",
                         required=True)
     parser.add_argument("--threads", "-t", type=int, help="threads to use [16]", default=16)
     parser.add_argument("--tmp_dir", type=str, help="folder for temporary files")
+    parser.add_argument("--n_cells", type=str,
+                        help='expected number of cell-associated barcodes, or "%s" to estimate it from the '
+                             'barcode count distribution. When set, the whitelist is treated as a pool to '
+                             'select cell barcodes from; when omitted, the whitelist is taken to be the '
+                             'cell barcodes themselves' % AUTO_BARCODES)
+    add_hidden_option("--n_cells_interval", type=int, default=25)
+    add_hidden_option("--barcode_correction", type=str, choices=[e.name for e in BarcodeCorrectionMethod],
+                      default=BarcodeCorrectionMethod.auto.name)
+    parser.add_argument("--no_gzip", help="do not gzip the split reads FASTA",
+                        dest="gzipped", action='store_false', default=True)
     add_hidden_option('--debug', action='store_true', default=False, help='debug log output.')
 
     args = parser.parse_args(sys_argv)
-    args.mode = IsoQuantMode[args.mode]
     args.out_fasta = None
     args.output_tsv = None
     return args
@@ -78,26 +104,51 @@ def check_args(args):
         else:
             args.output_tsv = [args.output + "_%d.barcoded_reads.tsv" % i for i in range(num_files)]
 
-    if args.out_fasta is None and args.mode.produces_new_fasta():
+    if args.out_fasta is None and args.split_molecules:
+        suffix = ".split_reads.fasta.gz" if args.gzipped else ".split_reads.fasta"
         if num_files == 1:
-            args.out_fasta = [args.output + ".split_reads.fasta"]
+            args.out_fasta = [args.output + suffix]
         else:
-            args.out_fasta = [args.output + "_%d.split_reads.fasta" % i for i in range(num_files)]
+            args.out_fasta = [args.output + "_%d%s" % (i, suffix) for i in range(num_files)]
+
+
+def run_barcode_calling(args):
+    if args.threads == 1 or args.mode.enforces_single_thread():
+        process_single_thread(args)
+    else:
+        process_in_parallel(args)
 
 
 def main(sys_argv):
     args = parse_args(sys_argv)
     set_logger(logger, args)
+    # resolved here rather than in parse_args so the warnings reach the configured logger
+    resolve_deprecated_mode(args)
+    args.mode = IsoQuantMode[args.mode]
+    resolve_split_molecules(args)
     check_args(args)
+    resolve_barcode_correction(args, whitelist_option='--barcodes')
 
     out_dir = os.path.dirname(args.output)
     if out_dir and not os.path.exists(out_dir):
         os.makedirs(out_dir, exist_ok=True)
 
-    if args.threads == 1 or args.mode.enforces_single_thread():
-        process_single_thread(args)
-    else:
-        process_in_parallel(args)
+    if args.detect_cell_barcodes:
+        # first pass: extract barcodes only to count them. Nothing is written, and no FASTA
+        # is produced -- the second pass does the extraction whose results are kept.
+        final_output_tsv, final_out_fasta = args.output_tsv, args.out_fasta
+        args.output_tsv, args.out_fasta = None, None
+        args.whitelist_matching = False
+        cell_barcodes = detect_cell_barcode_list(args, args.output + ".cell_barcodes.tsv",
+                                                 get_barcode_length(args.mode),
+                                                 args.n_cells, args.n_cells_interval,
+                                                 args.output + ".cell_barcodes.stats")
+        # second pass: ordinary barcode calling against the detected cell barcodes
+        args.barcodes = [cell_barcodes]
+        args.output_tsv, args.out_fasta = final_output_tsv, final_out_fasta
+
+    args.whitelist_matching = True
+    run_barcode_calling(args)
 
 
 def main_entry():

@@ -21,6 +21,24 @@ python isoquant_visualize.py <output_directory> --gene_list <gene_list> [options
 * `--counts`: Use counts instead of TPM files for visualization.
 * `--ref_only`: Use only reference transcript quantification instead of transcript model quantification.
 * `--filter_transcripts`: Filter transcripts by minimum value occurring in at least one condition.
+* `--read_group_strategy`: Grouping strategy whose grouped counts are visualized, named as it
+appears in the grouped counts file names (`SAMPLE_ID.gene_grouped_<strategy>_counts.tsv`), e.g.
+`file_name`, `barcode`, `tag_CB` for `--read_group tag:CB` or `file0_col1` for a grouping table.
+Defaults to the first strategy given with `--read_group` in the original run that has grouped counts
+in the output directory; strategies IsoQuant adds on its own (e.g. `barcode` in single-cell modes,
+`file_name` for several input files) are not recorded, so for them the alphabetically first strategy
+is used. An unknown strategy is reported as an error.
+
+## Input files
+
+Read assignment statistics are taken from `SAMPLE_ID.read_info.tsv.gz`, or from the deprecated
+`SAMPLE_ID.read_assignments.tsv.gz` when that is the only per-read file present.
+If neither is in the output directory, re-run IsoQuant with `--large_output read_info`.
+
+Grouped counts are plotted per condition only when the number of groups is small
+(up to 100, as for `--read_group file_name`). Single-cell and spatial runs produce one group
+per barcode or spot, so the visualizer falls back to the ungrouped counts for them
+and reports this on the console.
 
 
 ## Output

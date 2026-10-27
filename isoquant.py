@@ -33,6 +33,7 @@ from collections import namedtuple
 from io import StringIO
 from traceback import print_exc
 from concurrent.futures import ProcessPoolExecutor
+from typing import Optional, Tuple
 import concurrent.futures
 
 import pysam
@@ -40,7 +41,10 @@ import gffutils
 import pyfaidx
 
 from isoquant_lib.utils.error_codes import IsoQuantExitCode
-from isoquant_lib.modes import IsoQuantMode, ISOQUANT_MODES, AnalysisType, ANALYSIS_ALIASES, ANALYSIS_CHOICES
+from isoquant_lib.modes import (IsoQuantMode, ISOQUANT_MODES, AnalysisType, ANALYSIS_ALIASES, ANALYSIS_CHOICES,
+                                BarcodeCorrectionMethod, LARGE_WHITELIST_SIZE, AUTO_BARCODES,
+                                DEPRECATED_MODE_ALIASES, SPLIT_MOLECULES_CHOICES, SPLIT_MOLECULES_TRUE,
+                                SPLIT_MOLECULES_FALSE, SPLIT_MOLECULES_AUTO)
 from isoquant_lib.gtf2db import convert_gtf_to_db
 from isoquant_lib.utils.read_mapper import (
     DATA_TYPE_ALIASES,
@@ -52,6 +56,7 @@ from isoquant_lib.utils.read_mapper import (
     DataSetReadMapper
 )
 from isoquant_lib.alignment.alignment_processor import PolyATrimmed
+from isoquant_lib.terminal_prediction.external_polya import check_flnc_report
 from isoquant_lib.dataset_processor import DatasetProcessor, PolyAUsageStrategies
 from isoquant_lib.model_construction.model_construction import StrandnessReportingLevel
 from isoquant_lib.assignment.long_read_assigner import AmbiguityResolvingMethod
@@ -59,14 +64,26 @@ from isoquant_lib.quantification.long_read_counter import COUNTING_STRATEGIES, C
 from isoquant_lib.utils.input_data_storage import InputDataStorage, InputDataType
 from isoquant_lib.assignment.multimap_resolver import MultimapResolvingStrategy
 from isoquant_lib.utils.stats import combine_counts
-from isoquant_lib.barcode_calling import process_single_thread, process_in_parallel, get_umi_length
+from isoquant_lib.barcode_calling.options import (
+    check_barcode_input_files,
+    check_barcode_mapping_files,
+    resolve_deprecated_mode,
+    resolve_split_molecules,
+    validate_barcode_calling,
+)
+from isoquant_lib.barcode_calling.pipeline import call_barcodes
+from isoquant_lib.utils.file_utils import check_file_exists
+from isoquant_lib.utils.read_tags import count_tagged_alignments
 from isoquant_lib.common import setup_worker_logging, _get_log_params
+from isoquant_lib.utils.checkpoints import (CheckpointStore, get_resume_incompatibility_reason, mark_done_with_debug_hook, checkpoint_name,
+                                           run_checkpoint_dir, run_stage, write_run_record)
 
 
 logger = logging.getLogger('IsoQuant')
 
 # Large output file types for --large_output option
-LARGE_OUTPUT_TYPES = ["read_info", "read_assignments", "corrected_bed", "read2transcripts", "allinfo", "none"]
+LARGE_OUTPUT_TYPES = ["read_info", "read_assignments", "corrected_bed", "read2transcripts", "allinfo",
+                      "tagged_bam", "deduplicated_bam", "none"]
 
 
 def bool_str(s):
@@ -158,8 +175,10 @@ def parse_args(cmd_args=None, namespace=None):
     add_option_to_group(input_args_group, '--stranded',  type=str, choices=SUPPORTED_STRANDEDNESS,
                         help="reads strandness type [none]", default="none")
     add_option_to_group(input_args_group, '--polya_trimmed', default=PolyATrimmed.none.name, type=str,
-                        choices=[e.name for e in PolyATrimmed],
-                        help="define reads which had polyA tail trimmed [%s]" % PolyATrimmed.none.name)
+                        help="define reads which had polyA tail trimmed or take polyA status from an external "
+                             "source: none, all, stranded, tag:<TAG> (e.g. Dorado's tag:pt), "
+                             "list:<FILE> (read ids, optional strand column), "
+                             "flnc:<FILE> (isoseq refine flnc.report.csv) [%s]" % PolyATrimmed.none.name)
     add_option_to_group(input_args_group, '--fl_data', action='store_true', default=False,
                         help="reads represent FL transcripts; both ends of the read are considered to be reliable")
 
@@ -229,6 +248,11 @@ def parse_args(cmd_args=None, namespace=None):
                                          default=["read_info", "read2transcripts"],
                                          help="large output files to generate [read_info read2transcripts]")
 
+    add_additional_option_to_group(output_setup_args_group, "--no_report",
+                                   help="do not write the run summary (SAMPLE.summary.html and "
+                                        "SAMPLE.summary_stats.json)",
+                                   action='store_true', default=False)
+
     add_additional_option_to_group(output_setup_args_group, "--genedb_output", help="output folder for converted gene "
                                                                                     "database, will be created automatically "
                                                                                     " (same as output by default)", type=str)
@@ -284,10 +308,19 @@ def parse_args(cmd_args=None, namespace=None):
                                    type=int, default=-1)
 
     # SC ARGUMENTS
-    add_option_to_group(sc_args_group, "--mode", "-m", type=str, choices=ISOQUANT_MODES,
-                                   help="IsoQuant mode [%s]" % IsoQuantMode.bulk.name, default=IsoQuantMode.bulk.name)
+    add_option_to_group(sc_args_group, "--mode", "-m", type=str,
+                                   choices=ISOQUANT_MODES + list(DEPRECATED_MODE_ALIASES),
+                                   help="IsoQuant mode [%s]" % IsoQuantMode.bulk.name, default=IsoQuantMode.bulk.name,
+                                   metavar="{%s}" % ",".join(ISOQUANT_MODES))
+    add_option_to_group(sc_args_group, "--split_molecules", type=str, choices=SPLIT_MOLECULES_CHOICES,
+                                   default=None,
+                                   help="split reads containing several cDNA molecules ligated end to end: "
+                                        "%s splits wherever the protocol allows it, %s also fails for protocols "
+                                        "that cannot [%s]" % (SPLIT_MOLECULES_AUTO, SPLIT_MOLECULES_TRUE,
+                                                              SPLIT_MOLECULES_AUTO))
     add_option_to_group(sc_args_group, '--barcode_whitelist', type=str, nargs='+',
-                                   help='file(s) with barcode whitelist(s) for barcode calling')
+                                   help='file(s) with barcode whitelist(s) for barcode calling, '
+                                        'or "%s" to detect cell barcodes from the data' % AUTO_BARCODES)
     add_option_to_group(sc_args_group, "--barcoded_reads", type=str, nargs='+',
                                    help='TSV file(s) with barcoded reads')
     add_option_to_group(sc_args_group, "--barcoded_bam", action='store_true', default=False,
@@ -297,6 +330,23 @@ def parse_args(cmd_args=None, namespace=None):
     add_option_to_group(sc_args_group, "--molecule", type=str,
                                    help='molecule definition file (MDF) for custom_sc mode: '
                                         'defines molecule structure for universal barcode extraction')
+    add_option_to_group(sc_args_group, "--n_cells", type=str,
+                                   help='expected number of cell-associated barcodes, or "%s" to estimate it '
+                                        'from the barcode count distribution. When set, the whitelist is '
+                                        'treated as a pool to select cell barcodes from; when omitted, the '
+                                        'whitelist is taken to be the cell barcodes themselves' % AUTO_BARCODES)
+    add_additional_option_to_group(sc_args_group, "--n_cells_interval", type=int, default=25,
+                                   help='percentage by which the number of selected barcodes may differ '
+                                        'from --n_cells [25]')
+    add_additional_option_to_group(sc_args_group, "--barcode_correction", type=str,
+                                   choices=[e.name for e in BarcodeCorrectionMethod],
+                                   default=BarcodeCorrectionMethod.auto.name,
+                                   help="override how the cell barcode list is obtained: %s matches reads "
+                                        "against the whitelist as given, %s selects cell barcodes from read "
+                                        "counts first [%s: decided by --n_cells]"
+                                        % (BarcodeCorrectionMethod.whitelist.name,
+                                           BarcodeCorrectionMethod.detect.name,
+                                           BarcodeCorrectionMethod.auto.name))
     add_additional_option_to_group(sc_args_group, "--barcode_tag", type=str, default="CB",
                                    help='BAM tag for cell barcode [CB]')
     add_additional_option_to_group(sc_args_group, "--umi_tag", type=str, default="UB",
@@ -383,7 +433,7 @@ def parse_args(cmd_args=None, namespace=None):
     add_hidden_option("--collect_tss_training", type=str, default=None,
                       help="developer: dump per-peak features + true_peak label for TSS training to this CSV path.")
 
-    isoquant_version = "4.0.0"
+    isoquant_version = "4.1.0"
     try:
         with open(os.path.join(os.path.dirname(os.path.realpath(__file__)), "VERSION")) as version_f:
             isoquant_version = version_f.readline().strip()
@@ -418,7 +468,7 @@ def parse_args(cmd_args=None, namespace=None):
 
         args, unknown_args = resume_parser.parse_known_args(cmd_args)
         if unknown_args:
-            logger.error("You cannot specify options other than --output/--threads/--debug/--high_memory "
+            logger.error("You cannot specify options other than --output/--threads/--debug/--high_memory/--keep_tmp "
                          "with --resume option")
             parser.print_usage()
             sys.exit(IsoQuantExitCode.INCOMPATIBLE_OPTIONS)
@@ -448,7 +498,7 @@ def get_bam_files_from_samples(input_data) -> list:
     return [f for f in bam_files if os.path.isfile(f)]
 
 
-def run_fusion_detection_on_samples(fd, samples: list) -> dict:
+def run_fusion_detection_on_samples(fd, samples: list, checkpoints: Optional[CheckpointStore] = None) -> dict:
     """Run fusion detection per sample using a shared FusionDetector.
 
     The report is written alongside the other per-sample outputs as
@@ -463,8 +513,14 @@ def run_fusion_detection_on_samples(fd, samples: list) -> dict:
     """
     summary = {"total": 0, "successful": 0, "failed": 0, "skipped": []}
     for sample in samples:
-        sample_bams = [f for lib in sample.file_list for f in lib if os.path.isfile(f)]
+        sample_bams = fusion_input_bams(sample)
         if not sample_bams:
+            continue
+        fusion_checkpoint = checkpoint_name("fusion", sample.prefix)
+        if checkpoints is not None and checkpoints.is_done(fusion_checkpoint):
+            logger.info("Fusion detection for sample %s was done during the previous run, skipping" % sample.prefix)
+            summary["total"] += 1
+            summary["successful"] += 1
             continue
         summary["total"] += 1
         out_fname = os.path.join(sample.out_dir, sample.prefix + ".fusions.tsv")
@@ -476,13 +532,32 @@ def run_fusion_detection_on_samples(fd, samples: list) -> dict:
                 fd.detect_fusions()
             fd.report(output_path=out_fname)
             logger.info("Fusion candidates for sample %s written to %s" % (sample.prefix, out_fname))
-            summary["successful"] += 1
         except Exception as e:
             logger.error("Fusion detection failed for sample %s: %s" % (sample.prefix, str(e)))
             logger.debug("Traceback:", exc_info=True)
             summary["failed"] += 1
             summary["skipped"].append(sample.prefix)
+            continue
+        summary["successful"] += 1
+        # only a success is marked, outside the try: a failed sample stays retryable on resume,
+        # and a failure to write the checkpoint is not reported as a failed detection
+        if checkpoints is not None:
+            mark_done_with_debug_hook(checkpoints, fusion_checkpoint)
     return summary
+
+
+def fusion_input_bams(sample) -> list:
+    """The sample's alignment files fusion detection reads; a sample without any is not processed."""
+    return [f for lib in sample.file_list for f in lib if os.path.isfile(f)]
+
+
+def fusion_pending(samples: list, checkpoints: CheckpointStore) -> bool:
+    """True if some sample still needs fusion detection (building the detector is expensive).
+
+    Samples without BAMs are never processed nor marked, so they must not count as pending.
+    """
+    return any(fusion_input_bams(sample) and not checkpoints.is_done(checkpoint_name("fusion", sample.prefix))
+               for sample in samples)
 
 
 def check_and_load_args(args, parser):
@@ -494,6 +569,12 @@ def check_and_load_args(args, parser):
                          "Check that output folder is correctly specified.")
             sys.exit(IsoQuantExitCode.RESUME_CONFIG_NOT_FOUND)
         args = load_previous_run(args)
+        # every run of this version writes a checkpoint record and saves its id in .params
+        reason = get_resume_incompatibility_reason(run_checkpoint_dir(args.output), getattr(args, "checkpoint_run_id", None),
+                                 args._version)
+        if reason:
+            logger.error("The run in %s cannot be resumed: %s. Restart it without --resume." % (args.output, reason))
+            sys.exit(IsoQuantExitCode.RESUME_INCOMPATIBLE)
     elif args.output_exists:
         if os.path.exists(args.param_file):
             if args.force:
@@ -542,14 +623,43 @@ def check_and_load_args(args, parser):
             if val not in LARGE_OUTPUT_TYPES:
                 logger.error("Invalid --large_output value: %s. Valid values: %s" % (val, ", ".join(LARGE_OUTPUT_TYPES)))
                 sys.exit(IsoQuantExitCode.INVALID_PARAMETER)
+        _warn_about_unusable_bam_outputs(args)
 
+    if not args.resume:
+        reset_checkpoints(args)
     save_params(args)
     return args
 
 
+def reset_checkpoints(args):
+    """Start a fresh run: drop every checkpoint a previous run left in this output folder.
+
+    Done before .params is saved, so a .params written by this version always comes with
+    an (empty) checkpoint store, and no old sample checkpoint can outlive it.
+    """
+    for sample in args.input_data.samples:
+        shutil.rmtree(sample.checkpoint_dir, ignore_errors=True)
+    run_dir = run_checkpoint_dir(args.output)
+    CheckpointStore(run_dir, resume=False).reset()
+    # saved in .params below; --resume checks it against the record
+    args.checkpoint_run_id = write_run_record(run_dir, args._version)
+
+
+def _warn_about_unusable_bam_outputs(args):
+    """Say up front when a requested BAM output cannot be produced, rather than mid-run."""
+    if not args.mode.needs_pcr_deduplication():
+        for output_type in ("tagged_bam", "deduplicated_bam"):
+            if output_type in args.large_output:
+                logger.warning("--large_output %s has no effect in %s mode, which has no barcodes "
+                               "or UMIs; it will be skipped" % (output_type, args.mode.name))
+    elif "tagged_bam" in args.large_output and getattr(args, 'barcoded_bam', False):
+        logger.warning("--large_output tagged_bam is redundant with --barcoded_bam: those "
+                       "alignments already carry the tags; it will be skipped")
+
+
 def load_previous_run(args):
     logger.info("Loading parameters from the previous run")
-    logger.error("Only --output/--threads/--debug/--high_memory are compatible with --resume option")
+    logger.info("Only --output/--threads/--debug/--high_memory/--keep_tmp are compatible with --resume option")
     unpickler = pickle.Unpickler(open(args.param_file, "rb"), fix_imports=False)
     loaded_args = unpickler.load()
 
@@ -582,6 +692,10 @@ def save_params(args):
             else:
                 updated_specs.append(spec)
         args.read_group = updated_specs
+
+    polya_name, sep, polya_file = args.polya_trimmed.partition(":")
+    if sep and polya_name in (PolyATrimmed.list.name, PolyATrimmed.flnc.name) and polya_file:
+        args.polya_trimmed = polya_name + ":" + os.path.abspath(polya_file)
 
     pickler = pickle.Pickler(open(args.param_file, "wb"),  -1)
     pickler.dump(args)
@@ -674,6 +788,17 @@ def _validate_data_type_and_input(args):
     return True
 
 
+def _reject_reserved_sample_names(args) -> bool:
+    # the run-level checkpoint store is <output>/checkpoints and is wiped on a fresh run
+    run_store_dir = os.path.normpath(run_checkpoint_dir(args.output))
+    for sample in args.input_data.samples:
+        if os.path.normpath(sample.out_dir) == run_store_dir:
+            logger.error("Experiment name '%s' is reserved, please choose a different prefix or name"
+                         % os.path.basename(run_store_dir))
+            return False
+    return True
+
+
 def _validate_alignment_options(args):
     if args.aligner is not None and args.aligner not in SUPPORTED_ALIGNERS:
         logger.error(" Unsupported aligner " + args.aligner + ", choose one of: " + " ".join(SUPPORTED_ALIGNERS))
@@ -715,54 +840,47 @@ def _dedup_read_group_specs(args):
         args.read_group = updated_specs
 
 
-def _validate_barcode_calling(args):
-    args.umi_length = 0
-    if not args.mode.needs_barcode_calling():
+def _reject_splitting_aligned_input(args):
+    """Refuse to split molecules when the reads are already aligned.
+
+    Splitting rewrites each read into its constituent cDNAs, so the pieces have to be aligned
+    afresh -- but supplying a BAM says "do not map". The two requests contradict each other,
+    and either way of guessing silently gives the user something they did not ask for, so make
+    them choose.
+    """
+    if not args.split_molecules or args.input_data.input_type.needs_mapping():
         return
-    barcode_sources = sum([bool(args.barcode_whitelist), bool(args.barcoded_reads), bool(args.barcoded_bam)])
-    if barcode_sources > 1:
-        logger.critical("Options --barcode_whitelist, --barcoded_reads, and --barcoded_bam are mutually exclusive")
-        sys.exit(IsoQuantExitCode.INVALID_PARAMETER)
-    if args.mode == IsoQuantMode.custom_sc:
-        if not any([args.molecule, args.barcoded_reads, args.barcoded_bam]):
-            logger.critical("custom_sc mode requires --molecule, --barcoded_reads, or --barcoded_bam")
-            sys.exit(IsoQuantExitCode.BARCODE_WHITELIST_MISSING)
-    elif not any([args.barcode_whitelist, args.barcoded_reads, args.barcoded_bam]):
-        logger.critical("You have chosen single-cell/spatial mode %s, please specify barcode whitelist, "
-                        "file with barcoded reads, or --barcoded_bam" % args.mode.name)
-        sys.exit(IsoQuantExitCode.BARCODE_WHITELIST_MISSING)
-    if args.barcoded_bam:
-        args.umi_length = _detect_umi_length_from_bam(args.input_data.samples[0].file_list[0][0], args.umi_tag)
-    else:
-        args.umi_length = get_umi_length(args.mode)
+    logger.critical("Reads cannot be split into separate molecules when they are already "
+                    "aligned (%s input): the split molecules would have to be mapped again. "
+                    "Provide the raw reads instead, or use --split_molecules %s to analyse "
+                    "the alignments as they are."
+                    % (args.input_data.input_type.name, SPLIT_MOLECULES_FALSE))
+    sys.exit(IsoQuantExitCode.INCOMPATIBLE_OPTIONS)
 
 
 def check_input_params(args):
     if not _validate_data_type_and_input(args):
         return False
+    if not _reject_reserved_sample_names(args):
+        return False
     if not _validate_alignment_options(args):
         return False
 
     if not isinstance(args.mode, IsoQuantMode):
+        resolve_deprecated_mode(args)
         args.mode = IsoQuantMode[args.mode]
+    resolve_split_molecules(args)
+    _reject_splitting_aligned_input(args)
 
     # translate --analysis (and the deprecated stage flags) into internal booleans
     resolve_analyses(args)
 
     _apply_stage_warnings(args)
     _dedup_read_group_specs(args)
-    _validate_barcode_calling(args)
+    validate_barcode_calling(args)
 
     check_input_files(args)
     return True
-
-
-def _detect_umi_length_from_bam(bam_path: str, umi_tag: str) -> int:
-    with pysam.AlignmentFile(bam_path, "rb") as bam:
-        for read in bam:
-            if read.has_tag(umi_tag):
-                return len(read.get_tag(umi_tag))
-    return 0
 
 
 def check_bam_file(bam_path: str, check_index: bool = True):
@@ -776,13 +894,6 @@ def check_bam_file(bam_path: str, check_index: bool = True):
             logger.critical("BAM file " + bam_path + " is not indexed, run samtools sort and samtools index")
             sys.exit(IsoQuantExitCode.BAM_NOT_INDEXED)
         bamfile_in.close()
-
-
-def check_file_exists(file_path: str, description: str):
-    """Check that a file exists, exit with error if not."""
-    if not os.path.isfile(file_path):
-        logger.critical(f"{description} {file_path} does not exist")
-        sys.exit(IsoQuantExitCode.INPUT_FILE_NOT_FOUND)
 
 
 def extract_read_group_file_path(spec: str):
@@ -829,39 +940,6 @@ def _check_reference_and_reads(args):
                 check_bam_file(illumina, check_index=True)
 
 
-def _check_barcode_input_files(args):
-    # Check barcoded reads files (from args, not sample - sample.barcoded_reads is set later)
-    if hasattr(args, 'barcoded_reads') and args.barcoded_reads:
-        if isinstance(args.barcoded_reads, list):
-            for bc_file in args.barcoded_reads:
-                check_file_exists(bc_file, "Barcoded reads file")
-        else:
-            check_file_exists(args.barcoded_reads, "Barcoded reads file")
-
-    # Check molecule definition file
-    if hasattr(args, 'molecule') and args.molecule:
-        check_file_exists(args.molecule, "Molecule definition file")
-
-    # Check barcode whitelist files
-    if hasattr(args, 'barcode_whitelist') and args.barcode_whitelist:
-        for wl_file in args.barcode_whitelist:
-            check_file_exists(wl_file, "Barcode whitelist file")
-
-
-def _check_barcode_mapping_files(args):
-    from isoquant_lib.assignment.read_groups import parse_barcode2spot_spec
-
-    # Check barcode2spot file (parse spec to extract filename)
-    if hasattr(args, 'barcode2spot') and args.barcode2spot:
-        bc2spot_file, _, _ = parse_barcode2spot_spec(args.barcode2spot)
-        check_file_exists(bc2spot_file, "Barcode to spot mapping file")
-
-    # Check barcode2barcode file (parse spec to extract filename)
-    if hasattr(args, 'barcode2barcode') and args.barcode2barcode:
-        bc2bc_file, _, _ = parse_barcode2spot_spec(args.barcode2barcode)
-        check_file_exists(bc2bc_file, "Barcode to barcode mapping file")
-
-
 def _check_read_group_files(args):
     # Check read_group file specs
     if hasattr(args, 'read_group') and args.read_group:
@@ -902,8 +980,8 @@ def _check_annotation_files(args):
 
 def check_input_files(args):
     _check_reference_and_reads(args)
-    _check_barcode_input_files(args)
-    _check_barcode_mapping_files(args)
+    check_barcode_input_files(args)
+    check_barcode_mapping_files(args)
     _check_read_group_files(args)
     _check_annotation_files(args)
 
@@ -922,6 +1000,8 @@ def create_output_dirs(args):
                 logger.warning(sample_aux_dir + " folder already exists, some files may be overwritten")
         else:
             os.makedirs(sample_aux_dir)
+        os.makedirs(sample.checkpoint_dir, exist_ok=True)
+        os.makedirs(sample.chr_fragment_dir, exist_ok=True)
 
 
 def set_logger(args):
@@ -1081,6 +1161,30 @@ def set_splice_correction_options(args):
     args.correct_microintron_retention = strategy.microintron_retention
 
 
+def parse_polya_trimmed(value: str) -> Tuple[PolyATrimmed, Optional[str], Optional[str]]:
+    """Parse --polya_trimmed name[:value]; returns the mode, BAM tag and file. Raises ValueError."""
+    name, sep, option_value = value.partition(":")
+    if name not in PolyATrimmed.__members__:
+        raise ValueError("unknown value %s, use one of none, all, stranded, tag:<TAG>, list:<FILE>, flnc:<FILE>"
+                         % name)
+    mode = PolyATrimmed[name]
+    if not mode.uses_external_source():
+        if sep:
+            raise ValueError("%s does not take a value" % name)
+        return mode, None, None
+    if not option_value:
+        raise ValueError("%s requires a value, e.g. %s:%s" % (name, name, "pt" if mode == PolyATrimmed.tag else "FILE"))
+    if mode == PolyATrimmed.tag:
+        return mode, option_value, None
+
+    if not os.path.isfile(option_value):
+        raise ValueError("file %s does not exist" % option_value)
+    file_name = os.path.abspath(option_value)
+    if mode == PolyATrimmed.flnc:
+        check_flnc_report(file_name)
+    return mode, None, file_name
+
+
 def set_model_construction_options(args):
     ModelConstructionStrategy = namedtuple('ModelConstructionStrategy',
                                            ('min_novel_intron_count',
@@ -1152,7 +1256,12 @@ def set_model_construction_options(args):
     args.require_monointronic_polya = strategy.require_monointronic_polya
     args.require_monoexonic_polya = strategy.require_monoexonic_polya
     args.polya_requirement_strategy = PolyAUsageStrategies[args.polya_requirement]
-    args.polya_trimmed = PolyATrimmed[args.polya_trimmed]
+    try:
+        args.polya_trimmed, args.polya_trimmed_tag, args.polya_trimmed_file = \
+            parse_polya_trimmed(args.polya_trimmed)
+    except ValueError as e:
+        logger.critical("Incorrect --polya_trimmed value: %s" % str(e))
+        sys.exit(IsoQuantExitCode.INVALID_PARAMETER)
     args.report_canonical_strategy = StrandnessReportingLevel[args.report_canonical]
     if args.report_canonical_strategy == StrandnessReportingLevel.auto:
         args.report_canonical_strategy = strategy.report_canonical
@@ -1230,85 +1339,23 @@ def prepare_reference_genome(args):
         args.reference = gunzipped_reference
 
 
-class BarcodeCallingArgs:
-    def __init__(self, input, barcode_whitelist, mode, output, out_fasta, tmp_dir, threads,
-                 molecule: str = None):
-        self.input = input  # Can be a single file (str) or list of files
-        self.barcodes = barcode_whitelist
-        self.mode = mode
-        self.output_tsv = output  # Can be a single filename (str) or list of filenames
-        self.out_fasta = out_fasta  # Can be a single filename (str), list of filenames, or None
-        self.tmp_dir = tmp_dir
-        self.threads = threads
-        self.molecule = molecule
-
-
-def call_barcodes(args):
-    if args.barcoded_bam:
-        logger.info("Barcodes will be extracted from BAM tags (%s/%s)" % (args.barcode_tag, args.umi_tag))
+def warn_about_missing_polya_tag(args) -> None:
+    """--polya_trimmed tag:X silently falls back to sequence-based detection when the alignments lack the tag."""
+    if args.polya_trimmed != PolyATrimmed.tag or args.input_data.input_type != InputDataType.bam:
         return
-    if args.barcoded_reads:
-        # TODO barcoded files via YAML
-        args.input_data.samples[0].barcoded_reads = args.barcoded_reads
-        return
+    tag = args.polya_trimmed_tag
     for sample in args.input_data.samples:
-        # Collect all input files for this sample
-        input_files = [files[0] for files in sample.file_list]
-        output_barcodes_list = [sample.barcodes_tsv + "_%d.tsv" % i for i in range(len(input_files))]
-        barcodes_done_list = [sample.barcodes_done + "_%d.tsv" % i for i in range(len(input_files))]
-
-        output_fasta_list = None
-        new_reads = []
-        if args.mode.produces_new_fasta():
-            output_fasta_list = [sample.split_reads_fasta + "_%d.fa" % i for i in range(len(input_files))]
-            new_reads = [[fasta] for fasta in output_fasta_list]
-
-        # Check if all files were already processed during resume
-        all_done = all(os.path.exists(done) for done in barcodes_done_list)
-        if all_done and args.resume:
-            logger.info("Barcodes were called during the previous run, skipping")
-            sample.barcoded_reads.extend(output_barcodes_list)
-            if args.mode.produces_new_fasta():
-                sample.file_list = new_reads
-            continue
-
-        # Remove existing done markers
-        for barcodes_done in barcodes_done_list:
-            if os.path.exists(barcodes_done):
-                os.remove(barcodes_done)
-
-            bc_threads = 1 if args.mode.enforces_single_thread() else args.threads
-            bc_args = BarcodeCallingArgs(input_files, args.barcode_whitelist, args.mode,
-                                         output_barcodes_list, output_fasta_list, sample.aux_dir, bc_threads,
-                                         molecule=getattr(args, 'molecule', None))
-            # Launching barcode calling in a separate process has the following reason:
-            # Read chunks are not cleared by the GC in the end of barcode calling, leaving the main
-            # IsoQuant process to consume ~2,5 GB even when barcode calling is done.
-            # Once 16 child processes are created later, IsoQuant instantly takes threads x 2,5 GB for nothing.
-            log_file, log_level = _get_log_params()
-            with ProcessPoolExecutor(max_workers=1,
-                                     initializer=setup_worker_logging,
-                                     initargs=(log_file, log_level)) as proc:
-                logger.info("Detecting barcodes for %d file(s)" % len(input_files))
-                if bc_threads == 1:
-                    future_res = proc.submit(process_single_thread, bc_args)
-                else:
-                    future_res = proc.submit(process_in_parallel, bc_args)
-
-            concurrent.futures.wait([future_res],  return_when=concurrent.futures.ALL_COMPLETED)
-            if future_res.exception() is not None:
-                raise future_res.exception()
-
-        # Mark all files as done and add to barcoded_reads
-        for i, (input_file, output_barcodes, barcodes_done) in enumerate(zip(input_files, output_barcodes_list, barcodes_done_list)):
-            sample.barcoded_reads.append(output_barcodes)
-            open(barcodes_done, "w").close()
-            logger.info("Processed %s, barcodes are stored in %s" % (input_file, output_barcodes))
-
-        if args.mode.produces_new_fasta():
-            logger.info("Reads were split during barcode calling")
-            logger.info("The following files will be used instead of original reads %s " % ", ".join(map(lambda x: x[0], new_reads)))
-            sample.file_list = new_reads
+        for lib in sample.file_list:
+            for bam_file in lib:
+                tagged, checked = count_tagged_alignments(bam_file, tag)
+                if checked == 0 or tagged > 0:
+                    continue
+                logger.warning("None of the first %d primary alignments in %s carry the %s tag, "
+                               "--polya_trimmed tag:%s will have no effect for this file and polyA tails "
+                               "will be detected from read sequences only" % (checked, bam_file, tag, tag))
+                logger.warning("IsoQuant keeps read tags when aligning an unaligned BAM or FASTQ with SAM tags "
+                               "in read headers (rerun with --clean_start if the alignment is from an earlier run); "
+                               "when aligning yourself, use e.g. samtools fastq -T %s | minimap2 -y" % tag)
 
 
 def run_pipeline(args):
@@ -1341,13 +1388,16 @@ def run_pipeline(args):
         logger.info("Isoform assignment step is skipped because --run-aligner-only option was used")
         return
 
+    warn_about_missing_polya_tag(args)
+
     # run isoform assignment
     dataset_processor = DatasetProcessor(args)
     dataset_processor.process_all_samples(args.input_data)
 
+    run_checkpoints = CheckpointStore(run_checkpoint_dir(args.output), args.resume)
     # aggregate counts for all samples
-    if len(args.input_data.samples) > 1 and args.genedb and args.run_quantification:
-        combine_counts(args.input_data, args.output)
+    run_stage(run_checkpoints, "combine_counts", run=lambda: combine_counts(args.input_data, args.output),
+              enabled=len(args.input_data.samples) > 1 and bool(args.genedb) and args.run_quantification)
 
     # Run fusion detection after isoform detection when fusion is enabled
     if getattr(args, "fusion", False):
@@ -1357,17 +1407,22 @@ def run_pipeline(args):
             logger.warning("Fusion detection requires --genedb; skipping")
         elif not bam_files:
             logger.warning("No BAM files available for fusion detection; skipping")
+        elif not fusion_pending(args.input_data.samples, run_checkpoints):
+            logger.info("Fusion detection was done for every sample during the previous run, skipping")
         else:
             try:
                 from isoquant_lib.fusion.fusion_detector import FusionDetector
                 fd = FusionDetector(bam_files[0], args.genedb, reference_fasta=args.reference)
-                summary = run_fusion_detection_on_samples(fd, args.input_data.samples)
+            except Exception as e:
+                logger.warning("Fusion detection could not be initialised and was skipped: %s" % str(e))
+                logger.debug("Traceback:", exc_info=True)
+            else:
+                # detection failures are handled per sample inside (best effort, the sample stays
+                # retryable); a failure to write a checkpoint is not, and aborts the run
+                summary = run_fusion_detection_on_samples(fd, args.input_data.samples, run_checkpoints)
                 logger.info("Fusion detection summary: %d total, %d successful, %d failed" %
                             (summary["total"], summary["successful"], summary["failed"]))
                 logger.info(" === Fusion detection finished === ")
-            except Exception as e:
-                logger.warning("Fusion detection encountered an error and was skipped: %s" % str(e))
-                logger.debug("Traceback:", exc_info=True)
 
     logger.info(" === IsoQuant pipeline finished === ")
 

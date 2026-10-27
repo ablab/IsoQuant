@@ -1,0 +1,76 @@
+name: Mouse.PB_simulated.reduced_db
+output: /abga/work/andreyp/ci_isoquant/output
+run_type: transcripts,quantification_known,quantification_novel,quantification_genes,performance
+genome: /abga/work/andreyp/data/reference/mouse/GRCm39.primary_assembly.genome.fa
+genedb: /abga/work/andreyp/ci_isoquant/data/mouse/mouse.gencode.M26.spatial.20percent.reduced.gtf
+bam: /abga/work/andreyp/ci_isoquant/data/mouse/Mouse.PB.simulated.sorted.bam
+datatype: pacbio
+isoquant_options: '"-t 12 --complete_genedb --force --high_memory "'
+reduced_db: /abga/work/andreyp/ci_isoquant/data/mouse/mouse.gencode.M26.spatial.20percent
+reference_tpm: /abga/work/andreyp/ci_isoquant/data/mouse/Mouse.PB.simulated.counts.tsv
+reference_gene_tpm: /abga/work/andreyp/ci_isoquant/data/mouse/Mouse.PB.simulated.gene_counts.tsv
+baselines:
+  transcripts:
+    full_recall: 94.0
+    full_precision: 98.6
+    known_recall: 96.5
+    known_precision: 99.5
+    novel_recall: 77.5
+    novel_precision: 92.3
+  transcripts_td50:
+    full_recall: 93.8
+    full_precision: 98.5
+    known_recall: 96.5
+    known_precision: 99.5
+    novel_recall: 77.1
+    novel_precision: 91.8
+  transcripts_td10:
+    full_recall: 92.6
+    full_precision: 97.2
+    known_recall: 96.5
+    known_precision: 99.4
+    novel_recall: 69.3
+    novel_precision: 82.6
+  quantification_ref:
+    reported_overlap: 29696.0
+    corr_overlap: 0.9411
+    good_matches_overlap: 447.0
+    fair_matches_overlap: 1162.0
+    false_reports_overlap: 0.0
+    missed_overlap: 677.0
+    reported_full: 29947.0
+    corr_full: 0.8997
+    good_matches_full: 447.0
+    fair_matches_full: 1162.0
+    false_reports_full: 251.0
+    missed_full: 5988.0
+  quantification_novel:
+    reported_overlap: 33297.0
+    corr_overlap: 0.9874
+    good_matches_overlap: 31291.0
+    fair_matches_overlap: 31702.0
+    false_reports_overlap: 0.0
+    missed_overlap: 0.0
+    reported_full: 33792.0
+    corr_full: 0.8507
+    good_matches_full: 31291.0
+    fair_matches_full: 31702.0
+    false_reports_full: 495.0
+    missed_full: 2387.0
+  quantification_gene:
+    reported_overlap: 19836.0
+    corr_overlap: 0.9197
+    good_matches_overlap: 575.0
+    fair_matches_overlap: 18048.0
+    false_reports_overlap: 0.0
+    missed_overlap: 1568.0
+    reported_full: 19877.0
+    corr_full: 0.9197
+    good_matches_full: 575.0
+    fair_matches_full: 18048.0
+    false_reports_full: 41.0
+    missed_full: 1568.0
+  performance:
+    max_rss: 6591913984.0
+    cpu_time: 5039.0
+    clock_time: 608.0

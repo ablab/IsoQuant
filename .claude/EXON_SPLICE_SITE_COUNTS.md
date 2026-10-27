@@ -3,7 +3,7 @@
 Region-based exon **splice-site** quantification: for each read, records whether it
 demonstrates a candidate exon's splice sites **fully**, **only on the left**, or
 **only on the right**, plus per-region **exclusion** and **ambiguous** outcomes.
-Runs under `--count_exons` alongside `JointExonCounter` (default `exon_counts`) and
+Runs under `--count_exons` alongside `ExonUsageCounter` (default `exon_counts`) and
 `IntronCounter` (`splice_junction_counts`). Originally specced (single-cell only) as
 `AlternativeExonCounter` / `alternative_exon`; generalized and renamed.
 

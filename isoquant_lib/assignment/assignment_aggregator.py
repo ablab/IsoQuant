@@ -10,7 +10,7 @@ import logging
 from isoquant_lib.utils.stats import EnumStats
 from isoquant_lib.quantification.long_read_counter import (
     ExonCounter,
-    JointExonCounter,
+    ExonUsageCounter,
     ExonSpliceSiteCounter,
     IntronCounter,
     IntronRetentionCounter,
@@ -19,6 +19,9 @@ from isoquant_lib.quantification.long_read_counter import (
     create_transcript_counter,
 )
 from isoquant_lib.terminal_prediction.terminal_counter import PolyACounter, TSSCounter
+from isoquant_lib.quantification.rna_velocity_counter import RNAVelocityCounter
+from isoquant_lib.assignment.read_groups import get_grouping_pool_types
+from isoquant_lib.modes import IsoQuantMode
 from .assignment_io import (
     IOSupport,
     BEDPrinter,
@@ -35,8 +38,14 @@ logger = logging.getLogger('IsoQuant')
 
 
 class ReadAssignmentAggregator:
-    def __init__(self, args, sample, string_pools, gffutils_db=None, chr_id=None, gzipped=False, grouping_strategy_names=None):
+    def __init__(self, args, sample, string_pools, gffutils_db=None, chr_id=None, gzipped=False, grouping_strategy_names=None,
+                 for_merge: bool = False):
+        # for_merge=True is the merge driver's mode: no printer is opened and no counter
+        # output is emptied, so building the aggregator has no filesystem side effects and
+        # a resumed merge cannot empty an output that was already finished. Otherwise this
+        # is a counting (per-chromosome) aggregator, which owns and empties its outputs.
         self.args = args
+        self.for_merge = for_merge
         self.string_pools = string_pools
         self.grouping_strategy_names = grouping_strategy_names if grouping_strategy_names else ["default"]
         self.common_header = "# Command line: " + args._cmd_line + "\n# IsoQuant version: " + args._version + "\n"
@@ -54,11 +63,35 @@ class ReadAssignmentAggregator:
         self._init_ungrouped_counters(sample, chr_id)
         self._init_grouped_counters(sample, chr_id)
         self._init_grouped_model_counters(sample, chr_id)
+        if not self.for_merge:
+            self.empty_counter_outputs()
+
+    def all_counters(self) -> CompositeCounter:
+        return CompositeCounter(self.global_counter.counters + self.transcript_model_global_counter.counters +
+                                self.gene_model_global_counter.counters)
+
+    def empty_counter_outputs(self) -> None:
+        """Empty every file the counters append to, once, before counting.
+
+        Done here and not in the counter constructors, so that a new counter is safe by
+        default: the merge builds the same counters for outputs that may be finished
+        already (see .claude/RESUME_CHECKPOINTS.md) and must not touch them.
+        """
+        for path in self.all_counters().files_to_empty_before_counting():
+            open(path, "w").close()
 
     # ------------------------------------------------------------------ printers
 
     def _init_printers(self, sample, chr_id, gzipped):
         printer_list = []
+        if self.for_merge:
+            # printers open (and empty) their file when built, so the merge builds its own
+            self.corrected_bed_printer = None
+            self.read_info_printer = None
+            self.basic_printer = None
+            self.t2t_sqanti_printer = VoidTranscriptPrinter()
+            self.global_printer = ReadAssignmentCompositePrinter(printer_list)
+            return
         self.corrected_bed_printer = self._make_corrected_bed_printer(sample, chr_id, gzipped, printer_list)
         self.read_info_printer = self._make_read_info_printer(sample, chr_id, gzipped, printer_list)
         self.basic_printer = self._make_basic_printer(sample, chr_id, gzipped, printer_list)
@@ -91,7 +124,6 @@ class ReadAssignmentAggregator:
         assigned_tsv_path = sample.get_assigned_tsv_file(chr_id) if chr_id else sample.out_assigned_tsv
         printer = BasicTSVAssignmentPrinter(assigned_tsv_path, self.args, self.io_support,
                                             additional_header=self.common_header, gzipped=gzipped)
-        sample.out_assigned_tsv_result = printer.output_file_name
         printer_list.append(printer)
         return printer
 
@@ -149,8 +181,9 @@ class ReadAssignmentAggregator:
         exon_splice_site_counts_path = (sample.get_exon_splice_site_counts_file(chr_id)
                                         if chr_id else sample.out_exon_splice_site_counts_tsv)
         # string_pools=None means ungrouped counting
-        # region-based counts are the default "exon" output now
-        self.exon_counter = JointExonCounter(exon_counts_path)
+        # per-exon usage counts are the default "exon" output
+        self.exon_counter = ExonUsageCounter(exon_counts_path, delta=self.args.delta,
+                                             minimal_exon_overlap=self.args.minimal_exon_overlap)
         self.intron_counter = IntronCounter(intron_counts_path)
         self.exon_splice_site_counter = ExonSpliceSiteCounter(
             exon_splice_site_counts_path,
@@ -193,6 +226,10 @@ class ReadAssignmentAggregator:
     def _init_grouped_counters(self, sample, chr_id):
         if not (self.args.read_group and self.args.genedb):
             return
+        # Pool type per grouping strategy (index-aligned with
+        # grouping_strategy_names); used to restrict RNA velocity to
+        # cell-barcode groupings.
+        grouping_pool_types = get_grouping_pool_types(self.args)
         for group_idx, strategy_name in enumerate(self.grouping_strategy_names):
             if self.args.run_quantification:
                 self._add_grouped_quant_counters(sample, chr_id, group_idx, strategy_name)
@@ -201,6 +238,8 @@ class ReadAssignmentAggregator:
             self._add_grouped_terminal_counters(sample, chr_id, group_idx, strategy_name)
             if self.args.count_intron_retentions:
                 self._add_grouped_ir_counter(sample, chr_id, group_idx, strategy_name)
+            self._add_grouped_velocity_counter(sample, chr_id, group_idx, strategy_name,
+                                               grouping_pool_types)
 
     def _add_grouped_quant_counters(self, sample, chr_id, group_idx, strategy_name):
         if chr_id:
@@ -232,9 +271,10 @@ class ReadAssignmentAggregator:
             exon_out_file = f"{sample.out_exon_grouped_counts_tsv}_{strategy_name}"
             intron_out_file = f"{sample.out_intron_grouped_counts_tsv}_{strategy_name}"
             exon_splice_site_out_file = f"{sample.out_exon_splice_site_grouped_counts_tsv}_{strategy_name}"
-        # region-based counts are the default "exon" output now
-        exon_counter = JointExonCounter(exon_out_file,
-                                        string_pools=self.string_pools, group_index=group_idx)
+        # per-exon usage counts are the default "exon" output
+        exon_counter = ExonUsageCounter(exon_out_file, string_pools=self.string_pools, group_index=group_idx,
+                                        delta=self.args.delta,
+                                        minimal_exon_overlap=self.args.minimal_exon_overlap)
         intron_counter = IntronCounter(intron_out_file, string_pools=self.string_pools, group_index=group_idx)
         exon_splice_site_counter = ExonSpliceSiteCounter(
             exon_splice_site_out_file, string_pools=self.string_pools, group_index=group_idx,
@@ -273,6 +313,26 @@ class ReadAssignmentAggregator:
                                              string_pools=self.string_pools,
                                              group_index=group_idx)
             self.global_counter.add_counter(grouped_tss_counter)
+
+    def _add_grouped_velocity_counter(self, sample, chr_id, group_idx, strategy_name,
+                                      grouping_pool_types):
+        # RNA velocity (spliced/unspliced) counts. Only meaningful for
+        # cell-barcode groupings (barcode / barcode_spot / barcode_barcode);
+        # groupings like file_name or BAM tags would collapse the whole
+        # sample into a single "cell". Each strategy writes to its own
+        # path -- otherwise grouped counters would share one file and the
+        # merge stage would delete the per-chr fragment twice (FileNotFoundError).
+        is_barcode_grouping = grouping_pool_types.get(group_idx, "").startswith("barcode")
+        if self.args.mode == IsoQuantMode.bulk or not is_barcode_grouping:
+            return
+        if chr_id:
+            rna_velocity_path = sample.get_grouped_counts_file(chr_id, "RNA_velocity", strategy_name)
+        else:
+            rna_velocity_path = f"{sample.out_rna_velocity_grouped}_{strategy_name}"
+        rna_velocity_counter = RNAVelocityCounter(self.args, rna_velocity_path,
+                                                  string_pools=self.string_pools,
+                                                  group_index=group_idx)
+        self.global_counter.add_counter(rna_velocity_counter)
 
     def _add_grouped_ir_counter(self, sample, chr_id, group_idx, strategy_name):
         if chr_id:

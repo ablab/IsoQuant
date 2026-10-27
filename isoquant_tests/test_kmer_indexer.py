@@ -4,9 +4,10 @@
 # See file LICENSE for details.
 ############################################################################
 
+import numpy
 import pytest
 from isoquant_lib.barcode_calling.indexers import KmerIndexer, Dict2BitKmerIndexer, ArrayKmerIndexer, Array2BitKmerIndexer
-from isoquant_lib.barcode_calling.common import str_to_2bit, batch_str_to_2bit
+from isoquant_lib.barcode_calling.common import str_to_2bit, batch_str_to_2bit, NUCL2BIN
 
 
 class TestKmerIndexer:
@@ -119,6 +120,35 @@ class TestKmerIndexer:
         assert isinstance(seq, str)
         assert isinstance(count, int)
         assert isinstance(positions, list)
+
+    def test_query_does_not_grow_index(self):
+        """Querying must never add k-mers to the index.
+
+        The index is shared by every read a worker process ever sees, so a lookup that
+        inserts foreign k-mers grows without bound. Searching a constant element across
+        an entire cDNA once cost 10.8 GB per worker this way.
+        """
+        tso = "CCCATGTACTCTGCGTTGATACCACTGCTT"
+        indexer = KmerIndexer([tso], kmer_size=13)
+        size_after_build = len(indexer.index)
+
+        # a long stretch of sequence sharing no 13-mer with the pattern
+        foreign = "ACGT" * 500
+        indexer.get_occurrences(foreign)
+        indexer.get_occurrences_substr(foreign, 0, len(foreign) - 1)
+
+        assert len(indexer.index) == size_after_build
+
+    def test_substr_matches_full_query(self):
+        """get_occurrences_substr over the whole sequence agrees with get_occurrences."""
+        barcodes = ["ACTGACTGAA", "TGCATGCATT"]
+        indexer = KmerIndexer(barcodes, kmer_size=4)
+        sequence = "GGACTGACTGAAGG"
+
+        full = indexer.get_occurrences(sequence)
+        substr = indexer.get_occurrences_substr(sequence, 0, len(sequence) - 1)
+
+        assert full == substr
 
 
 class TestDict2BitKmerIndexer:
@@ -275,22 +305,29 @@ class TestArrayKmerIndexer:
         assert len(indexer.index) == 64  # 4^3
 
     def test_binary_encoding(self):
-        """Test nucleotide to binary conversion."""
+        """The one 2-bit alphabet, shared with str_to_2bit and friends."""
+        assert ArrayKmerIndexer.NUCL2BIN is NUCL2BIN
         assert ArrayKmerIndexer.NUCL2BIN['A'] == 0
         assert ArrayKmerIndexer.NUCL2BIN['C'] == 1
-        assert ArrayKmerIndexer.NUCL2BIN['G'] == 2
-        assert ArrayKmerIndexer.NUCL2BIN['T'] == 3
+        assert ArrayKmerIndexer.NUCL2BIN['T'] == 2
+        assert ArrayKmerIndexer.NUCL2BIN['G'] == 3
+
+    def test_encoding_agrees_with_str_to_2bit(self):
+        """Two encodings of the same base used to disagree; codes are now interchangeable."""
+        indexer = ArrayKmerIndexer([], kmer_size=4)
+        for seq in ("ACGT", "TTTT", "GATC", "CAGT"):
+            assert list(indexer._get_kmer_indexes(seq)) == [str_to_2bit(seq)]
 
     def test_get_kmer_indexes(self):
         """Test k-mer index generation."""
         indexer = ArrayKmerIndexer([], kmer_size=2)
         # "AC" = 00 01 = 1
-        # "CT" = 01 11 = 7
+        # "CT" = 01 10 = 6
         kmer_idxs = list(indexer._get_kmer_indexes("ACT"))
 
         assert len(kmer_idxs) == 2
         assert kmer_idxs[0] == 1  # AC
-        assert kmer_idxs[1] == 7  # CT
+        assert kmer_idxs[1] == 6  # CT
 
     def test_exact_match(self):
         """Test finding exact match."""
@@ -393,11 +430,44 @@ class TestArray2BitKmerIndexer:
         bin_seqs = [str_to_2bit(b) for b in barcodes]
         indexer = Array2BitKmerIndexer(bin_seqs, kmer_size=6, seq_len=25)
 
-        # Index should be flat list
-        assert isinstance(indexer.index, list)
-        # Index ranges should map to flat index
-        assert isinstance(indexer.index_ranges, list)
+        # Both are flat numpy arrays: boxing 2-bit codes as Python ints costs ~28 bytes
+        # each on top of the 8 the value needs, and index_ranges has 4^k + 1 entries
+        assert isinstance(indexer.index, numpy.ndarray)
+        assert indexer.index.ndim == 1
+        assert isinstance(indexer.index_ranges, numpy.ndarray)
+        assert indexer.index_ranges.ndim == 1
         assert len(indexer.index_ranges) == 4**6 + 1  # 4^k + 1
+        # ranges partition the flat index
+        assert indexer.index_ranges[0] == 0
+        assert indexer.index_ranges[-1] == len(indexer.index)
+        assert (numpy.diff(indexer.index_ranges) >= 0).all()
+
+    def test_accepts_any_iterable_of_codes(self):
+        """Callers hand over Python lists, numpy arrays and generators alike."""
+        barcodes = ["ACTGACTGACTGACTGACTGACTGA", "TTTTACTGACTGACTGACTGACTGA"]
+        codes = [str_to_2bit(b) for b in barcodes]
+        from_list = Array2BitKmerIndexer(codes, kmer_size=6, seq_len=25)
+        from_array = Array2BitKmerIndexer(numpy.array(codes, dtype=numpy.uint64),
+                                          kmer_size=6, seq_len=25)
+        from_generator = Array2BitKmerIndexer(iter(codes), kmer_size=6, seq_len=25)
+
+        for other in (from_array, from_generator):
+            assert other.total_sequences == from_list.total_sequences
+            assert (other.index == from_list.index).all()
+            assert (other.index_ranges == from_list.index_ranges).all()
+            assert other.get_occurrences(barcodes[0]) == from_list.get_occurrences(barcodes[0])
+
+    def test_occurrences_are_plain_ints(self):
+        """Numpy scalars leaking out would break bit_to_str's mixed-type shifts."""
+        barcodes = ["ACTGACTGACTGACTGACTGACTGA"]
+        indexer = Array2BitKmerIndexer([str_to_2bit(b) for b in barcodes],
+                                       kmer_size=6, seq_len=25)
+        results = indexer.get_occurrences(barcodes[0])
+        assert results
+        for seq, count, positions in results:
+            assert isinstance(seq, str)
+            assert type(count) is int
+            assert all(type(p) is int for p in positions)
 
 
 if __name__ == '__main__':

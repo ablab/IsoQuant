@@ -1,0 +1,16 @@
+name: Human.ONT_simulated.R9.uniform_cov
+output: /abga/work/andreyp/ci_isoquant/output
+run_type: assignment
+genome: /abga/work/andreyp/data/reference/human/GRCh38.chr.fa
+genedb: /abga/work/andreyp/data/reference/human/gencode.v36.annotation.db
+reads: /abga/work/andreyp/simulation/data/uniform_cov/Human.ONT_R9_SIRVs.uniform_cov_aligned_reads.fasta.gz
+datatype: ont
+isoquant_options: '"-t 16 --complete_genedb --no_model_construction --force "'
+baselines:
+  assignment:
+    mapping_precision: 99.1
+    mapping_recall: 94.01
+    assignment_precision: 99.02
+    assignment_recall: 90.55
+    overall_precision: 98.32
+    overall_recall: 85.56

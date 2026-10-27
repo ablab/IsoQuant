@@ -1,0 +1,12 @@
+name: SRIV.Set4.ONT_R10.opts3
+output: /abga/work/andreyp/ci_isoquant/output
+run_type: transcripts
+genome: /abga/work/andreyp/ci_isoquant/data/ref/SIRV4/SIRV_isoforms_multi-fasta_200709a.fasta
+genedb: /abga/work/andreyp/ci_isoquant/data/ref/SIRV4/SIRV.reduced.gtf
+reads: /abga/work/andreyp/data/sirvs/Lexogen.SIRVs.Set4.ONT_cDNA.R10.4.copy.fq
+datatype: ont
+isoquant_options: '" --force --use_secondary --complete_genedb --report_novel_unspliced
+  true --report_canonical all --polya_requirement never --transcript_quantification
+  unique_splicing_consistent --gene_quantification all --matching_strategy loose --splice_correction_strategy
+  none"'
+reduced_db: /abga/work/andreyp/ci_isoquant/data/ref/SIRV4/SIRV_isoforms_multi-fasta-annotation

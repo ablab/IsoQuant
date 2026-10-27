@@ -1,0 +1,14 @@
+name: Fusion.ONT_simulated
+output: /abga/work/andreyp/ci_isoquant/output
+run_type: fusion
+genome: /abga/work/andreyp/data/reference/human/GRCh38.primary_assembly.genome.fa
+genedb: /abga/work/andreyp/data/reference/human/gencode.v49.annotation.gtf.db
+bam: /abga/work/andreyp/ci_isoquant/data/fusion/Fusion.ONT_simulated_ont_simulated_reads_with_fusions_b5e4e6_a91892_2366a1.bam
+datatype: nanopore
+fusion_truth: /abga/work/andreyp/ci_isoquant/data/fusion/fusion_truth_pb.tsv
+isoquant_options: " -t 16 --complete_genedb --analysis fusion"
+baselines:
+  fusion:
+    sensitivity: 0.9189
+    precision: 0.9321
+    f1_score: 0.9254

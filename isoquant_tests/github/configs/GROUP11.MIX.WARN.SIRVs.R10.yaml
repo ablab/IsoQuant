@@ -1,0 +1,18 @@
+name: GROUP11.MIX.SIRVs.R10
+output: /abga/work/andreyp/ci_isoquant/output
+run_type: transcripts
+genome: /abga/work/andreyp/ci_isoquant/data/ref/SIRV4/SIRV_isoforms_multi-fasta_200709a.fasta
+genedb: /abga/work/andreyp/ci_isoquant/data/ref/SIRV4/SIRV_isoforms_multi-fasta-annotation.reduced.gtf
+bam: /abga/work/andreyp/ci_isoquant/data/groups/mix/SRIV.simulated_R10_no_trunc.group_SIRV1.bam
+  /abga/work/andreyp/ci_isoquant/data/groups/mix/SRIV.simulated_R10_no_trunc.group_SIRV2.bam
+  /abga/work/andreyp/ci_isoquant/data/groups/mix/SRIV.simulated_R10_no_trunc.group_SIRV3.bam
+  /abga/work/andreyp/ci_isoquant/data/groups/mix/SRIV.simulated_R10_no_trunc.group_SIRV4.bam
+  /abga/work/andreyp/ci_isoquant/data/groups/mix/SRIV.simulated_R10_no_trunc.group_SIRV5.bam
+  /abga/work/andreyp/ci_isoquant/data/groups/mix/SRIV.simulated_R10_no_trunc.group_SIRV6.bam
+  /abga/work/andreyp/ci_isoquant/data/groups/mix/SRIV.simulated_R10_no_trunc.group_SIRV7.bam
+datatype: ont
+isoquant_options: '"-t 8 --use_replicas false --complete_genedb --force --read_group
+  file_name tag:RG tag:CB file:/abga/work/andreyp/ci_isoquant/data/groups/mix/SRIV.simulated_R10_no_trunc.groups.csv:0:1,2:,
+  file:/abga/work/andreyp/ci_isoquant/data/groups/mix/SRIV.simulated_R10_no_trunc.groups.tsv:0:2
+  read_id:_ file_name read_id:_ tag:RG"'
+reduced_db: /abga/work/andreyp/ci_isoquant/data/ref/SIRV4/SIRV_isoforms_multi-fasta-annotation

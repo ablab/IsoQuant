@@ -18,8 +18,8 @@ trained offline with ``scripts/train_polya_tss_model.py``.
 
 import logging
 from pathlib import Path
-from typing import Optional
 import glob
+from typing import List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -33,7 +33,6 @@ from isoquant_lib.assignment.isoform_assignment import (
     ReadAssignmentType,
 )
 from isoquant_lib.quantification.long_read_counter import AbstractCounter
-from isoquant_lib.assignment.read_groups import AbstractReadGrouper
 from .terminal_peaks import (
     ANNOTATION_TOLERANCE,
     FEATURE_COLUMNS,
@@ -90,8 +89,7 @@ class TerminalCounter(AbstractCounter):
         self.output_tpm_file_name = None
         self.output_stats_file_name = None
         self.usable_file_name = None
-        # Clear any stale per-chr file before we start appending in dump().
-        open(self.output_file, "w").close()
+        # nothing is written here: the counting aggregator empties files_to_empty_before_counting()
 
         self.args = args
         self.string_pools = string_pools
@@ -111,8 +109,6 @@ class TerminalCounter(AbstractCounter):
         # requested CSV path.
         self._training_csv_path = (output_prefix + TRAINING_SUFFIX
                                    if self._collecting_training else None)
-        if self._training_csv_path:
-            open(self._training_csv_path, "w").close()
 
         # transcript_id -> {'chr', 'gene_id', 'data', 'annotated',
         #                   int_group_id -> list[int]}
@@ -123,10 +119,12 @@ class TerminalCounter(AbstractCounter):
         # emitted output independent of loader granularity (a transcript whose
         # reads span several gene blocks must not be split into partial rows).
         self._all_transcripts: dict = {}
-        # Genomic positions predicted for the most recently flushed gene, so
-        # transcript discovery can reuse them to refine intron-graph terminal
-        # vertices (set by flush()).
-        self.last_gene_predictions: list = []
+        # (transcript_id, genomic position) predicted for the most recently
+        # flushed gene, so transcript discovery can reuse them to refine
+        # intron-graph terminal vertices (set by flush()). The transcript id is
+        # kept so a prediction is only applied to its own transcript's terminal
+        # intron -- a gene block mixes several genes and both strands.
+        self.last_gene_predictions: List[Tuple[str, int]] = []
 
     @property
     def model(self) -> XGBClassifier:
@@ -154,6 +152,12 @@ class TerminalCounter(AbstractCounter):
 
     def get_output_file_handler(self):
         return open(self.output_file, "a")
+
+    def files_to_empty_before_counting(self) -> list:
+        # the per-chr training fragment is appended to as well
+        if self._training_csv_path:
+            return [self.output_file, self._training_csv_path]
+        return [self.output_file]
 
     # -- subclass hooks -------------------------------------------------------
 
@@ -224,11 +228,19 @@ class TerminalCounter(AbstractCounter):
         the accumulated reads are then merged into :attr:`_all_transcripts` so
         the emitted output is still computed once over each transcript's full
         histogram in :meth:`dump`. Grouped and training counters keep
-        accumulating across the chromosome and emit only in :meth:`dump`."""
+        accumulating across the chromosome and emit only in :meth:`dump`.
+
+        Each prediction is paired with the reference transcript it was computed
+        for. A gene block spans several genes (often on both strands), so a bare
+        position list lets one transcript's site be applied to a neighbour's
+        intron; the intron graph uses the transcript id to admit a prediction
+        only on that transcript's own terminal intron."""
         if not self.ignore_read_groups or self._collecting_training:
             return
         rows = self._predict_rows()
-        self.last_gene_predictions = rows['prediction'].tolist() if rows is not None else []
+        self.last_gene_predictions = (list(zip(rows['transcript_id'].tolist(),
+                                               rows['prediction'].tolist()))
+                                      if rows is not None else [])
         self._merge_into_all()
         self.transcripts = {}
 
@@ -496,17 +508,11 @@ class TerminalCounter(AbstractCounter):
                     row_dict[col] = peak[col]
                     
                 row_dict['counts_byGroup'] = count
-                row_dict['group_id'] = self._group_name(gid)
+                row_dict['group_id'] = self._get_group_name(gid)
                 
                 rows.append(row_dict)
         out = pd.DataFrame(rows, columns=self._output_columns())
         out.to_csv(self.output_file, sep="\t", index=False, mode="w", header=True)
-
-    def _group_name(self, group_id: int) -> str:
-        if self.string_pools is None:
-            return AbstractReadGrouper.default_group_id
-        pool = self.string_pools.get_read_group_pool(self.group_index)
-        return pool.get_str(group_id)
 
 
 class PolyACounter(TerminalCounter):

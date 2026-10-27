@@ -1,5 +1,26 @@
 # IsoQuant changelog
 
+## IsoQuant 4.1.0, 20 October 2026
+
+- New options for cell barcode calling:
+  - `--n_cells` to select cell barcodes from a large whitelist (e.g. a stock 10x whitelist), which significantly improves barcode calling recall;
+  - `--barcode_whitelist auto` to detect cell barcodes without a whitelist;
+  - `--split_molecules` to control splitting of concatenated cDNAs, replaces `tenX_v3_split`, `tenX_v2_split` and `stereoseq_nosplit` modes;
+- New `--polya_trimmed` values to use external poly-A tail information: `tag:<TAG>` (e.g. Dorado `pt` tag), `list:<FILE>` (list of read IDs) and `flnc:<FILE>` (`isoseq refine` report);
+- Spliced/unspliced counts for RNA velocity analysis in single-cell and spatial modes, including `.loom` output;
+- HTML report with run summary and QC statistics for every experiment;
+- New exon counts with independent exon quantification ([#426](https://github.com/ablab/IsoQuant/discussions/426));
+- Fixed intron retention counts, exclusion counts now correspond to reads with the intron spliced ([#426](https://github.com/ablab/IsoQuant/discussions/426));
+- Fixed a minor bug in UMI deduplication;
+- New BAM outputs for single-cell and spatial modes, set via `--large_output`:
+  - `tagged_bam` with barcode and UMI tags;
+  - `deduplicated_bam` containing only UMI-deduplicated alignments;
+- New `pacbio_all` preset for `--model_construction_strategy` for very sensitive transcript discovery (e.g. FLNCs);
+- Fixed structural categories in the SQANTI-like output ([#265](https://github.com/ablab/IsoQuant/issues/265));
+- Fixed polyA/TSS prediction in rare cases of overlapping genes;
+- Fixed crash with `--check_canonical` ([#425](https://github.com/ablab/IsoQuant/issues/425), [#427](https://github.com/ablab/IsoQuant/issues/427));
+- Reworked `--resume` option allowing resuming crashed runs (partial runs produced by previous versions cannot be resumed).
+
 ## Isoquant 4.0.0, 25 July 2026
 
 Major update with new functionality and output formats.

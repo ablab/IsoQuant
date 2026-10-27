@@ -1,0 +1,15 @@
+name: GROUP9.MTX2.SIRVs
+output: /abga/work/andreyp/ci_isoquant/output
+run_type: void
+genome: /abga/work/andreyp/ci_isoquant/data/ref/SIRV4/SIRV_isoforms_multi-fasta_200709a.fasta
+genedb: /abga/work/andreyp/ci_isoquant/data/ref/SIRV4/SIRV_isoforms_multi-fasta-annotation.reduced.gtf
+datatype: ont
+isoquant_options: '"-t 8 --complete_genedb --force --bam /abga/work/andreyp/ci_isoquant/data/groups/quick/Lexogen.SIRVs.Set4.ONT_cDNA.R10.1.bam
+  /abga/work/andreyp/ci_isoquant/data/groups/quick/Lexogen.SIRVs.Set4.ONT_cDNA.R10.2.bam
+  /abga/work/andreyp/ci_isoquant/data/groups/quick/Lexogen.SIRVs.Set4.ONT_cDNA.R10.3.bam
+  /abga/work/andreyp/ci_isoquant/data/groups/quick/Lexogen.SIRVs.Set4.ONT_cDNA.R10.4.bam
+  /abga/work/andreyp/ci_isoquant/data/groups/quick/Lexogen.SIRVs.Set4.ONT_cDNA.R10.5.bam
+  /abga/work/andreyp/ci_isoquant/data/groups/quick/Lexogen.SIRVs.Set4.ONT_cDNA.R10.6.bam
+  /abga/work/andreyp/ci_isoquant/data/groups/quick/Lexogen.SIRVs.Set4.ONT_cDNA.R10.7.bam  --count_exons
+  --counts_format matrix mtx "'
+check_input_files: gene_grouped_file_name_counts.linear.tsv transcript_grouped_file_name_counts.linear.tsv discovered_transcript_grouped_file_name_counts.linear.tsv gene_grouped_file_name_tpm.tsv transcript_grouped_file_name_tpm.tsv exon_grouped_file_name_counts.linear.tsv splice_junction_grouped_file_name_counts.linear.tsv gene_grouped_file_name_counts.matrix.mtx gene_grouped_file_name_counts.features.tsv gene_grouped_file_name_counts.barcodes.tsv transcript_grouped_file_name_counts.matrix.mtx transcript_grouped_file_name_counts.features.tsv transcript_grouped_file_name_counts.barcodes.tsv

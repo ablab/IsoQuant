@@ -1,0 +1,21 @@
+[
+  data format: "bam",
+  {
+    name: "YAML2.SIRVs.R10_1",
+    long read files: [
+      "Lexogen.SIRVs.Set4.ONT_cDNA.R10.4.grouped4.group0.bam",
+      "Lexogen.SIRVs.Set4.ONT_cDNA.R10.4.grouped4.group1.bam",
+    ]
+  },
+  {
+    name: "YAML2.SIRVs.R10_2",
+    long read files: [
+      "Lexogen.SIRVs.Set4.ONT_cDNA.R10.4.grouped4.group2.bam",
+      "Lexogen.SIRVs.Set4.ONT_cDNA.R10.4.grouped4.group3.bam"
+    ],
+    labels: [
+      "Sample1",
+      "Sample2"
+    ]
+  }
+]
