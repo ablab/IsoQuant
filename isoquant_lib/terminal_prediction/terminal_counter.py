@@ -462,10 +462,10 @@ class TerminalCounter(AbstractCounter):
     def _postprocess_predictions(self, result: pd.DataFrame) -> pd.DataFrame:
         return result
 
-    def _extra_columns(self) -> list[str]:
+    def _extra_columns(self):
         return []
 
-    def _output_columns(self) -> list[str]:
+    def _output_columns(self):
         base = list(EMPTY_COLUMNS) + self._extra_columns()
         if not self.ignore_read_groups:
             base.extend(['counts_byGroup', 'group_id'])
@@ -577,7 +577,7 @@ class TSSCounter(TerminalCounter):
             )
         return self._cage_df
 
-    def _extra_columns(self) -> list[str]:
+    def _extra_columns(self):
         if self._cage_path:
             return ['validated_by_cage', 'dist_to_closest_cage']
         return []
