@@ -476,25 +476,29 @@ class TerminalCounter(AbstractCounter):
         if not seen_groups:
             self._write_empty()
             return
-
+        extra_cols = self._extra_columns()
         rows = []
         for _, peak in result.iterrows():
             for gid in seen_groups:
                 count = self._counts_for_group(peak, gid)
                 if count == 0:
                     continue
-                rows.append({
+                row_dict = {
                     'chromosome': peak['chromosome'],
                     'transcript_id': peak['transcript_id'],
                     'gene_id': peak['gene_id'],
                     'prediction': peak['prediction'],
                     'counts': peak['counts'],
                     'flag': peak['flag'],
-                    'validated_by_cage': peak['validated_by_cage'],
-                    'dist_to_closest_cage': peak['dist_to_closest_cage'],
-                    'counts_byGroup': count,
-                    'group_id': self._group_name(gid),
-                })
+                }
+                
+                for col in extra_cols:
+                    row_dict[col] = peak[col]
+                    
+                row_dict['counts_byGroup'] = count
+                row_dict['group_id'] = self._group_name(gid)
+                
+                rows.append(row_dict)
         out = pd.DataFrame(rows, columns=self._output_columns())
         out.to_csv(self.output_file, sep="\t", index=False, mode="w", header=True)
 
