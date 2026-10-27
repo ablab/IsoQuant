@@ -601,6 +601,7 @@ class TSSCounter(TerminalCounter):
             result.loc[tss_sub.index, 'dist_to_closest_cage'] = min_distances
 
         result['validated_by_cage'] = (result['dist_to_closest_cage'] == 0)
+        result['dist_to_closest_cage'] = result['dist_to_closest_cage'].astype('Int64')
         return result
         
      
