@@ -110,6 +110,11 @@ Indicate that reads were poly-A trimmed. Possible values are:
 
 Note that IsoQuant still runs sequence-based polyA tail detection for every read. If the external information and the sequence disagree, the external information is used.
 
+`--illumina_bam`
+    Sorted and indexed BAM file(s) with short Illumina reads from the same sample. Short reads are used only for
+    correcting splice sites (and not for transcript discovery or quantification).
+    Can be used only together with `--bam` or `--fastq`, see [input](input.md).
+
 `--prefix` or `-p`
     Prefix for all output files and subfolder name. `OUT` if not set.
 
@@ -555,6 +560,18 @@ polyA tails are always required for 1/2-exon transcripts when using ONT data (th
 
 Note that polyA tails are always required for reporting novel unspliced isoforms. 
 
+`--novel_apa`
+    Report novel isoforms that have identical intron chain but distinct polyA sites (or TSS when `--fl_data` is set). 
+    By default, IsoQuant will report only one novel isoform with a certain intron chain. 
+    Known isoforms with the same intron chain and alternative polyA or transcript start sites will still be reported.
+
+`--no_splice_site_correction`
+    Disable canonical splice-site correction for novel transcript models. Reference junctions are not affected.
+
+`--use_replicas`
+    When several files are given for a single sample,
+    novel transcripts are required to be confirmed by reads from at least 2 files (replicas).
+    Set to `false` to disable this requirement. Default is `true`.
 
 
 ## Hidden options
@@ -599,6 +616,10 @@ We recommend _not_ to modify these options unless you are clearly aware of their
 `--high_memory`
     Cache read alignments instead for making several passes over a BAM file, noticeably increases RAM usage,
     but may improve running time when disk I/O is relatively slow.
+
+`--keep_tmp`
+    Do not remove temporary files in the end (e.g. binary read assignments in `aux/`); useful for debugging
+    and for reusing assignments via `--read_assignments`.
 
 
 #### Aligner settings

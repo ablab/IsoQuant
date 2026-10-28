@@ -15,12 +15,14 @@ python isoquant_visualize.py <output_directory> --gene_list <gene_list> [options
 ## Command line options
 
 * `output_directory` (required): Directory containing IsoQuant output files.
-* * `--gene_list` (required): Path to a .txt file containing a list of genes, each on its own line.
+* `--gene_list` (required): Path to a .txt file containing a list of genes, each on its own line.
 * `--viz_output`: Optional directory to save visualization output files. Defaults to the main output directory if not specified.
 * `--gtf`: Optional path to a GTF file if it cannot be extracted from the IsoQuant log.
 * `--counts`: Use counts instead of TPM files for visualization.
 * `--ref_only`: Use only reference transcript quantification instead of transcript model quantification.
 * `--filter_transcripts`: Filter transcripts by minimum value occurring in at least one condition.
+* `--find_genes [N]`: Rank genes by a combined rank of expression, expression difference and transcript usage deviance relative to the `wild_type` condition, and visualize the top N genes (default is 100).
+* `--known_genes_path`: Path to a file with known target genes (one per line), used together with `--find_genes` to mark known targets in the ranking.
 * `--read_group_strategy`: Grouping strategy whose grouped counts are visualized, named as it
 appears in the grouped counts file names (`SAMPLE_ID.gene_grouped_<strategy>_counts.tsv`), e.g.
 `file_name`, `barcode`, `tag_CB` for `--read_group tag:CB` or `file0_col1` for a grouping table.
