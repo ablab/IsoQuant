@@ -1,13 +1,21 @@
 name: User manual
 
+# The manual is built from the latest release tag, not from master, so it always
+# matches the released version. To publish documentation fixes for the current
+# release, move its tag onto the fixing commit (git tag -f vX.Y.Z && git push -f origin vX.Y.Z);
+# the uploaded release archive is unaffected.
 on:
   workflow_dispatch:
+    inputs:
+      ref:
+        description: "tag/branch to build the manual from (default: latest release tag)"
+        required: false
+        default: ""
+  release:
+    types: [published]
   push:
-    branches:
-      - master
-    paths:
-      - 'docs/**'
-      - 'mkdocs.yml'
+    tags:
+      - 'v*'
 
 permissions:
   contents: write
@@ -15,8 +23,21 @@ permissions:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
+      - name: Resolve documentation ref
+        run: |
+          ref="${{ github.event.inputs.ref }}"
+          if [ -z "$ref" ]; then
+            ref=$(gh release view --repo "${{ github.repository }}" --json tagName -q .tagName)
+          fi
+          echo "Building manual from $ref"
+          echo "DOCS_REF=$ref" >> "$GITHUB_ENV"
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.DOCS_REF }}
+          fetch-depth: 0
       - name: Configure Git Credentials
         run: |
           git config user.name github-actions[bot]
