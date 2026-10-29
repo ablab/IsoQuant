@@ -48,10 +48,15 @@ class GraphBasedConstructor:
         # the refined ends. A bare read_end / read_start (no polyA evidence, e.g.
         # a degraded ONT terminus) never triggers reclassification, so known
         # transcripts are not lost to noise.
-        if is_matching_assignment(assignment):
+        # An annotated isoform with exactly this intron chain always wins: the read assigner
+        # tolerates small intron shifts, so it may hand the path to a sibling whose ends fit
+        # better but whose splice site is a few bases off (NAGNAG), losing the exact isoform.
+        if intron_path in self.ctx.known_isoforms_in_graph:
+            matched_reference_id = self.ctx.select_known_isoform(self.ctx.known_isoforms_in_graph[intron_path],
+                                                                 self.ctx.path_storage.paths_to_reads[path],
+                                                                 transcript_range, assignment)
+        elif is_matching_assignment(assignment):
             matched_reference_id = assignment.isoform_matches[0].assigned_transcript
-        elif intron_path in self.ctx.known_isoforms_in_graph:
-            matched_reference_id = self.ctx.known_isoforms_in_graph[intron_path]
         else:
             return None
 
