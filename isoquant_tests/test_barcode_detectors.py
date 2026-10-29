@@ -27,6 +27,7 @@ from isoquant_lib.barcode_calling.callers import (
     TenXv2SplittingBarcodeDetector,
     VisiumHDBarcodeDetector,
     VisiumHDSplittingBarcodeDetector,
+    VisiumHDMultiplexedSplittingBarcodeDetector,
     # Curio
     CurioBarcodeDetector,
     CurioIlluminaDetector,
@@ -1048,6 +1049,41 @@ class TestVisiumHDSplittingBarcodeDetector:
         assert len(records) == 1
         assert records[0].id.startswith("read1_") and records[0].id.endswith("_+")
         assert str(records[0].seq) in read_sequence
+
+
+class TestVisiumHDMultiplexedSplittingBarcodeDetector(TestVisiumHDSplittingBarcodeDetector):
+    """Units between ONT sample barcodes: ADAPTER BARCODE [Visium molecules] BARCODErc ADAPTERrc."""
+
+    @staticmethod
+    def _detector():
+        return VisiumHDMultiplexedSplittingBarcodeDetector([VISIUM_HD_BC1_WHITELIST, VISIUM_HD_BC2_WHITELIST])
+
+    @staticmethod
+    def _unit(sample, molecules):
+        adapter = VisiumHDMultiplexedSplittingBarcodeDetector.ADAPTER_TOP
+        left, right = VisiumHDMultiplexedSplittingBarcodeDetector.SAMPLE_BARCODES[sample]
+        return (adapter + "AAGGTTAA" + left + "CAGCACCT" + "".join(molecules) +
+                "AGGTGCTG" + right + "TTAACCTT" + reverese_complement(adapter))
+
+    def test_units_and_samples(self):
+        read = self._unit("A1", [self._molecule(0)]) + self._unit("D1", [reverese_complement(self._molecule(1))])
+        result = self._detector().find_barcode_umi("read", read)
+        found = sorted((p.unit, p.get_barcode(), p.strand, p.sample_left, p.sample_right)
+                       for p in result.detected_patterns)
+        bc = [bc1 + "|" + bc2 for bc1, bc2, _ in self.MOLECULES]
+        assert found == [(0, bc[0], "+", "A1", "A1rc"), (1, bc[1], "-", "D1", "D1rc")]
+        # FASTA segments stay within their unit
+        for p in result.detected_patterns:
+            assert p.unit_start <= p.get_fasta_segment_start() < p.get_fasta_segment_end(len(read)) <= p.unit_end
+
+    def test_several_molecules_in_one_unit(self):
+        read = self._unit("D1", [self._molecule(0), self._molecule(1)])
+        result = self._detector().find_barcode_umi("read", read)
+        assert [(p.unit, p.sample_left, p.sample_right) for p in result.detected_patterns] == \
+            [(0, "D1", "D1rc"), (0, "D1", "D1rc")]
+
+    def test_header(self):
+        assert VisiumHDMultiplexedSplittingBarcodeDetector.header().endswith("\tunit\tsample_left\tsample_right")
 
 
 if __name__ == '__main__':

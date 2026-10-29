@@ -183,7 +183,7 @@ class TestDetectorSelection:
         # visium_5prime gains splitting by reusing the 10x 3' detector
         ("visium_5prime", True, "TenXSplittingBarcodeDetector"),
         ("visium_5prime", False, "TenXBarcodeDetector"),
-        ("visium_hd", True, "VisiumHDSplittingBarcodeDetector"),
+        ("visium_hd", True, "VisiumHDMultiplexedSplittingBarcodeDetector"),
         ("visium_hd", False, "VisiumHDBarcodeDetector"),
     ])
     def test_exact_detector_mapping(self, mode, split, expected):

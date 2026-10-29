@@ -47,6 +47,7 @@ from .base import (
     TenXBarcodeDetectionResult,
     TenXSplitBarcodeDetectionResult,
     VisiumHDSplitBarcodeDetectionResult,
+    VisiumHDUnitBarcodeDetectionResult,
     SplittingBarcodeDetectionResult,
     ReadStats,
     increase_if_valid,
@@ -77,6 +78,7 @@ from .tenx import (
     TenXv2SplittingBarcodeDetector,
     VisiumHDBarcodeDetector,
     VisiumHDSplittingBarcodeDetector,
+    VisiumHDMultiplexedSplittingBarcodeDetector,
 )
 
 from .molecule_structure import MoleculeStructure
@@ -93,6 +95,7 @@ __all__ = [
     'TenXBarcodeDetectionResult',
     'TenXSplitBarcodeDetectionResult',
     'VisiumHDSplitBarcodeDetectionResult',
+    'VisiumHDUnitBarcodeDetectionResult',
     'SplittingBarcodeDetectionResult',
     'ExtractionResult',
     'DetectedElement',
@@ -114,6 +117,7 @@ __all__ = [
     'TenXv2SplittingBarcodeDetector',
     'VisiumHDBarcodeDetector',
     'VisiumHDSplittingBarcodeDetector',
+    'VisiumHDMultiplexedSplittingBarcodeDetector',
     # Universal extraction
     'MoleculeStructure',
     'UniversalSingleMoleculeExtractor',

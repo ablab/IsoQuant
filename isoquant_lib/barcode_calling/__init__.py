@@ -55,6 +55,7 @@ from .callers import (
     TenXv2SplittingBarcodeDetector,
     VisiumHDBarcodeDetector,
     VisiumHDSplittingBarcodeDetector,
+    VisiumHDMultiplexedSplittingBarcodeDetector,
     UniversalSingleMoleculeExtractor,
     MoleculeStructure
 )
@@ -121,6 +122,7 @@ __all__ = [
     'TenXv2SplittingBarcodeDetector',
     'VisiumHDBarcodeDetector',
     'VisiumHDSplittingBarcodeDetector',
+    'VisiumHDMultiplexedSplittingBarcodeDetector',
     # universal calling
     'UniversalSingleMoleculeExtractor',
     'MoleculeStructure',

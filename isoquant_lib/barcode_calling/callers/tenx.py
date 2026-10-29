@@ -18,12 +18,12 @@ from ..indexers import KmerIndexer
 from ..common import (
     find_polyt_start, reverese_complement,
     find_candidate_with_max_score_ssw, find_candidate_with_max_score_ssw_var_len,
-    find_tied_candidates_ssw_var_len,
+    find_tied_candidates_ssw_var_len, align_pattern_ssw,
     detect_exact_positions, detect_first_exact_positions, str_to_2bit,
     find_optimal_kmer_size,
 )
 from ..spot_mapping import JOINT_BARCODE_SEPARATOR, SpotMapping
-from .base import (TenXBarcodeDetectionResult, TenXSplitBarcodeDetectionResult,
+from .base import (TenXBarcodeDetectionResult, TenXSplitBarcodeDetectionResult, VisiumHDUnitBarcodeDetectionResult,
                    VisiumHDSplitBarcodeDetectionResult, SplittingBarcodeDetectionResult)
 
 logger = logging.getLogger('IsoQuant')
@@ -865,3 +865,91 @@ class VisiumHDSplittingBarcodeDetector(SplittingScanMixin, VisiumHDBarcodeDetect
     @classmethod
     def header(cls):
         return cls.result_type().header()
+
+
+class VisiumHDMultiplexedSplittingBarcodeDetector(VisiumHDSplittingBarcodeDetector):
+    """Visium HD splitting for ONT-multiplexed libraries (temporary analysis, samples are hardcoded).
+
+    Each Visium cDNA is ligated to a native barcode adapter on both ends and reads, whatever its strand,
+    as ADAPTER BARCODE [Visium molecules] BARCODErc ADAPTERrc. The read is cut into such units at the sample
+    barcodes, Visium molecules are split within each unit as usual, and every molecule is reported with the
+    sample barcodes flanking its unit (e.g. A1 on the left, A1rc on the right, or * when not found).
+    """
+
+    ADAPTER_TOP = "CCTGTACTTCGTTCAGTTACGTATTGCT"
+    ADAPTER_BOTTOM = "ACGTAACTGAACGAAGTACAGG"
+    # sample -> (barcode after the 5' adapter, barcode before the 3' adapter) as they read in a unit
+    SAMPLE_BARCODES = {
+        "A1": ("CCTGGTAACTGGGACACAAGACTC", "GAGTCTTGTGTCCCAGTTACCAGG"),
+        "D1": ("TAGGGAAACACGATAGAATCCGAA", "TTCGGATTCTATCGTGTTTCCCTA"),
+    }
+    SAMPLE_BARCODE_KMER = 8
+    SAMPLE_BARCODE_MIN_SCORE = 16
+    # shorter read segments between sample barcodes are adapter junctions, not units
+    MIN_UNIT_LENGTH = 100
+
+    def __init__(self, barcode_pair_list: List[List[str]], spot_mapping: Optional[SpotMapping] = None):
+        super().__init__(barcode_pair_list, spot_mapping)
+        self.flank_names = {}
+        for sample, (left_barcode, right_barcode) in self.SAMPLE_BARCODES.items():
+            self.flank_names[left_barcode] = sample
+            self.flank_names[right_barcode] = sample + "rc"
+        self.flank_indexer = KmerIndexer(list(self.flank_names), kmer_size=self.SAMPLE_BARCODE_KMER)
+
+    def _find_flanks(self, sequence: str) -> List[Tuple[int, int, str]]:
+        """Sample barcode occurrences (start, end, name) in read order, overlapping ones resolved by score."""
+        hits = []
+        occurrences = self.flank_indexer.get_occurrences(sequence, min_kmers=2, hits_delta=len(sequence))
+        for barcode, _, positions in occurrences:
+            # k-mers of one occurrence lie within a barcode length of each other
+            clusters = [[positions[0]]]
+            for pos in positions[1:]:
+                if pos - clusters[-1][-1] <= len(barcode):
+                    clusters[-1].append(pos)
+                else:
+                    clusters.append([pos])
+            for cluster in clusters:
+                if len(cluster) < 2:
+                    continue
+                window_start = max(0, cluster[0] - len(barcode))
+                window_end = min(len(sequence), cluster[-1] + 2 * len(barcode))
+                start, end, _, _, score = align_pattern_ssw(sequence, window_start, window_end, barcode,
+                                                            self.SAMPLE_BARCODE_MIN_SCORE)
+                if start is not None:
+                    hits.append((start, end, self.flank_names[barcode], score))
+
+        flanks = []
+        for hit in sorted(hits):
+            if flanks and hit[0] <= flanks[-1][1]:
+                if hit[3] > flanks[-1][3]:
+                    flanks[-1] = hit
+                continue
+            flanks.append(hit)
+        return [(start, end, name) for start, end, name, _ in flanks]
+
+    def find_barcode_umi(self, read_id: str, sequence: str) -> SplittingBarcodeDetectionResult:
+        """Split the read into units between sample barcodes and Visium molecules within each unit."""
+        read_length = len(sequence)
+        bounds = [(-1, -1, "*")] + self._find_flanks(sequence) + [(read_length, read_length, "*")]
+        units = [(left[1] + 1, right[0], left[2], right[2]) for left, right in zip(bounds, bounds[1:])
+                 if right[0] - left[1] - 1 >= self.MIN_UNIT_LENGTH]
+        if not units:
+            units = [(0, read_length, "*", "*")]
+
+        read_result = SplittingBarcodeDetectionResult(read_id)
+        for unit, (unit_start, unit_end, sample_left, sample_right) in enumerate(units):
+            unit_result = super().find_barcode_umi(read_id, sequence[unit_start:unit_end])
+            for pattern in unit_result.detected_patterns:
+                # - strand coordinates are in the reverse complement of the read
+                offset = read_length - unit_end if pattern.strand == "-" else unit_start
+                pattern.update_coordinates(offset)
+                read_result.append(VisiumHDUnitBarcodeDetectionResult(
+                    pattern, unit, offset, offset + unit_end - unit_start, sample_left, sample_right))
+
+        read_result.filter()
+        return read_result
+
+    # result_type() stays the per-molecule split result built while scanning a unit, which is wrapped above
+    @classmethod
+    def header(cls):
+        return VisiumHDUnitBarcodeDetectionResult.header()

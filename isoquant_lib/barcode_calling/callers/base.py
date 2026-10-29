@@ -373,6 +373,39 @@ class VisiumHDSplitBarcodeDetectionResult(TenXSplitBarcodeDetectionResult):
         return 0
 
 
+class VisiumHDUnitBarcodeDetectionResult(VisiumHDSplitBarcodeDetectionResult):
+    """Visium HD molecule inside a multiplexing unit: the read segment between sample barcode flanks.
+
+    Unit bounds are in the coordinates of the molecule's strand (the read for +, its reverse complement
+    for -), so that the FASTA segment never extends into a neighbouring unit.
+    """
+
+    def __init__(self, result: VisiumHDSplitBarcodeDetectionResult, unit: int, unit_start: int, unit_end: int,
+                 sample_left: str, sample_right: str):
+        VisiumHDSplitBarcodeDetectionResult.__init__(self, result.read_id, result.get_barcode(), result.get_umi(),
+                                                     result.BC_score, result.UMI_good, result.strand,
+                                                     result.polyT, result.r1, result.tso)
+        self.unit: int = unit
+        self.unit_start: int = unit_start
+        self.unit_end: int = unit_end
+        self.sample_left: str = sample_left
+        self.sample_right: str = sample_right
+
+    def get_fasta_segment_start(self) -> int:
+        return max(self.unit_start, VisiumHDSplitBarcodeDetectionResult.get_fasta_segment_start(self))
+
+    def get_fasta_segment_end(self, seq_len: int) -> int:
+        return min(self.unit_end, VisiumHDSplitBarcodeDetectionResult.get_fasta_segment_end(self, seq_len))
+
+    def __str__(self) -> str:
+        return VisiumHDSplitBarcodeDetectionResult.__str__(self) + \
+            "\t%d\t%s\t%s" % (self.unit, self.sample_left, self.sample_right)
+
+    @staticmethod
+    def header() -> str:
+        return VisiumHDSplitBarcodeDetectionResult.header() + "\tunit\tsample_left\tsample_right"
+
+
 class SplittingBarcodeDetectionResult:
     """Result container for read splitting modes (multiple barcodes per read)."""
 

@@ -43,7 +43,7 @@ from . import (
     SharedMemoryStereoSplittingBarcodeDetector,
     ReadStats,
     VisiumHDBarcodeDetector,
-    VisiumHDSplittingBarcodeDetector,
+    VisiumHDMultiplexedSplittingBarcodeDetector,
     UniversalSingleMoleculeExtractor,
     MoleculeStructure
 )
@@ -70,7 +70,8 @@ SPLITTING_BARCODE_CALLING_MODES = {
     IsoQuantMode.stereoseq: SharedMemoryStereoSplittingBarcodeDetector,
     # same chemistry as 10x 3', so the same splitting detector applies
     IsoQuantMode.visium_5prime: TenXSplittingBarcodeDetector,
-    IsoQuantMode.visium_hd: VisiumHDSplittingBarcodeDetector,
+    # temporary (branch visium_hd_multiplex): also splits ONT-multiplexed units and reports their samples
+    IsoQuantMode.visium_hd: VisiumHDMultiplexedSplittingBarcodeDetector,
 }
 
 BARCODE_FILES_REQUIRED = {
