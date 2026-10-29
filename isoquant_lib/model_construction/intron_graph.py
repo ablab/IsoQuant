@@ -410,11 +410,17 @@ class IntronGraph:
 
         approved_set = set()
         substitute_dict = {}
+        known_introns = self.intron_collector.known_introns
         # get counts
         vertex_counts = sorted([(self.intron_collector.clustered_introns[i], i) for i in vertex_set], reverse=True)
         for count, vertex in vertex_counts:
             similar_vertices = []
             for i in sorted(approved_set):
+                if vertex in known_introns and i in known_introns:
+                    # two annotated introns a few bases apart (e.g. NAGNAG acceptors) are distinct
+                    # splice sites, never alignment noise: merging them makes their isoforms
+                    # thread to one graph path and one of the isoforms is lost
+                    continue
                 start_dist = abs(i[0] - vertex[0])
                 end_dist = abs(i[1] - vertex[1])
                 if start_dist < self.params.graph_clustering_distance and \

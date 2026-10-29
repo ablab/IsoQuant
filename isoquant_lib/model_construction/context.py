@@ -15,7 +15,7 @@
 
 from collections import defaultdict
 from enum import Enum, unique
-from typing import Dict, List
+from typing import Dict, List, Optional, Tuple
 
 from ..gene_info import StrandDetector, TranscriptModel
 from isoquant_lib.model_construction.intron_graph import IntronGraph
@@ -201,15 +201,44 @@ class ModelConstructionContext:
 
         return None
 
-    def get_known_spliced_isoforms(self, gene_info, s="known"):
-        known_isoforms = {}
+    def get_known_spliced_isoforms(self, gene_info) -> Dict[tuple, List[str]]:
+        # graph path -> every annotated isoform threading to it. Isoforms with identical intron
+        # chains (e.g. differing only in their ends) share a path; keeping a single id per path
+        # silently dropped the others from both FL and assignment-based construction.
+        known_isoforms = defaultdict(list)
         for isoform_id in gene_info.all_isoforms_introns:
             isoform_introns = gene_info.all_isoforms_introns[isoform_id]
             intron_path = self.path_processor.thread_introns(isoform_introns)
             if not intron_path:
                 continue
-            known_isoforms[tuple(intron_path)] = isoform_id
-        return known_isoforms
+            known_isoforms[tuple(intron_path)].append(isoform_id)
+        return dict(known_isoforms)
+
+    def select_known_isoform(self, candidates: List[str], path_reads: List[ReadAssignment],
+                             transcript_range: Tuple[int, int],
+                             path_assignment: Optional[ReadAssignment] = None) -> str:
+        """Pick the annotated isoform a graph path stands for among those sharing its intron chain:
+        the one the path itself was assigned to, otherwise the one most of the path's reads were
+        uniquely assigned to by the reference step, otherwise the one with the closest ends."""
+        if len(candidates) == 1:
+            return candidates[0]
+        candidate_set = set(candidates)
+        if path_assignment is not None and path_assignment.isoform_matches:
+            matched = {m.assigned_transcript for m in path_assignment.isoform_matches} & candidate_set
+            if len(matched) == 1:
+                return matched.pop()
+
+        votes = defaultdict(int)
+        for read_assignment in path_reads:
+            isoform_id = reference_unique_known_isoform(read_assignment)
+            if isoform_id in candidate_set:
+                votes[isoform_id] += 1
+
+        def end_distance(isoform_id: str) -> int:
+            exons = self.gene_info.all_isoforms_exons[isoform_id]
+            return abs(exons[0][0] - transcript_range[0]) + abs(exons[-1][1] - transcript_range[1])
+
+        return min(candidates, key=lambda t: (-votes[t], end_distance(t), t))
 
     def build_graph(self, read_assignment_storage):
         self.intron_graph = IntronGraph(self.args, self.gene_info, read_assignment_storage,
@@ -220,5 +249,6 @@ class ModelConstructionContext:
         self.path_storage.fill(read_assignment_storage)
         self.known_isoforms_in_graph = self.get_known_spliced_isoforms(self.gene_info)
         self.known_introns = set(self.gene_info.intron_profiles.features)
-        for intron_path, isoform_id in self.known_isoforms_in_graph.items():
-            self.known_isoforms_in_graph_ids[isoform_id] = intron_path
+        for intron_path, isoform_ids in self.known_isoforms_in_graph.items():
+            for isoform_id in isoform_ids:
+                self.known_isoforms_in_graph_ids[isoform_id] = intron_path
