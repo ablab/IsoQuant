@@ -459,7 +459,8 @@ The most common use-cases for single-cell/spatial data are grouping by barcode p
 
 `--read_group barcode_spot` (requires `--barcode2spot`)
 
-`--read_group barcode_barcode` (requires `--barcode2barcode`)
+`--read_group barcode_barcode` (requires `--barcode2barcode`; not used when Visium HD barcodes are
+[called as spot IDs](#spot-level-barcode-calling-visium-hd), then `barcode` groups by spot)
 
 or grouping by individual barcode (not recommended for datasets with many barcodes):
 
