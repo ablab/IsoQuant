@@ -12,6 +12,7 @@ import pytest
 import isoquant
 from isoquant_lib.alignment.alignment_info import AlignmentInfo
 from isoquant_lib.alignment.alignment_processor import AlignmentCollector, PolyATrimmed
+from isoquant_lib.assignment.isoform_assignment import ReadAssignmentType
 from isoquant_lib.terminal_prediction.external_polya import (
     NO_TAIL_FOUND,
     PRESENT_FORWARD,
@@ -219,6 +220,9 @@ class TestReconcile:
         (_polya(int_a=390), "+", (-1, -1, 390, -1)),
         (_polya(ext_t=90), "-", (-1, 90, -1, -1)),
         (_polya(), None, (-1, -1, -1, -1)),
+        # a tail at the other read end does not count
+        (_polya(ext_a=410), "-", (410, 99, -1, -1)),
+        (_polya(int_t=110), "+", (401, -1, -1, 110)),
     ])
     def test_inject(self, before, strand, after):
         info = PolyAInfo(*before)
@@ -262,9 +266,9 @@ class TestAddPolyAInfo:
         assert not has_any_polya(alignment_info.polya_info)
 
 
-def _collector(mode: PolyATrimmed) -> AlignmentCollector:
+def _collector(mode: PolyATrimmed, fl_data: bool = False) -> AlignmentCollector:
     collector = AlignmentCollector.__new__(AlignmentCollector)
-    collector.params = SimpleNamespace(polya_trimmed=mode)
+    collector.params = SimpleNamespace(polya_trimmed=mode, fl_data=fl_data)
     return collector
 
 
@@ -306,3 +310,87 @@ class TestArtificialPolyA:
         read_assignment = _read_assignment("+", "+", _polya(ext_a=410))
         _collector(PolyATrimmed.stranded).add_artificial_polya(read_assignment)
         assert read_assignment.polya_info.external_polya_pos == 401
+
+    @pytest.mark.parametrize("strand, before, after", [
+        # full-length reads: the 3' end is the polyA site when no tail was found
+        ("+", _polya(), (401, -1, -1, -1)),
+        ("-", _polya(), (-1, 99, -1, -1)),
+        (".", _polya(), (-1, -1, -1, -1)),
+        # a tail detected at the 3' end is kept
+        ("+", _polya(int_a=380), (-1, -1, 380, -1)),
+        ("-", _polya(int_t=110), (-1, -1, -1, 110)),
+        # a genomic A-run at the 5' end does not replace the 3' site
+        ("-", _polya(int_a=380), (-1, 99, 380, -1)),
+        ("+", _polya(int_t=110), (401, -1, -1, 110)),
+        # a soft-clipped tail at the 5' end: the read comes from the other strand
+        ("-", _polya(ext_a=410), (410, -1, -1, -1)),
+        ("+", _polya(ext_t=90), (-1, 90, -1, -1)),
+    ])
+    def test_fl_data(self, strand, before, after):
+        read_assignment = _read_assignment(strand, "+", before)
+        _collector(PolyATrimmed.none, fl_data=True).add_artificial_polya(read_assignment)
+        assert _positions(read_assignment.polya_info) == after
+
+    @pytest.mark.parametrize("mode, external, after", [
+        # an explicit --polya_trimmed source takes precedence over --fl_data
+        (PolyATrimmed.flnc, NO_TAIL_FOUND, (-1, -1, -1, -1)),
+        (PolyATrimmed.tag, UNKNOWN, (-1, -1, -1, -1)),
+        (PolyATrimmed.list, PRESENT_NO_HINT, (-1, 99, -1, -1)),
+        (PolyATrimmed.stranded, UNKNOWN, (-1, 99, -1, -1)),
+    ])
+    def test_fl_data_with_polya_trimmed(self, mode, external, after):
+        read_assignment = _read_assignment("-", "+", _polya())
+        _collector(mode, fl_data=True).add_artificial_polya(read_assignment, external)
+        assert _positions(read_assignment.polya_info) == after
+
+
+class _RecordingAssigner:
+    def __init__(self):
+        self.verified = []
+
+    def verify_read_ends_for_assignment(self, combined_profile, assignment):
+        self.verified.append(assignment)
+
+
+class TestApplyArtificialPolyA:
+    """A site added after assignment is verified against the assigned isoforms, as a detected tail is."""
+
+    @staticmethod
+    def _apply(polya: tuple, assignment_type: ReadAssignmentType, fl_data: bool = True, assigner=None):
+        read_assignment = _read_assignment("+", "+", polya)
+        read_assignment.assignment_type = assignment_type
+        alignment_info = SimpleNamespace(polya_info=read_assignment.polya_info, combined_profile=None)
+        assigner = assigner if assigner is not None else _RecordingAssigner()
+        _collector(PolyATrimmed.none, fl_data).apply_artificial_polya(read_assignment, alignment_info,
+                                                                      UNKNOWN, assigner)
+        return read_assignment, assigner.verified
+
+    @pytest.mark.parametrize("assignment_type", [ReadAssignmentType.unique,
+                                                 ReadAssignmentType.unique_minor_difference,
+                                                 ReadAssignmentType.ambiguous])
+    def test_added_site_is_verified_for_consistent_assignments(self, assignment_type):
+        read_assignment, verified = self._apply(_polya(), assignment_type)
+        assert read_assignment.polyA_found
+        assert verified == [read_assignment]
+
+    @pytest.mark.parametrize("assignment_type", [ReadAssignmentType.inconsistent, ReadAssignmentType.intergenic,
+                                                 ReadAssignmentType.noninformative])
+    def test_other_assignments_are_not_reclassified(self, assignment_type):
+        read_assignment, verified = self._apply(_polya(), assignment_type)
+        assert read_assignment.polyA_found
+        assert verified == []
+
+    def test_detected_tail_is_not_verified_twice(self):
+        read_assignment, verified = self._apply(_polya(int_a=380), ReadAssignmentType.unique)
+        assert read_assignment.polyA_found
+        assert verified == []
+
+    def test_site_added_next_to_a_tail_at_the_other_end_is_verified(self):
+        read_assignment, verified = self._apply(_polya(int_t=110), ReadAssignmentType.unique)
+        assert read_assignment.polya_info.external_polya_pos == 401
+        assert verified == [read_assignment]
+
+    def test_no_site_no_verification(self):
+        read_assignment, verified = self._apply(_polya(), ReadAssignmentType.unique, fl_data=False)
+        assert not read_assignment.polyA_found
+        assert verified == []
