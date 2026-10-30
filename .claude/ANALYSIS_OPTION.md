@@ -12,7 +12,7 @@ replacing four scattered per-stage flags. Added on branch `model-read-info-outpu
 | `transcript_discovery` | `td` | `no_model_construction=False` | novel transcript models; also enables polyA/TSS prediction. |
 | `exon_quantification` | `ex_quant` | `count_exons=True`, `count_intron_retentions=True` | exon + splice-junction + intron-retention counts. Needs `--genedb`. |
 | `fusion` | — | `fusion=True` | fusion detection. Needs `--genedb` + a BAM. |
-| `velocity` | — | `rna_velocity=True`, `velocity_explicit` | per-cell RNA velocity counts + loom. Needs `--genedb` and cells (non-bulk mode or `--barcode2cellid`). See `.claude/RNA_VELOCITY.md`. |
+| `velocity` | — | `rna_velocity=True`, `velocity_explicit` | per-cell RNA velocity counts + loom. Needs `--genedb` and a non-bulk mode. See `.claude/RNA_VELOCITY.md`. |
 
 `--analysis` takes a space-separated list (`nargs='+'`, argparse `choices=ANALYSIS_CHOICES`).
 The enum + alias table live in `isoquant_lib/modes.py` (`AnalysisType`, `ANALYSIS_ALIASES`,
@@ -25,14 +25,14 @@ The enum + alias table live in `isoquant_lib/modes.py` (`AnalysisType`, `ANALYSI
 - single-cell / spatial modes (`mode.needs_barcode_calling()`) → `{quantification}` only.
   **Behavior change**: single-cell no longer builds models by default.
 - `velocity` is added on top for `tenX_v3` / `tenX_v2` (`mode.velocity_by_default()`) and
-  whenever `--barcode2cellid` is set. In the default case it is skipped per sample when the
-  `barcode` grouping exceeds `MAX_DEFAULT_VELOCITY_CELLS` (100k) barcodes.
+  whenever `--barcode2cellid` is set in a non-bulk mode. In the default case it is skipped per sample when
+  more than `MAX_DEFAULT_VELOCITY_CELLS` (100k) cells are expected (`--n_cells`, detected cells, or barcodes).
 
-## Feasibility rules (warn, never abort)
+## Feasibility rules (warn; abort only for velocity conflicts)
 
 - No `--genedb`: `quantification` / `exon_quantification` / `fusion` / `velocity` are dropped with a
   warning; if nothing feasible remains, the run falls back to `transcript_discovery`.
-- `velocity` in `bulk` mode without `--barcode2cellid`: dropped with a warning.
+- `velocity` in `bulk` mode: exits with `INCOMPATIBLE_OPTIONS`. Explicit `velocity` whose grouping `--read_group` excludes: exits; default `velocity`: dropped with a warning (`check_velocity_grouping`).
 - Single-cell + `transcript_discovery` requested: warns that model construction runs after
   UMI dedup (no novel genes, possibly incomplete — prefer a pseudo-bulk run), then proceeds.
 
