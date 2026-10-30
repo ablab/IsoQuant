@@ -286,10 +286,12 @@ Space-separated list of analyses to run. Supported values (short aliases in brac
 * `fusion` (requires gene annotation): fusion gene detection, produces:
   - Fusion gene predictions (`SAMPLE_ID.fusions.tsv`, one file per sample combining all its BAM files).
 
-* `velocity` (requires gene annotation and cells, i.e. a single-cell mode or `--barcode2cellid`): 
+* `velocity` (requires gene annotation and a single-cell/spatial mode, incompatible with `bulk` mode): 
   per-cell spliced/unspliced counts for RNA velocity analysis, produces:
   - RNA velocity counts (`*.RNA_velocity_grouped_<strategy>` and `*.RNA_velocity_grouped_<strategy>.loom`),
   computed for `barcode_cell` grouping when `--barcode2cellid` is set and for `barcode` grouping otherwise.
+  When `velocity` is set explicitly but `--read_group` excludes the required grouping, IsoQuant exits with an error;
+  when it is enabled by default, it is skipped with a warning.
 
 
 Defaults when `--analysis` is not set:
@@ -297,9 +299,11 @@ Defaults when `--analysis` is not set:
 * with `--genedb`: `quantification transcript_discovery`;
 * without `--genedb`: `transcript_discovery` only;
 * single-cell/spatial modes: `quantification` only;
-* `velocity` is added for `tenX_v3` and `tenX_v2` modes and whenever `--barcode2cellid` is set.
-  In 10x modes without `--barcode2cellid` it is skipped when more than 100000 barcodes are detected,
+* `velocity` is added for `tenX_v3` and `tenX_v2` modes and in any single-cell/spatial mode when `--barcode2cellid` is set.
+  Without `--barcode2cellid` it is skipped when more than 100000 cells are expected,
   since velocity output is written for every barcode; set `--analysis velocity` explicitly to force it.
+  The expected number of cells is `--n_cells` when set, the number of detected cell barcodes for `--n_cells auto`,
+  and the number of distinct barcodes otherwise.
 
 Note that requesting `transcript_discovery` in a
 single-cell/spatial mode is allowed, but since it runs after UMI deduplication, it will not detect novel genes. 

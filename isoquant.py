@@ -728,7 +728,7 @@ def resolve_analyses(args):
     else:
         analyses = {AnalysisType.transcript_discovery}
     # velocity is per cell: on by default only when barcodes are cells or are mapped to cells
-    if args.analysis is None and (args.mode.velocity_by_default() or barcode2cellid):
+    if args.analysis is None and (args.mode.velocity_by_default() or (barcode2cellid and is_single_cell)):
         analyses.add(AnalysisType.velocity)
 
     # apply deprecated stage flags additively, on top of the chosen analyses
@@ -760,10 +760,11 @@ def resolve_analyses(args):
                        "it will not yield novel genes and may be incomplete; "
                        "consider a pseudo-bulk run for transcript discovery")
 
-    # feasibility: velocity needs cells, i.e. barcodes or a barcode-to-cell mapping
-    if AnalysisType.velocity in analyses and args.mode == IsoQuantMode.bulk and not barcode2cellid:
-        logger.warning("velocity requires a single-cell mode or --barcode2cellid and will not be run")
-        analyses.discard(AnalysisType.velocity)
+    # velocity needs cells, which bulk data does not have
+    if AnalysisType.velocity in analyses and not is_single_cell:
+        logger.critical("velocity analysis is incompatible with %s mode, use a single-cell or spatial mode"
+                        % args.mode.name)
+        sys.exit(IsoQuantExitCode.INCOMPATIBLE_OPTIONS)
 
     # canonical internal flags (names reused across the pipeline)
     args.run_quantification = AnalysisType.quantification in analyses
@@ -1305,9 +1306,32 @@ def set_configs_directory(args):
                 json.dump({}, f_out, indent=2)
 
 
+def check_velocity_grouping(args):
+    """Velocity runs on barcode_cell grouping (with --barcode2cellid) or on barcode grouping.
+
+    When --read_group leaves neither, an explicit --analysis velocity is an error, while
+    velocity enabled by default is dropped with a warning.
+    """
+    if not getattr(args, "rna_velocity", False):
+        return
+    groupings = set(args.read_group) if args.read_group else set()
+    if getattr(args, "barcode2cellid", None) and "barcode_cell" not in groupings:
+        problem = "--barcode2cellid is set, but --read_group does not include barcode_cell"
+    elif not groupings & {"barcode", "barcode_cell"}:
+        problem = "--read_group includes neither barcode nor barcode_cell"
+    else:
+        return
+    if getattr(args, "velocity_explicit", False):
+        logger.critical("velocity analysis is requested, but %s; adjust --read_group" % problem)
+        sys.exit(IsoQuantExitCode.INCOMPATIBLE_OPTIONS)
+    logger.warning("%s, RNA velocity will not be computed" % problem)
+    args.rna_velocity = False
+
+
 def set_additional_params(args):
     set_configs_directory(args)
     set_data_dependent_options(args)
+    check_velocity_grouping(args)
     set_matching_options(args)
     set_model_construction_options(args)
     set_splice_correction_options(args)

@@ -25,17 +25,32 @@ convention, so scVelo finds the layers it expects by name.
 
 `--analysis velocity` (`AnalysisType.velocity` -> `args.rna_velocity`, set in
 `resolve_analyses`, `isoquant.py`). When `--analysis` is omitted it is added for
-`tenX_v3` / `tenX_v2` (`IsoQuantMode.velocity_by_default()`) and whenever
-`--barcode2cellid` is given; an explicit `--analysis` list without `velocity`
-wins. Dropped with a warning without `--genedb`, and in `bulk` mode without
-`--barcode2cellid`. `args.velocity_explicit` records an explicit request.
+`tenX_v3` / `tenX_v2` (`IsoQuantMode.velocity_by_default()`) and, in any
+single-cell/spatial mode, whenever `--barcode2cellid` is given; an explicit
+`--analysis` list without `velocity` wins. Dropped with a warning without
+`--genedb`. Explicit `velocity` in `bulk` mode exits (`INCOMPATIBLE_OPTIONS`).
+`args.velocity_explicit` records an explicit request.
+
+Rule for conflicts with `--read_group`: **explicit request -> error, default ->
+warning and drop.** `check_velocity_grouping` (`isoquant.py`, right after
+`set_data_dependent_options` has auto-added groupings) applies it when
+`--barcode2cellid` is set but `barcode_cell` is absent (e.g. `no_auto`), or when
+neither `barcode` nor `barcode_cell` is present (`--barcode2spot` alone in
+10x, `tag:CB`, `--read_group none`). Separately, `check_barcode_mapping_files`
+rejects `barcode_spot` / `barcode_barcode` / `barcode_cell` groupings without
+their mapping option at startup.
 
 Per sample, after the read groups are loaded (derive step, always runs, so
 resume recomputes it), `DatasetProcessor.velocity_is_active` sets
 `args.rna_velocity_active`: default velocity on per-barcode grouping is skipped
-with a warning when the `barcode` strategy has more than
-`MAX_DEFAULT_VELOCITY_CELLS` (= `LARGE_WHITELIST_SIZE`, 100k) groups. Explicit
+with a warning when more than `MAX_DEFAULT_VELOCITY_CELLS`
+(= `LARGE_WHITELIST_SIZE`, 100k) cells are expected. Explicit
 `--analysis velocity` and a `barcode_cell` grouping bypass the check.
+`expected_cell_count`: distinct barcodes on reads overcount cells (empty
+droplets, ambient reads — a stock 3M whitelist easily yields >100k), so when
+cell barcodes were detected (`args.detect_cell_barcodes`) it is `--n_cells` as
+given, or the line count of `<prefix>.cell_barcodes.tsv` for `--n_cells auto`;
+otherwise the distinct barcode count of the `barcode` strategy.
 
 `ReadAssignmentAggregator._velocity_pool_type` then picks exactly **one** kind
 of grouping (`isoquant_lib/assignment/assignment_aggregator.py`):

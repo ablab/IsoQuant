@@ -21,7 +21,9 @@ from isoquant_lib.assignment.read_groups import (
     parse_grouping_spec,
 )
 from isoquant_lib.dataset_processor import DatasetProcessor
+from isoquant_lib.barcode_calling.options import check_barcode_mapping_files
 from isoquant_lib.modes import AnalysisType, IsoQuantMode, MAX_DEFAULT_VELOCITY_CELLS
+from isoquant_lib.utils.error_codes import IsoQuantExitCode
 from isoquant_lib.utils.string_pools import StringPoolManager
 
 
@@ -44,9 +46,12 @@ class TestResolveVelocityAnalysis:
     def test_off_by_default_elsewhere(self, mode):
         assert not resolve(mode).rna_velocity
 
-    @pytest.mark.parametrize("mode", ["stereoseq", "visium_hd", "bulk"])
+    @pytest.mark.parametrize("mode", ["stereoseq", "visium_hd", "curio"])
     def test_barcode2cellid_turns_it_on(self, mode):
         assert resolve(mode, barcode2cellid="cells.tsv").rna_velocity
+
+    def test_barcode2cellid_does_not_turn_it_on_in_bulk(self):
+        assert not resolve("bulk", barcode2cellid="cells.tsv").rna_velocity
 
     def test_explicit_analysis_list_without_velocity_wins(self):
         assert not resolve("tenX_v3", analysis=["quant"]).rna_velocity
@@ -58,11 +63,11 @@ class TestResolveVelocityAnalysis:
         assert args.velocity_explicit
         assert AnalysisType.velocity in args.analyses
 
-    def test_bulk_without_cells_drops_velocity(self, caplog):
-        with caplog.at_level(logging.WARNING, logger="IsoQuant"):
-            args = resolve("bulk", analysis=["velocity"])
-        assert not args.rna_velocity
-        assert "velocity requires" in caplog.text
+    @pytest.mark.parametrize("barcode2cellid", [None, "cells.tsv"])
+    def test_explicit_velocity_in_bulk_is_an_error(self, barcode2cellid):
+        with pytest.raises(SystemExit) as exit_info:
+            resolve("bulk", analysis=["velocity"], barcode2cellid=barcode2cellid)
+        assert exit_info.value.code == IsoQuantExitCode.INCOMPATIBLE_OPTIONS
 
     def test_requires_genedb(self):
         assert not resolve("tenX_v3", genedb=None).rna_velocity
@@ -107,6 +112,59 @@ class TestBarcodeCellGrouping:
         pool = pools.get_read_group_pool(0)
         assert pool is pools.barcode_cell_pool
         assert sorted(pool.get_str(i) for i in range(len(pool))) == ["NA", "cell_1", "cell_2"]
+
+    def test_string_pool_reads_gzipped_mapping(self, tmp_path):
+        import gzip
+        mapping = tmp_path / "cells.tsv.gz"
+        with gzip.open(mapping, "wt") as f:
+            f.write("AAAA\tcell_1\n")
+        pools = StringPoolManager()
+        pools.build_barcode_cell_pool(str(mapping))
+        assert "cell_1" in pools.barcode_cell_pool
+
+    @pytest.mark.parametrize("grouping,option", [("barcode_cell", "--barcode2cellid"),
+                                                 ("barcode_spot", "--barcode2spot"),
+                                                 ("barcode_barcode", "--barcode2barcode")])
+    def test_mapping_grouping_without_its_file_is_an_error(self, grouping, option, caplog):
+        args = SimpleNamespace(read_group=[grouping], barcode2spot=None, barcode2barcode=None,
+                               barcode2cellid=None)
+        with pytest.raises(SystemExit) as exit_info:
+            check_barcode_mapping_files(args)
+        assert exit_info.value.code == IsoQuantExitCode.MISSING_REQUIRED_OPTION
+        assert option in caplog.text
+
+
+def check_grouping(read_group, barcode2cellid=None, explicit=False) -> SimpleNamespace:
+    args = SimpleNamespace(read_group=read_group, barcode2cellid=barcode2cellid,
+                           rna_velocity=True, velocity_explicit=explicit)
+    isoquant.check_velocity_grouping(args)
+    return args
+
+
+class TestVelocityGroupingCheck:
+    @pytest.mark.parametrize("read_group,barcode2cellid", [(["barcode"], None),
+                                                           (["barcode_cell"], "cells.tsv"),
+                                                           (["barcode", "barcode_cell"], "cells.tsv")])
+    def test_usable_grouping_keeps_velocity(self, read_group, barcode2cellid):
+        assert check_grouping(read_group, barcode2cellid).rna_velocity
+        assert check_grouping(read_group, barcode2cellid, explicit=True).rna_velocity
+
+    @pytest.mark.parametrize("read_group,barcode2cellid", [(None, None),
+                                                           (["barcode_spot"], None),
+                                                           (["tag:CB"], None),
+                                                           (["no_auto", "barcode"], "cells.tsv")])
+    def test_default_velocity_is_dropped_with_a_warning(self, read_group, barcode2cellid, caplog):
+        with caplog.at_level(logging.WARNING, logger="IsoQuant"):
+            assert not check_grouping(read_group, barcode2cellid).rna_velocity
+        assert "RNA velocity will not be computed" in caplog.text
+
+    @pytest.mark.parametrize("read_group,barcode2cellid", [(None, None),
+                                                           (["barcode_spot"], None),
+                                                           (["no_auto", "barcode"], "cells.tsv")])
+    def test_explicit_velocity_is_an_error(self, read_group, barcode2cellid):
+        with pytest.raises(SystemExit) as exit_info:
+            check_grouping(read_group, barcode2cellid, explicit=True)
+        assert exit_info.value.code == IsoQuantExitCode.INCOMPATIBLE_OPTIONS
 
 
 def velocity_pool_type(read_group, **flags):
@@ -163,3 +221,27 @@ class TestBarcodeCountGate:
 
     def test_analysis_off(self):
         assert not velocity_is_active(10, rna_velocity=False)
+
+
+def expected_cell_count(barcode_count, cell_barcodes_file, **flags) -> int:
+    processor = DatasetProcessor.__new__(DatasetProcessor)
+    processor.args = SimpleNamespace(**flags)
+    sample = SimpleNamespace(out_cell_barcodes_tsv=str(cell_barcodes_file))
+    return processor.expected_cell_count(sample, barcode_count)
+
+
+class TestExpectedCellCount:
+    def test_barcodes_taken_as_cells_without_detection(self, tmp_path):
+        assert expected_cell_count(500000, tmp_path / "none.tsv", detect_cell_barcodes=False, n_cells=None) == 500000
+
+    def test_n_cells_as_given(self, tmp_path):
+        assert expected_cell_count(500000, tmp_path / "none.tsv", detect_cell_barcodes=True, n_cells=3000) == 3000
+
+    def test_n_cells_auto_uses_detected_cells(self, tmp_path):
+        cell_barcodes = tmp_path / "sample.cell_barcodes.tsv"
+        cell_barcodes.write_text("AAAA\nCCCC\nGGGG\n")
+        assert expected_cell_count(500000, cell_barcodes, detect_cell_barcodes=True, n_cells="auto") == 3
+
+    def test_ignored_n_cells_is_not_used(self, tmp_path):
+        # --n_cells with --barcoded_bam is ignored and no detection runs
+        assert expected_cell_count(500000, tmp_path / "none.tsv", detect_cell_barcodes=False, n_cells=3000) == 500000

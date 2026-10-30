@@ -278,7 +278,8 @@ class DatasetProcessor:
                 logger.warning("Large number of barcodes detected (%d). Per-barcode grouping may consume "
                                "substantial RAM. Consider using '--barcode2spot' to group barcodes by "
                                "cell type or spatial region.", barcode_count)
-        self.args.rna_velocity_active = self.velocity_is_active(barcode_count)
+        cell_count = self.expected_cell_count(sample, barcode_count) if barcode_count is not None else None
+        self.args.rna_velocity_active = self.velocity_is_active(cell_count)
 
         polya_fraction = polya_found / total_assignments if total_assignments > 0 else 0.0
         logger.info("Total assignments used for analysis: %d, polyA tail detected in %d (%.1f%%)" %
@@ -312,22 +313,39 @@ class DatasetProcessor:
         self.compress_barcode_tables(sample)
         logger.info("Processed experiment " + sample.prefix)
 
-    def velocity_is_active(self, barcode_count: Optional[int]) -> bool:
+    def expected_cell_count(self, sample: SampleData, barcode_count: int) -> int:
+        """Number of cells per-barcode grouping is expected to hold.
+
+        Distinct barcodes seen on reads overcount cells (empty droplets, ambient reads), so when
+        cell barcodes were detected the count comes from that detection instead: --n_cells as
+        given, or the number of barcodes selected for --n_cells auto.
+        """
+        if not getattr(self.args, "detect_cell_barcodes", False):
+            return barcode_count
+        n_cells = getattr(self.args, "n_cells", None)
+        if isinstance(n_cells, int):
+            return n_cells
+        if os.path.exists(sample.out_cell_barcodes_tsv):
+            with open(sample.out_cell_barcodes_tsv) as cell_barcodes:
+                return sum(1 for line in cell_barcodes if line.strip())
+        return barcode_count
+
+    def velocity_is_active(self, cell_count: Optional[int]) -> bool:
         """Per-sample RNA velocity decision, read by ReadAssignmentAggregator.
 
         Velocity enabled by default on per-barcode grouping is skipped when there are too many
-        barcodes to be cells: the loom is dense in genes x cells and takes days to write.
+        cells: the loom is dense in genes x cells and takes days to write.
         An explicit --analysis velocity, or cells given via --barcode2cellid, bypass the check.
         """
         if not getattr(self.args, "rna_velocity", False):
             return False
-        if (barcode_count is None or "barcode_cell" in self.grouping_strategy_names
+        if (cell_count is None or "barcode_cell" in self.grouping_strategy_names
                 or getattr(self.args, "velocity_explicit", False)):
             return True
-        if barcode_count > MAX_DEFAULT_VELOCITY_CELLS:
-            logger.warning("%d barcodes detected, which is more than %d expected cells; skipping RNA velocity "
-                           "output. Provide cell ids via --barcode2cellid or force it with --analysis velocity.",
-                           barcode_count, MAX_DEFAULT_VELOCITY_CELLS)
+        if cell_count > MAX_DEFAULT_VELOCITY_CELLS:
+            logger.warning("%d cells expected, more than %d; skipping RNA velocity output. "
+                           "Provide cell ids via --barcode2cellid or force it with --analysis velocity.",
+                           cell_count, MAX_DEFAULT_VELOCITY_CELLS)
             return False
         return True
 
