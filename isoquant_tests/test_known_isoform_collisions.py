@@ -17,11 +17,15 @@ instances created with ``__new__`` plus the few attributes they touch.
 """
 
 import types
+from collections import defaultdict
 
 from isoquant_lib.assignment.isoform_assignment import MatchEventSubtype, ReadAssignmentType
+from isoquant_lib.gene_info import TranscriptModel, TranscriptModelType
+from isoquant_lib.model_construction import model_filter
 from isoquant_lib.model_construction.context import ModelConstructionContext
 from isoquant_lib.model_construction.fl_graph_constructor import GraphBasedConstructor
 from isoquant_lib.model_construction.intron_graph import IntronGraph, TerminalVertex
+from isoquant_lib.model_construction.model_filter import ModelFilter
 
 # Fcgr3: ENSMUST00000164044.8 and ENSMUST00000169017.8 differ only by a 3 bp acceptor shift
 MAJOR_INTRON = (170885518, 170886154)
@@ -139,3 +143,65 @@ def test_exact_intron_chain_beats_a_shifted_sibling_with_better_ends():
         assignment_type=ReadAssignmentType.unique_minor_difference,
         isoform_matches=[types.SimpleNamespace(assigned_transcript="shifted", match_subclassifications=events)])
     assert constructor._reference_isoform_for_path(path_assignment, path, tuple(exact), (100, 600)) == "exact"
+
+
+# -- ModelFilter.detect_similar_isoforms ---------------------------------------
+# Two annotated introns a few bases apart stay separate graph vertices, so reads split between them
+# make two novel models that differ only at that splice site. The weaker one must not remove the
+# stronger one just because its path came first.
+
+def _novel_model(transcript_id, exons, transcript_type=TranscriptModelType.novel_in_catalog):
+    model = TranscriptModel("chr18", "-", transcript_id, "gene", exons, transcript_type)
+    model.intron_path = tuple((exons[i][1] + 1, exons[i + 1][0] - 1) for i in range(len(exons) - 1))
+    return model
+
+
+def _model_filter(monkeypatch, read_counts, delta=6):
+    # a single-model "gene" matches another model when exon counts agree and every boundary is within delta
+    class Assigner:
+        def __init__(self, model, *args, **kwargs):
+            self.model = model
+
+        def assign_to_isoform(self, read_id, exons):
+            matching = len(exons) == len(self.model.exon_blocks) and \
+                all(abs(x - y) <= delta for e1, e2 in zip(exons, self.model.exon_blocks) for x, y in zip(e1, e2))
+            return types.SimpleNamespace(matching=matching, assignment_type=ReadAssignmentType.inconsistent)
+
+    class ProfileConstructor:
+        def __init__(self, *args):
+            pass
+
+        def construct_profiles(self, exons, polya_info, polya_hints):
+            return exons
+
+    monkeypatch.setattr(model_filter, "GeneInfo", types.SimpleNamespace(from_models=lambda models, d: models[0]))
+    monkeypatch.setattr(model_filter, "LongReadAssigner", Assigner)
+    monkeypatch.setattr(model_filter, "CombinedProfileConstructor", ProfileConstructor)
+    monkeypatch.setattr(model_filter, "is_matching_assignment", lambda assignment: assignment.matching)
+    f = ModelFilter.__new__(ModelFilter)
+    f.args = types.SimpleNamespace(delta=delta)
+    f.string_pools = None
+    f.use_tss_model = False
+    f.store = types.SimpleNamespace(internal_counter=defaultdict(int, read_counts))
+    return f
+
+
+# Mouse.ONT_simulated.R9.trunc, ENSMUST00000035804.9: 40 reads align at acceptor 46853509, 6 at the
+# annotated alternative 46853506; the 6-read model sorted first and removed the 37-read one
+WEAK_EXONS = [(46846258, 46847028), (46848664, 46848833), (46853354, 46853505), (46856385, 46856462),
+              (46861040, 46861465)]
+STRONG_EXONS = [(46846258, 46847028), (46848664, 46848833), (46853354, 46853508), (46856385, 46856462),
+                (46861040, 46861465)]
+
+
+def test_weaker_near_identical_novel_model_is_removed(monkeypatch):
+    f = _model_filter(monkeypatch, {"weak": 6, "strong": 37})
+    models = [_novel_model("weak", WEAK_EXONS), _novel_model("strong", STRONG_EXONS)]
+    assert f.detect_similar_isoforms(models) == {"weak": "strong"}
+
+
+def test_known_model_absorbs_a_better_supported_novel_one(monkeypatch):
+    f = _model_filter(monkeypatch, {"novel": 37, "known": 6})
+    models = [_novel_model("novel", STRONG_EXONS),
+              _novel_model("known", WEAK_EXONS, transcript_type=TranscriptModelType.known)]
+    assert f.detect_similar_isoforms(models) == {"novel": "known"}
