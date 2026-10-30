@@ -33,6 +33,7 @@ Implementation Details:
 
 import os
 import glob
+import gzip
 import re
 import logging
 from typing import List, Dict, Optional
@@ -297,7 +298,9 @@ class StringPoolManager:
         mapping_file = mapping_spec.split(':')[0]
 
         values = set()
-        with open(mapping_file, 'r') as f:
+        # gzipped tables are accepted, as in load_multicolumn_table
+        opener = gzip.open if mapping_file.lower().endswith(('.gz', '.gzip')) else open
+        with opener(mapping_file, 'rt') as f:
             for line in f:
                 line = line.strip()
                 if not line or line.startswith('#'):
