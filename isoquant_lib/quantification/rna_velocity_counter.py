@@ -319,6 +319,10 @@ class RNAVelocityCounter(AbstractCounter):
         logger.info("RNA velocity counts are stored in %s and %s", self.output_file, loom_file)
 
     def finalize(self, args=None) -> None:
+        # TEMPORARY: loom export disabled, it is dense and too large for spatial data
+        # (~3.5 TB for Visium HD); the TSV with the same counts is still written
+        logger.info("RNA velocity loom export is disabled, counts are in %s", self.output_file)
+        return
         counts_df = pd.read_csv(self.output_file, sep='\t', comment='#', header=None,
                                 names=VELOCITY_COLUMNS)
         if counts_df.empty:
