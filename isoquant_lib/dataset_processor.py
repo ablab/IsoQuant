@@ -63,6 +63,7 @@ from isoquant_lib.utils.file_naming import (
     transcript_stat_file_name,
     umi_barcode2barcode_prefix,
     umi_output_prefix,
+    umi_groups_file_name,
     tagged_bam_fragment_name,
 )
 from isoquant_lib.model_construction.transcript_printer import GFFPrinter
@@ -768,6 +769,19 @@ class DatasetProcessor:
                 for all_info_file_name, _ in results:
                     with open(all_info_file_name, "r") as allinfo_inf:
                         shutil.copyfileobj(allinfo_inf, allinfo_outf)
+        if output_filtered_reads and large_output_enabled(self.args, "umi_groups"):
+            fragment_prefix = tmp_prefix if tmp_prefix else sample.out_umi_filtered_tmp
+            umi_groups_fname = output_prefix + ".umi_groups.tsv"
+            if self.args.gzipped:
+                umi_groups_fname += ".gz"
+            with open_text_write(umi_groups_fname) as umi_groups_outf:
+                umi_groups_outf.write("#read_id\tchr\tgroup_size\tread_ids\n")
+                for chr_id in self.get_chr_list():
+                    fragment = umi_groups_file_name(fragment_prefix, chr_id, edit_distance)
+                    if os.path.exists(fragment):
+                        with open(fragment, "r") as umi_groups_inf:
+                            shutil.copyfileobj(umi_groups_inf, umi_groups_outf)
+            logger.info("Reads of each UMI deduplication group saved to %s" % umi_groups_fname)
         for _, stats_output_file_name in results:
             read_stats_tsv(stats_output_file_name, stat_dict)
 
@@ -782,6 +796,7 @@ class DatasetProcessor:
         for chr_id in self.get_chr_list():
             fragments.append(allinfo_file_name(tmp_prefix, chr_id, edit_distance))
             fragments.append(allinfo_stats_file_name(tmp_prefix, chr_id, edit_distance))
+            fragments.append(umi_groups_file_name(tmp_prefix, chr_id, edit_distance))
         remove_files(fragments)
 
     def map_over_chromosomes(self, worker, sample, *extra_args, chr_ids=None):

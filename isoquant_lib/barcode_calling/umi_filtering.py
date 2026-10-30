@@ -144,7 +144,8 @@ class UMIFilter:
 
     def __init__(self, umi_length: int = 0, edit_distance: int = 3, disregard_length_diff: bool = True,
                  only_unique_assignments: bool = False, only_spliced_reads: bool = False,
-                 barcode_remap: Optional[Dict[str, str]] = None, output_read_tags: bool = False):
+                 barcode_remap: Optional[Dict[str, str]] = None, output_read_tags: bool = False,
+                 output_umi_groups: bool = False):
         """
         Initialize UMI filter.
 
@@ -157,6 +158,8 @@ class UMIFilter:
             barcode_remap: Optional mapping from barcode to spot ID for spot-level dedup
             output_read_tags: also record barcode/UMI/gene/transcript for each surviving read,
                 so a deduplicated BAM can be tagged without re-reading the assignments
+            output_umi_groups: remember all reads of each molecule, so that the read ids of every
+                deduplication group can be written next to its representative read
         """
         self.umi_length = umi_length
         self.max_edit_distance = edit_distance
@@ -165,6 +168,9 @@ class UMIFilter:
         self.only_spliced_reads = only_spliced_reads
         self.barcode_remap = barcode_remap
         self.output_read_tags = output_read_tags
+        self.output_umi_groups = output_umi_groups
+        # representative read id -> ids of all reads of its molecule, representative first
+        self.molecule_reads: Dict[str, List[str]] = {}
 
         self.selected_reads: Set[str] = set()
         self.stats: Dict[str, int] = defaultdict(int)
@@ -288,6 +294,7 @@ class UMIFilter:
         if len(molecule_list) == 1:
             self.duplicated_molecule_counts[1] += 1
             logger.debug("Unique " + molecule_list[0].read_id)
+            self._record_molecule(molecule_list[0], molecule_list)
             return molecule_list
 
         resulting_reads = []
@@ -298,6 +305,7 @@ class UMIFilter:
             self.duplicated_molecule_counts[duplicate_count] += 1
 
             if duplicate_count == 1:
+                self._record_molecule(umi_dict[umi][0], umi_dict[umi])
                 resulting_reads.append((umi_dict[umi][0], umi))
                 continue
 
@@ -348,6 +356,7 @@ class UMIFilter:
                 best_read.set_additional_attribute('transcript_type', 'None')
 
             logger.debug("Selected %s %s" % (best_read.read_id, best_read.umi))
+            self._record_molecule(best_read, umi_dict[umi])
             resulting_reads.append((best_read, umi))
 
         # If single UMI, trust it regardless of whether it's marked as trusted
@@ -356,6 +365,23 @@ class UMIFilter:
 
         # With multiple UMIs, ignore untrusted ones
         return [x[0] for x in filter(lambda x: x[1] != UNTRUSTED_UMI_KEY, resulting_reads)]
+
+    def _record_molecule(self, best_read: ReadAssignment, molecule_reads: List[ReadAssignment]):
+        """Remember the read ids of a molecule, representative first; a read listed several times occurs once."""
+        if not self.output_umi_groups:
+            return
+        read_ids = [best_read.read_id]
+        seen = {best_read.read_id}
+        for m in molecule_reads:
+            if m.read_id not in seen:
+                seen.add(m.read_id)
+                read_ids.append(m.read_id)
+        self.molecule_reads[best_read.read_id] = read_ids
+
+    def _umi_group_record(self, read_assignment: ReadAssignment) -> str:
+        """One line of the UMI groups file: representative read id, chromosome, group size and all read ids."""
+        read_ids = self.molecule_reads.get(read_assignment.read_id, [read_assignment.read_id])
+        return "\t".join([read_assignment.read_id, read_assignment.chr_id, str(len(read_ids)), ",".join(read_ids)])
 
     def _process_gene(self, gene_dict: Dict[str, List[ReadAssignment]]):
         """
@@ -390,7 +416,7 @@ class UMIFilter:
                           transcript_id])
 
     def _process_chunk(self, gene_barcode_dict: Dict[str, Dict[str, List[ReadAssignment]]],
-                       allinfo_outf, read_ids_outf=None) -> Tuple[int, int]:
+                       allinfo_outf, read_ids_outf=None, umi_groups_outf=None) -> Tuple[int, int]:
         """
         Process a chunk of reads grouped by gene and barcode.
 
@@ -398,6 +424,7 @@ class UMIFilter:
             gene_barcode_dict: Nested dict[gene_id][barcode] -> list of reads
             allinfo_outf: Output file for detailed assignment info
             read_ids_outf: Optional output file for selected read IDs
+            umi_groups_outf: Optional output file for read ids of each deduplication group
 
         Returns:
             Tuple of (total_read_count, spliced_read_count)
@@ -422,12 +449,15 @@ class UMIFilter:
 
                 if read_ids_outf:
                     read_ids_outf.write(self._survivor_record(read_assignment) + "\n")
+                if umi_groups_outf:
+                    umi_groups_outf.write(self._umi_group_record(read_assignment) + "\n")
 
                 self.selected_reads.add(read_assignment.read_id)
 
                 if allinfo_outf:
                     allinfo_outf.write(format_read_assignment_for_output(read_assignment) + "\n")
 
+        self.molecule_reads.clear()
         return read_count, spliced_count
 
     def add_stats_for_read(self, read_assignment: ReadAssignment):
@@ -467,7 +497,8 @@ class UMIFilter:
     def process_single_chr(self, chr_id: str, saves_prefix: str, transcript_type_dict: Dict[str, Tuple[str, int]],
                            barcode_feature_table: Dict[str, str],
                            all_info_file_name: str, filtered_reads_file_name: Optional[str],
-                           stats_output_file_name: str, string_pools=None) -> Tuple[str, str]:
+                           stats_output_file_name: str, string_pools=None,
+                           umi_groups_file_name: Optional[str] = None) -> Tuple[str, str]:
         """
         Process UMI filtering for a single chromosome.
 
@@ -479,12 +510,14 @@ class UMIFilter:
             all_info_file_name: Output file for detailed assignment info
             filtered_reads_file_name: Optional output file for filtered read IDs
             stats_output_file_name: Output file for statistics
+            umi_groups_file_name: Optional output file for read ids of each deduplication group
 
         Returns:
             Tuple of (all_info_file_name, stats_output_file_name)
         """
         with open(all_info_file_name, "w") as allinfo_outf:
             filtered_reads_outf = open(filtered_reads_file_name, "w") if filtered_reads_file_name else None
+            umi_groups_outf = open(umi_groups_file_name, "w") if umi_groups_file_name else None
             read_count = 0
             spliced_count = 0
             self.unique_gene_barcode = set()
@@ -594,12 +627,14 @@ class UMIFilter:
 
                 # Process chunk
                 processed_read_count, processed_spliced_count = self._process_chunk(
-                    gene_barcode_dict, allinfo_outf, filtered_reads_outf)
+                    gene_barcode_dict, allinfo_outf, filtered_reads_outf, umi_groups_outf)
                 read_count += processed_read_count
                 spliced_count += processed_spliced_count
 
             if filtered_reads_outf:
                 filtered_reads_outf.close()
+            if umi_groups_outf:
+                umi_groups_outf.close()
 
         # Write statistics
         with open(stats_output_file_name, "w") as count_hist_file:

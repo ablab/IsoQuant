@@ -4,6 +4,8 @@
 # See file LICENSE for details.
 ############################################################################
 
+import io
+
 import pytest
 from isoquant_lib.barcode_calling.umi_filtering import (
     UMIFilter,
@@ -207,6 +209,71 @@ class TestUMIFilter:
         assert len(best) >= 1
         # The best read should be unique type
         assert any(r.assignment_type == ReadAssignmentType.unique for r in best)
+
+
+class TestUMIGroups:
+    """Test the output of read ids per deduplication group (--large_output umi_groups)."""
+    string_pools = StringPoolManager()
+
+    def make_read(self, read_id, umi, exons):
+        read = ReadAssignment(read_id=read_id, assignment_type=ReadAssignmentType.unique,
+                              string_pools=self.string_pools)
+        read.chr_id = "chr1"
+        read.umi = umi
+        read.corrected_exons = exons
+        return read
+
+    def run_chunk(self, umi_filter, reads):
+        umi_groups_outf = io.StringIO()
+        umi_filter._process_chunk({"gene1": {"ACGT": reads}}, None, umi_groups_outf=umi_groups_outf)
+        return sorted(umi_groups_outf.getvalue().splitlines())
+
+    def test_groups_list_all_duplicates(self):
+        """Every molecule gets one line with all of its reads, the representative first."""
+        umi_filter = UMIFilter(umi_length=10, edit_distance=3, output_umi_groups=True)
+        read1 = self.make_read("read_001", "AAAAAAAAAA", [(1000, 2000)])
+        read2 = self.make_read("read_002", "AAAAAAAAAA", [(1000, 1500), (1600, 2000)])
+        read3 = self.make_read("read_003", "TTTTTTTTTT", [(1000, 1500), (1600, 2000)])
+
+        lines = self.run_chunk(umi_filter, [read1, read2, read3])
+
+        assert lines == ["read_002\tchr1\t2\tread_002,read_001",
+                         "read_003\tchr1\t1\tread_003"]
+        assert umi_filter.molecule_reads == {}
+
+    def test_similar_umis_form_one_group(self):
+        """Reads whose UMIs are within the edit distance end up in the same group."""
+        umi_filter = UMIFilter(umi_length=10, edit_distance=3, output_umi_groups=True)
+        read1 = self.make_read("read_001", "AAAAAAAAAA", [(1000, 1500), (1600, 2000)])
+        read2 = self.make_read("read_002", "AAAAAAAAAA", [(1000, 2000)])
+        read3 = self.make_read("read_003", "AAAAAAAAAT", [(1000, 2000)])
+
+        lines = self.run_chunk(umi_filter, [read1, read2, read3])
+
+        assert lines == ["read_001\tchr1\t3\tread_001,read_002,read_003"]
+
+    def test_read_listed_once(self):
+        """A read occurring several times in a group (ambiguous assignment) is counted once."""
+        umi_filter = UMIFilter(umi_length=10, edit_distance=3, output_umi_groups=True)
+        read1 = self.make_read("read_001", "AAAAAAAAAA", [(1000, 1500), (1600, 2000)])
+        read1_copy = self.make_read("read_001", "AAAAAAAAAA", [(1000, 1500), (1600, 2000)])
+        read2 = self.make_read("read_002", "AAAAAAAAAA", [(1000, 2000)])
+
+        lines = self.run_chunk(umi_filter, [read1, read1_copy, read2])
+
+        assert lines == ["read_001\tchr1\t2\tread_001,read_002"]
+
+    def test_single_read(self):
+        umi_filter = UMIFilter(umi_length=10, edit_distance=3, output_umi_groups=True)
+        lines = self.run_chunk(umi_filter, [self.make_read("read_001", "AAAAAAAAAA", [(1000, 2000)])])
+        assert lines == ["read_001\tchr1\t1\tread_001"]
+
+    def test_groups_not_recorded_by_default(self):
+        umi_filter = UMIFilter(umi_length=10, edit_distance=3)
+        read1 = self.make_read("read_001", "AAAAAAAAAA", [(1000, 2000)])
+        read2 = self.make_read("read_002", "AAAAAAAAAA", [(1000, 2000)])
+        umi_filter._process_duplicates([read1, read2])
+        assert umi_filter.molecule_reads == {}
 
 
 class TestCreateTranscriptInfoDict:

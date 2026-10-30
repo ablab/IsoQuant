@@ -168,6 +168,20 @@ Each extra round only writes UMI deduplicated reads in allinfo format to
 statistics to `SAMPLE_ID.UMI_filtered.barcode_barcode_col{C}.ED{N}.stats.tsv`
 (`{C}` = 0-based spot-column index).
 
+### UMI deduplication groups
+
+Produced in single-cell/spatial modes with `--large_output umi_groups`:
+`SAMPLE_ID.UMI_filtered.ED{N}.umi_groups.tsv[.gz]` lists the reads of every molecule that survived
+UMI deduplication, e.g. to build a per-molecule consensus from all of its reads.
+Tab-separated values, one line per molecule, the columns are:
+
+* `read_id` - the representative read of the molecule, the same read that is reported in `read_info`;
+* `chr` - chromosome id;
+* `group_size` - number of distinct reads in the deduplication group;
+* `read_ids` - comma-separated ids of all reads in the group, the representative read first.
+
+Only the main barcode-based deduplication writes this file; the extra `--barcode2barcode` rounds do not.
+
 ### Tagged and deduplicated BAM
 
 Two optional BAM outputs for single-cell and spatial modes, enabled with

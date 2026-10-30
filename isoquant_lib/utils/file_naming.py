@@ -45,6 +45,10 @@ def allinfo_stats_file_name(out_umi_filtered_tmp: str, chr_id: str, edit_distanc
     return umi_filtered_reads_file_name(out_umi_filtered_tmp, chr_id, edit_distance) + ".stats.tsv"
 
 
+def umi_groups_file_name(out_umi_filtered_tmp: str, chr_id: str, edit_distance: int):
+    return umi_filtered_reads_file_name(out_umi_filtered_tmp, chr_id, edit_distance) + ".umi_groups.tsv"
+
+
 def umi_barcode2barcode_prefix(out_umi_filtered_tmp: str, col_index: int):
     """Get prefix for barcode2barcode UMI filtering output (per spot column)."""
     return out_umi_filtered_tmp + ".barcode_barcode_col%d" % col_index

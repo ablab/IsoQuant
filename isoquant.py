@@ -83,7 +83,7 @@ logger = logging.getLogger('IsoQuant')
 
 # Large output file types for --large_output option
 LARGE_OUTPUT_TYPES = ["read_info", "read_assignments", "corrected_bed", "read2transcripts", "allinfo",
-                      "tagged_bam", "deduplicated_bam", "none"]
+                      "tagged_bam", "deduplicated_bam", "umi_groups", "none"]
 
 
 def bool_str(s):
@@ -648,7 +648,7 @@ def reset_checkpoints(args):
 def _warn_about_unusable_bam_outputs(args):
     """Say up front when a requested BAM output cannot be produced, rather than mid-run."""
     if not args.mode.needs_pcr_deduplication():
-        for output_type in ("tagged_bam", "deduplicated_bam"):
+        for output_type in ("tagged_bam", "deduplicated_bam", "umi_groups"):
             if output_type in args.large_output:
                 logger.warning("--large_output %s has no effect in %s mode, which has no barcodes "
                                "or UMIs; it will be skipped" % (output_type, args.mode.name))

@@ -200,6 +200,9 @@ original file name, and barcode property (e.g. cell type).
     detected barcode and UMI added as tags (`*.tagged.bam`), see below;
   * `deduplicated_bam` - single-cell/spatial modes only: the UMI-deduplicated alignments with
     barcode, UMI, gene and transcript tags (`*.deduplicated.bam`), see below;
+  * `umi_groups` - single-cell/spatial modes only: read IDs of every UMI deduplication group,
+    one line per surviving molecule (`*.UMI_filtered.ED{N}.umi_groups.tsv.gz`),
+    see [formats](formats.md#umi-deduplication-groups);
   * `none` - do not generate any large output files (not compatible with other values).
 
 Example usage:

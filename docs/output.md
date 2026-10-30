@@ -216,6 +216,10 @@ Two optional BAM outputs carry the same information on the alignments themselves
 * `SAMPLE_ID.deduplicated.bam` - primary alignments of UMI-deduplicated reads, with barcode, UMI,
   gene and transcript tags (only with `--large_output deduplicated_bam`).
 
+With `--large_output umi_groups`, the read IDs of every UMI deduplication group are saved to
+`SAMPLE_ID.UMI_filtered.ED{N}.umi_groups.tsv[.gz]`, one line per molecule that survived
+deduplication (see [format](formats.md#umi-deduplication-groups)).
+
 Note that transcript discovery is performed only in `bulk` mode by default.
 Single-cell and spatial modes require UMI deduplication.
 Reads that are not assigned to any gene are discarded.

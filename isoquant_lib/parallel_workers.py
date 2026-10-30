@@ -32,6 +32,7 @@ from isoquant_lib.utils.file_naming import (
     tagged_bam_fragment_name,
     allinfo_file_name,
     allinfo_stats_file_name,
+    umi_groups_file_name,
 )
 from .gene_info import TranscriptModelType
 from .model_construction.model_construction import GraphBasedModelConstructor
@@ -421,16 +422,20 @@ def filter_umis_in_parallel(sample, chr_id, chr_ids, args, edit_distance, checkp
     # a deduplicated BAM needs the tags of every surviving read, and this is the only place
     # where the assignments carrying them are already loaded
     output_read_tags = output_filtered_reads and large_output_enabled(args, "deduplicated_bam")
+    # read ids of every deduplication group, only for the main round, which defines read_info
+    output_umi_groups = output_filtered_reads and large_output_enabled(args, "umi_groups")
     umi_filter = UMIFilter(args.umi_length, edit_distance, barcode_remap=barcode_remap,
-                           output_read_tags=output_read_tags)
+                           output_read_tags=output_read_tags, output_umi_groups=output_umi_groups)
     filtered_reads = sample.get_filtered_reads_file(chr_id) if output_filtered_reads else None
+    umi_groups = umi_groups_file_name(out_prefix, chr_id, edit_distance) if output_umi_groups else None
     umi_filter.process_single_chr(chr_id, sample.out_raw_file,
                                   transcript_type_dict,
                                   barcode_feature_table,
                                   all_info_file_name,
                                   filtered_reads,
                                   stats_output_file_name,
-                                  string_pools)
+                                  string_pools,
+                                  umi_groups)
     mark_done_with_debug_hook(checkpoints, chr_checkpoint)
     # logged after the checkpoint: the resume tests stop on this line
     logger.info("PCR duplicates filtered for chromosome " + chr_id)
