@@ -116,6 +116,25 @@ def has_any_polya(polya_info: PolyAInfo) -> bool:
             polya_info.internal_polya_pos != -1 or polya_info.internal_polyt_pos != -1)
 
 
+def has_polya_on_strand(polya_info: PolyAInfo, strand: Optional[str]) -> bool:
+    """Whether a tail sits at the 3' read end of a transcript on the given genomic strand."""
+    if strand == "+":
+        return polya_info.external_polya_pos != -1 or polya_info.internal_polya_pos != -1
+    if strand == "-":
+        return polya_info.external_polyt_pos != -1 or polya_info.internal_polyt_pos != -1
+    return False
+
+
+def has_soft_clipped_polya_at_5_prime(polya_info: PolyAInfo, strand: Optional[str]) -> bool:
+    """Whether a tail outside the alignment sits at the 5' read end of a transcript on the given genomic strand,
+    i.e. the read rather comes from the opposite strand."""
+    if strand == "+":
+        return polya_info.external_polyt_pos != -1
+    if strand == "-":
+        return polya_info.external_polya_pos != -1
+    return False
+
+
 def reconcile_polya(polya_info: PolyAInfo, external_strand: Optional[str], external_no_tail: bool) -> None:
     """Drop sequence-detected tails the external source contradicts.
 
@@ -138,12 +157,12 @@ def reconcile_polya(polya_info: PolyAInfo, external_strand: Optional[str], exter
 def inject_external_polya(polya_info: PolyAInfo, read_exons: List[Tuple[int, int]],
                           strand: Optional[str]) -> None:
     """Mark a tail at the read end of the given genomic strand, unless the sequence already found one there."""
+    if has_polya_on_strand(polya_info, strand):
+        return
     if strand == "+":
-        if polya_info.external_polya_pos == -1 and polya_info.internal_polya_pos == -1:
-            polya_info.external_polya_pos = read_exons[-1][1] + 1
+        polya_info.external_polya_pos = read_exons[-1][1] + 1
     elif strand == "-":
-        if polya_info.external_polyt_pos == -1 and polya_info.internal_polyt_pos == -1:
-            polya_info.external_polyt_pos = read_exons[0][0] - 1
+        polya_info.external_polyt_pos = read_exons[0][0] - 1
 
 
 def _normalize_list_line(line: str) -> Optional[Tuple[str, str]]:

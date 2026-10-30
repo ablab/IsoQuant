@@ -31,7 +31,10 @@ from isoquant_lib.terminal_prediction.external_polya import (
     UNKNOWN,
     external_polya_from_tag,
     has_any_polya,
+    has_polya_on_strand,
+    has_soft_clipped_polya_at_5_prime,
     hint_from_strandedness,
+    inject_external_polya,
     resolve_external_strand,
 )
 from isoquant_lib.assignment.exon_corrector import ExonCorrector
@@ -443,8 +446,7 @@ class AlignmentCollector:
             read_assignment.multimapper = alignment.is_secondary
             read_assignment.mapping_quality = alignment.mapping_quality
 
-            self.add_artificial_polya(read_assignment, external_polya)
-            read_assignment.polyA_found = has_any_polya(alignment_info.polya_info)
+            self.apply_artificial_polya(read_assignment, alignment_info, external_polya)
 
             AlignmentCollector.import_bam_tags(alignment, read_assignment, self.params.bam_tags)
             yield read_assignment
@@ -523,8 +525,7 @@ class AlignmentCollector:
             read_assignment.multimapper = alignment.is_secondary
             read_assignment.mapping_quality = alignment.mapping_quality
 
-            self.add_artificial_polya(read_assignment, external_polya)
-            read_assignment.polyA_found = has_any_polya(alignment_info.polya_info)
+            self.apply_artificial_polya(read_assignment, alignment_info, external_polya, assigner)
 
             if self.params.count_exons:
                 read_assignment.exon_gene_profile = alignment_info.combined_profile.read_exon_profile.gene_profile
@@ -619,6 +620,18 @@ class AlignmentCollector:
                                       external_strand=resolve_external_strand(external_polya, mapped_strand),
                                       external_no_tail=external_polya.status == ExternalPolyAStatus.no_tail)
 
+    def apply_artificial_polya(self, read_assignment, alignment_info: AlignmentInfo,
+                               external_polya: ExternalPolyA = UNKNOWN, assigner=None) -> None:
+        had_site = has_polya_on_strand(alignment_info.polya_info, read_assignment.strand)
+        self.add_artificial_polya(read_assignment, external_polya)
+        read_assignment.polyA_found = has_any_polya(alignment_info.polya_info)
+        if (assigner is not None and not had_site
+                and has_polya_on_strand(alignment_info.polya_info, read_assignment.strand)
+                and read_assignment.assignment_type.is_consistent()):
+            # the assigner did not see this site: check the read ends against it as for a detected tail,
+            # otherwise the read has no polyA site event although it counts towards the polyA percentage
+            assigner.verify_read_ends_for_assignment(alignment_info.combined_profile, read_assignment)
+
     def add_artificial_polya(self, read_assignment, external_polya: ExternalPolyA = UNKNOWN) -> None:
         if self.params.polya_trimmed == PolyATrimmed.stranded:
             AlignmentCollector.set_artificial_polya(read_assignment, read_assignment.strand)
@@ -628,6 +641,13 @@ class AlignmentCollector:
               and not has_any_polya(read_assignment.polya_info)):
             # phase 2: the source only says there is a tail, its side comes from the assigned strand
             AlignmentCollector.set_artificial_polya(read_assignment, read_assignment.strand)
+        elif (self.params.polya_trimmed == PolyATrimmed.none and self.params.fl_data
+              and not has_soft_clipped_polya_at_5_prime(read_assignment.polya_info, read_assignment.strand)):
+            # full-length reads end at the polyA site even when the tail was trimmed (e.g. FLNC);
+            # a genomic A-run at the 5' end does not count as a tail, but a soft-clipped tail there
+            # means the read comes from the other strand
+            inject_external_polya(read_assignment.polya_info, read_assignment.corrected_exons,
+                                  read_assignment.strand)
 
     @staticmethod
     def set_artificial_polya(read_assignment, strand: str) -> None:
