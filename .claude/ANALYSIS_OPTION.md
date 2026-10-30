@@ -12,6 +12,7 @@ replacing four scattered per-stage flags. Added on branch `model-read-info-outpu
 | `transcript_discovery` | `td` | `no_model_construction=False` | novel transcript models; also enables polyA/TSS prediction. |
 | `exon_quantification` | `ex_quant` | `count_exons=True`, `count_intron_retentions=True` | exon + splice-junction + intron-retention counts. Needs `--genedb`. |
 | `fusion` | — | `fusion=True` | fusion detection. Needs `--genedb` + a BAM. |
+| `velocity` | — | `rna_velocity=True`, `velocity_explicit` | per-cell RNA velocity counts + loom. Needs `--genedb` and cells (non-bulk mode or `--barcode2cellid`). See `.claude/RNA_VELOCITY.md`. |
 
 `--analysis` takes a space-separated list (`nargs='+'`, argparse `choices=ANALYSIS_CHOICES`).
 The enum + alias table live in `isoquant_lib/modes.py` (`AnalysisType`, `ANALYSIS_ALIASES`,
@@ -23,11 +24,15 @@ The enum + alias table live in `isoquant_lib/modes.py` (`AnalysisType`, `ANALYSI
 - no `--genedb` → `{transcript_discovery}` only (de-novo; unchanged).
 - single-cell / spatial modes (`mode.needs_barcode_calling()`) → `{quantification}` only.
   **Behavior change**: single-cell no longer builds models by default.
+- `velocity` is added on top for `tenX_v3` / `tenX_v2` (`mode.velocity_by_default()`) and
+  whenever `--barcode2cellid` is set. In the default case it is skipped per sample when the
+  `barcode` grouping exceeds `MAX_DEFAULT_VELOCITY_CELLS` (100k) barcodes.
 
 ## Feasibility rules (warn, never abort)
 
-- No `--genedb`: `quantification` / `exon_quantification` / `fusion` are dropped with a
+- No `--genedb`: `quantification` / `exon_quantification` / `fusion` / `velocity` are dropped with a
   warning; if nothing feasible remains, the run falls back to `transcript_discovery`.
+- `velocity` in `bulk` mode without `--barcode2cellid`: dropped with a warning.
 - Single-cell + `transcript_discovery` requested: warns that model construction runs after
   UMI dedup (no novel genes, possibly incomplete — prefer a pseudo-bulk run), then proceeds.
 
@@ -43,6 +48,8 @@ count_exons             = exon_quantification in analyses  or legacy --count_exo
 count_intron_retentions = exon_quantification in analyses  or legacy --count_intron_retentions
 fusion                  = fusion in analyses
 no_model_construction   = transcript_discovery not in analyses
+rna_velocity            = velocity in analyses
+velocity_explicit       = rna_velocity and --analysis was given
 predict_terminal_sites  = bool(genedb) and (run_quantification or not no_model_construction)
 analyses                = the resolved set of AnalysisType
 ```

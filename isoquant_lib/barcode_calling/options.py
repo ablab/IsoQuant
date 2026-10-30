@@ -241,3 +241,11 @@ def check_barcode_mapping_files(args):
     if hasattr(args, 'barcode2barcode') and args.barcode2barcode:
         bc2bc_file, _, _ = parse_barcode2spot_spec(args.barcode2barcode)
         check_file_exists(bc2bc_file, "Barcode to barcode mapping file")
+
+    # Check barcode2cellid file: barcode -> cell id, a single cell id column
+    if getattr(args, 'barcode2cellid', None):
+        bc2cell_file, _, cell_cols = parse_barcode2spot_spec(args.barcode2cellid)
+        check_file_exists(bc2cell_file, "Barcode to cell id mapping file")
+        if len(cell_cols) != 1:
+            logger.critical("--barcode2cellid expects a single cell id column, got %d" % len(cell_cols))
+            sys.exit(IsoQuantExitCode.INVALID_PARAMETER)

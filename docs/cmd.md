@@ -154,6 +154,11 @@ Set barcode-to-spot mapping via `--barcode2barcode` option.
 IsoQuant will add `--read_group barcode_barcode` automatically if `--barcode2barcode` is set.
 Multiple barcodes mapping to the same spot are grouped together.
 
+   * `barcode_cell` - group by cell id.
+Set barcode-to-cell mapping via `--barcode2cellid` option.
+IsoQuant will add `--read_group barcode_cell` automatically if `--barcode2cellid` is set.
+RNA velocity counts are computed for this grouping when it is present.
+
    * `barcode` - groups reads by cell barcode.
    When the number of barcodes is large, grouping counts by individual barcodes may take a long time.
    It is recommended to use `--barcode2spot` file instead.
@@ -281,12 +286,20 @@ Space-separated list of analyses to run. Supported values (short aliases in brac
 * `fusion` (requires gene annotation): fusion gene detection, produces:
   - Fusion gene predictions (`SAMPLE_ID.fusions.tsv`, one file per sample combining all its BAM files).
 
+* `velocity` (requires gene annotation and cells, i.e. a single-cell mode or `--barcode2cellid`): 
+  per-cell spliced/unspliced counts for RNA velocity analysis, produces:
+  - RNA velocity counts (`*.RNA_velocity_grouped_<strategy>` and `*.RNA_velocity_grouped_<strategy>.loom`),
+  computed for `barcode_cell` grouping when `--barcode2cellid` is set and for `barcode` grouping otherwise.
+
 
 Defaults when `--analysis` is not set:
 
 * with `--genedb`: `quantification transcript_discovery`;
 * without `--genedb`: `transcript_discovery` only;
-* single-cell/spatial modes: `quantification` only.
+* single-cell/spatial modes: `quantification` only;
+* `velocity` is added for `tenX_v3` and `tenX_v2` modes and whenever `--barcode2cellid` is set.
+  In 10x modes without `--barcode2cellid` it is skipped when more than 100000 barcodes are detected,
+  since velocity output is written for every barcode; set `--analysis velocity` explicitly to force it.
 
 Note that requesting `transcript_discovery` in a
 single-cell/spatial mode is allowed, but since it runs after UMI deduplication, it will not detect novel genes. 
@@ -445,6 +458,16 @@ However, you can specify one or more columns via colon symbol (similar to `--rea
 
 When `--barcode2spot` is set, `--read_group barcode_spot` will be set automatically
 to group counts by cell type, spatial regions, or other provided properties. 
+Grouping by raw barcode sequences will be disabled in this case, use `--read_group barcode` to enable it.
+
+`--barcode2cellid`
+
+Path to a 2-column TSV file mapping barcodes to cell ids (barcode in the first column, cell id in the second),
+e.g. spatial barcodes assigned to segmented cells.
+Intended for per-cell RNA velocity in spatial data, where individual barcodes are spots rather than cells:
+when set, `velocity` analysis is enabled by default and computed per cell id instead of per barcode.
+
+When `--barcode2cellid` is set, `--read_group barcode_cell` will be set automatically.
 Grouping by raw barcode sequences will be disabled in this case, use `--read_group barcode` to enable it.
 
 `--molecule`

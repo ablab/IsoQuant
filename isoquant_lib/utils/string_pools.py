@@ -155,6 +155,7 @@ class StringPoolManager:
         self.read_group_dynamic_pools: Dict[int, StringPool] = {}  # spec_index -> pool (dynamic, for tag/read_id)
         self.file_name_pool = StringPool()  # For file_name grouping (static)
         self.barcode_spot_pools: Dict[int, StringPool] = {}  # For barcode_spot grouping (multi-column support)
+        self.barcode_cell_pool: Optional[StringPool] = None  # For barcode_cell grouping (--barcode2cellid)
 
         # Mapping from group spec index to pool type ('file_name', 'barcode_spot', 'tsv:N', 'dynamic')
         self.group_spec_pool_types: Dict[int, str] = {}
@@ -277,30 +278,41 @@ class StringPoolManager:
             column_index: 0-based pool index (for storage in barcode_spot_pools dict)
             file_column: Actual file column to read (from parsed spec)
         """
-        # Extract filename from spec
-        bc2spot_file = barcode2spot_spec.split(':')[0]
+        pool = self._build_barcode_mapping_pool(barcode2spot_spec, file_column)
+        self.barcode_spot_pools[column_index] = pool
+        logger.debug(f"Barcode spot pool (col {column_index}): {len(pool)} unique spots")
 
-        # Collect all spots for this column
-        spots = set()
-        with open(bc2spot_file, 'r') as f:
+    def build_barcode_cell_pool(self, barcode2cellid_spec: str, file_column: int = 1):
+        """Build the barcode-to-cell id pool from a --barcode2cellid spec."""
+        self.barcode_cell_pool = self._build_barcode_mapping_pool(barcode2cellid_spec, file_column)
+        logger.debug(f"Barcode cell pool: {len(self.barcode_cell_pool)} unique cell ids")
+
+    @staticmethod
+    def _build_barcode_mapping_pool(mapping_spec: str, file_column: int) -> StringPool:
+        """
+        Pool of the values in one column of a barcode mapping TSV, plus 'NA'
+        for reads without barcode mapping, in sorted order for deterministic IDs across workers.
+        """
+        # Extract filename from spec
+        mapping_file = mapping_spec.split(':')[0]
+
+        values = set()
+        with open(mapping_file, 'r') as f:
             for line in f:
                 line = line.strip()
                 if not line or line.startswith('#'):
                     continue
                 parts = line.split('\t')
                 if len(parts) > file_column:
-                    spots.add(parts[file_column])
+                    values.add(parts[file_column])
 
         # Add default group ID for reads without barcode mapping
-        spots.add(AbstractReadGrouper.default_group_id)
+        values.add(AbstractReadGrouper.default_group_id)
 
-        # Create and populate pool
         pool = StringPool()
-        for spot in sorted(spots):
-            pool.add(spot)
-
-        self.barcode_spot_pools[column_index] = pool
-        logger.debug(f"Barcode spot pool (col {column_index}): {len(pool)} unique spots")
+        for value in sorted(values):
+            pool.add(value)
+        return pool
 
     def load_barcode_pool(self, barcode_file: str):
         """
@@ -419,6 +431,10 @@ class StringPoolManager:
             # Legacy single-column (use column 0, first spot column)
             if 0 in self.barcode_spot_pools:
                 return self.barcode_spot_pools[0]
+            return self._get_or_create_dynamic_pool(spec_index)
+        elif pool_type == 'barcode_cell':
+            if self.barcode_cell_pool is not None:
+                return self.barcode_cell_pool
             return self._get_or_create_dynamic_pool(spec_index)
         elif pool_type == 'barcode':
             # Use barcode pool for direct barcode grouping
@@ -681,6 +697,12 @@ def setup_string_pools(args, sample, chr_ids, chr_id=None, gffutils_db=None,
             for col_idx, file_col in enumerate(spot_cols):
                 string_pools.build_barcode_spot_pool(args.barcode2spot, column_index=col_idx,
                                                      file_column=file_col)
+
+    # Build barcode_cell pool if needed (single cell id column)
+    if any(pt == 'barcode_cell' for pt in pool_types.values()) and getattr(args, 'barcode2cellid', None):
+        from isoquant_lib.assignment.read_groups import parse_barcode2spot_spec
+        _, _, cell_cols = parse_barcode2spot_spec(args.barcode2cellid)
+        string_pools.build_barcode_cell_pool(args.barcode2cellid, file_column=cell_cols[0])
 
     # Load per-chromosome pools if requested
     if chr_id:
