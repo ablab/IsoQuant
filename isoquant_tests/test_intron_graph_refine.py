@@ -200,3 +200,58 @@ def test_attach_side_ignores_prediction_inside_the_intron():
 
     g._attach_side([intron], {intron: {}}, {intron: {2005: 2}}, read_end=True)
     assert not any(v[0] == TerminalVertex.tss_right for v in g.outgoing_edges[intron])
+
+
+# -- collect_terminal_positions: 5' ends at a predicted TSS (--fl_data) --------
+
+INNER_INTRON = (1000, 2000)
+
+
+def _terminal_graph(read_assignments, tss_positions):
+    # intron (1000, 2000) with an upstream intron (400, 600) entering it and a downstream one (2500, 2700)
+    # leaving it, so both read termini below lie inside exons that other reads splice through
+    g = _bare_graph(apa_delta=50)
+    g.params.delta = 5
+    g.read_assignments = read_assignments
+    g.predicted_tss_positions = sorted(tss_positions)
+    g.intron_collector = types.SimpleNamespace(substitute=lambda v: v, discarded_introns=set())
+    g.incoming_edges[INNER_INTRON] = {(400, 600)}
+    g.outgoing_edges[INNER_INTRON] = {(2500, 2700)}
+    return g
+
+
+def _terminal_read(strand: str):
+    return types.SimpleNamespace(multimapper=False, strand=strand, corrected_introns=[INNER_INTRON],
+                                 corrected_exons=[(700, 999), (2001, 2300)],
+                                 polya_info=types.SimpleNamespace(external_polya_pos=-1, internal_polya_pos=-1,
+                                                                  external_polyt_pos=-1, internal_polyt_pos=-1))
+
+
+def _collect(strand: str, tss_positions=()):
+    graph = _terminal_graph([_terminal_read(strand)], tss_positions)
+    _, read_ends, _, read_starts = graph.collect_terminal_positions()
+    return dict(read_starts[INNER_INTRON]), dict(read_ends[INNER_INTRON])
+
+
+def test_is_at_predicted_tss():
+    g = _terminal_graph([], [300, 900, 5000])
+    assert g.is_at_predicted_tss(900) and g.is_at_predicted_tss(850) and g.is_at_predicted_tss(950)
+    assert g.is_at_predicted_tss(260) and g.is_at_predicted_tss(5040)
+    assert not g.is_at_predicted_tss(600) and not g.is_at_predicted_tss(5051) and not g.is_at_predicted_tss(0)
+    assert not _terminal_graph([], []).is_at_predicted_tss(900)
+
+
+def test_collect_terminal_positions_keeps_five_prime_ends_at_a_predicted_tss():
+    # the prediction may belong to any transcript, e.g. reads whose first exons were left unaligned
+    assert _collect('+', [690]) == ({700: 1}, {})   # 5' end kept, untailed 3' end still internal
+    assert _collect('-', [2310]) == ({}, {2300: 1})
+
+
+def test_collect_terminal_positions_drops_other_internal_termini():
+    for strand in ('+', '-'):
+        assert _collect(strand) == ({}, {})
+        # predictions further than apa_delta (50) away
+        assert _collect(strand, [640, 2360]) == ({}, {})
+    # a TSS prediction does not keep a 3' end
+    assert _collect('-', [700]) == ({}, {})
+    assert _collect('+', [2300]) == ({}, {})
