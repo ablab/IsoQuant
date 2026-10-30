@@ -294,7 +294,7 @@ CI/CD workflows in `.github/workflows/`:
 - `Barcode.Custom.*.yml` - Universal barcode calling tests via custom_sc mode with MDF files
 - `SC.Mouse.10x.yml` - 10x single-cell pipeline with allinfo QA
 - `SC.Mouse.10x.barcoded_bam.yml` - 10x pipeline using `--barcoded_bam` with CB/UB tags from BAM
-- `SC.Mouse.VisiumHD.barcode2barcode.yml` - Visium HD pipeline with `--barcode2barcode` spot-level UMI dedup
+- `SC.Mouse.VisiumHD.barcode2barcode.yml` - Visium HD pipeline with `--barcode2barcode`: spot-level UMI dedup from `--barcoded_reads`, and spot-level barcode calling (`SC.Mouse.VisiumHD.spot_calling.allinfo`)
 - `SC.Human.Curio.custom_sc.yml` - Curio custom_sc pipeline with allinfo QA
 
 ## Code Organization by Function

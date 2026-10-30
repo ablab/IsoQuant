@@ -146,7 +146,8 @@ Useful for grouping single-cell/spatial data by cell type or spatial region inst
 
    * `barcode_barcode` - group by spot-level barcode mapping for UMI deduplication.
 Set barcode-to-spot mapping via `--barcode2barcode` option.
-IsoQuant will add `--read_group barcode_barcode` automatically if `--barcode2barcode` is set.
+IsoQuant will add `--read_group barcode_barcode` automatically if `--barcode2barcode` is set,
+unless Visium HD barcodes are called as spot IDs (then `barcode` grouping is per spot already).
 Multiple barcodes mapping to the same spot are grouped together.
 
    * `barcode` - groups reads by cell barcode.

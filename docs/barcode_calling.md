@@ -96,6 +96,21 @@ matches the reads against that much shorter list. See
 
 Supported for `tenX_v3`, `tenX_v2` and `visium_5prime`.
 
+`--split_molecules`
+
+Whether to split reads containing several cDNA molecules into one record per molecule:
+`auto` (default) splits wherever the protocol supports it (`tenX_v3`, `tenX_v2`, `stereoseq`,
+`visium_5prime`, `visium_hd`), `true` also fails for protocols that cannot split, `false` never splits.
+When splitting, the output has one row per molecule and a split FASTA is written, see
+[read splitting](single_cell.md#read-splitting).
+
+`--barcode2barcode`
+
+`visium_hd` only. TSV file mapping barcodes (`PART1|PART2`) to spot IDs, `FILE[:barcode_col:spot_col]`
+with exactly one spot column. Barcodes are reported as spot IDs, and a read whose barcode is ambiguous
+between neighbouring barcodes is still assigned when all candidates belong to the same spot,
+see [spot-level barcode calling](single_cell.md#spot-level-barcode-calling-visium-hd).
+
 `--no_gzip`
 
 Do not compress the split reads FASTA. It is gzipped by default; aligners read it compressed,

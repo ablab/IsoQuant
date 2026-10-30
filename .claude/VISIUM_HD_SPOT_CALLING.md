@@ -38,6 +38,10 @@ barcodes, the detector reports spot IDs and assigns a tie when all its candidate
 - QA: `misc/assess_barcode_quality.py --barcode2spot FILE[:bc:col]` maps true and detected `PART1|PART2`
   barcodes to spots (detected spot IDs pass through), single and split modes; `run_barcode_test.py` config keys
   `spot_mapping` + `spot_column` feed both the detect command and the QA; `spot_mapping` is a manifest path key.
+- CI: barcode level `Mouse.VisiumHD.v1.s1.sep.10M.correct_struct.{8um,16um}` and
+  `Mouse.VisiumHD_concat.v1.s1.800K.8um`; pipeline level `SC.Mouse.VisiumHD.spot_calling.allinfo` (simulated
+  aligned BAM with `--barcode_whitelist ... --barcode2barcode ...:0:2 --split_molecules false`, i.e. the whole
+  route: flag resolution, spot IDs in allinfo, no extra UMI rounds), a step of `SC.Mouse.VisiumHD.barcode2barcode.yml`.
 
 ## Measurements (simulated ONT, Stereo-seq NanoSim model, 800K-read CI sets, default `auto` splitting)
 
