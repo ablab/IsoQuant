@@ -6,6 +6,7 @@
 ############################################################################
 
 import logging
+from typing import Dict, Optional
 
 from isoquant_lib.utils.stats import EnumStats
 from isoquant_lib.quantification.long_read_counter import (
@@ -21,7 +22,6 @@ from isoquant_lib.quantification.long_read_counter import (
 from isoquant_lib.terminal_prediction.terminal_counter import PolyACounter, TSSCounter
 from isoquant_lib.quantification.rna_velocity_counter import RNAVelocityCounter
 from isoquant_lib.assignment.read_groups import get_grouping_pool_types
-from isoquant_lib.modes import IsoQuantMode
 from .assignment_io import (
     IOSupport,
     BEDPrinter,
@@ -228,8 +228,9 @@ class ReadAssignmentAggregator:
             return
         # Pool type per grouping strategy (index-aligned with
         # grouping_strategy_names); used to restrict RNA velocity to
-        # cell-barcode groupings.
+        # the grouping whose groups are cells.
         grouping_pool_types = get_grouping_pool_types(self.args)
+        velocity_pool_type = self._velocity_pool_type(grouping_pool_types)
         for group_idx, strategy_name in enumerate(self.grouping_strategy_names):
             if self.args.run_quantification:
                 self._add_grouped_quant_counters(sample, chr_id, group_idx, strategy_name)
@@ -238,8 +239,8 @@ class ReadAssignmentAggregator:
             self._add_grouped_terminal_counters(sample, chr_id, group_idx, strategy_name)
             if self.args.count_intron_retentions:
                 self._add_grouped_ir_counter(sample, chr_id, group_idx, strategy_name)
-            self._add_grouped_velocity_counter(sample, chr_id, group_idx, strategy_name,
-                                               grouping_pool_types)
+            if velocity_pool_type and grouping_pool_types.get(group_idx) == velocity_pool_type:
+                self._add_grouped_velocity_counter(sample, chr_id, group_idx, strategy_name)
 
     def _add_grouped_quant_counters(self, sample, chr_id, group_idx, strategy_name):
         if chr_id:
@@ -314,17 +315,25 @@ class ReadAssignmentAggregator:
                                              group_index=group_idx)
             self.global_counter.add_counter(grouped_tss_counter)
 
-    def _add_grouped_velocity_counter(self, sample, chr_id, group_idx, strategy_name,
-                                      grouping_pool_types):
-        # RNA velocity (spliced/unspliced) counts. Only meaningful for
-        # cell-barcode groupings (barcode / barcode_spot / barcode_barcode);
-        # groupings like file_name or BAM tags would collapse the whole
-        # sample into a single "cell". Each strategy writes to its own
-        # path -- otherwise grouped counters would share one file and the
-        # merge stage would delete the per-chr fragment twice (FileNotFoundError).
-        is_barcode_grouping = grouping_pool_types.get(group_idx, "").startswith("barcode")
-        if self.args.mode == IsoQuantMode.bulk or not is_barcode_grouping:
-            return
+    def _velocity_pool_type(self, grouping_pool_types: Dict[int, str]) -> Optional[str]:
+        # RNA velocity is per cell, so it runs on exactly one kind of grouping:
+        # barcode_cell (--barcode2cellid) when given, otherwise per-barcode
+        # grouping, whose groups are cells in single-cell modes. Spots and cell
+        # types (barcode_spot / barcode_barcode) are not cells, and the dense
+        # loom over a spatial barcode set takes days to write.
+        # rna_velocity_active is the per-sample decision made after the barcode
+        # count is known (DatasetProcessor); rna_velocity is the analysis switch.
+        if not getattr(self.args, "rna_velocity_active", getattr(self.args, "rna_velocity", False)):
+            return None
+        if 'barcode_cell' in grouping_pool_types.values():
+            return 'barcode_cell'
+        return 'barcode'
+
+    def _add_grouped_velocity_counter(self, sample, chr_id: Optional[str], group_idx: int,
+                                      strategy_name: str) -> None:
+        # Each strategy writes to its own path -- otherwise grouped counters
+        # would share one file and the merge stage would delete the per-chr
+        # fragment twice (FileNotFoundError).
         if chr_id:
             rna_velocity_path = sample.get_grouped_counts_file(chr_id, "RNA_velocity", strategy_name)
         else:

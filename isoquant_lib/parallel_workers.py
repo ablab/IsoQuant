@@ -239,7 +239,7 @@ def construct_models_in_parallel(sample, chr_id, chr_ids, saves_prefix, args,
     read_group_file_prefix = read_group_file_from_saves(saves_prefix)
 
     # The barcode/UMI pool resolves read_assignment.barcode/.umi for barcode-derived
-    # grouping (barcode, barcode_spot, barcode_barcode) AND for printing the
+    # grouping (barcode, barcode_spot, barcode_barcode, barcode_cell) AND for printing the
     # barcode/UMI columns in read_info / read_assignments. Any SC / barcoded_bam mode
     # sets barcode_id on reads, so load it whenever the mode uses barcodes; the old
     # `pt == 'barcode'` check missed barcode_spot / barcode_barcode and crashed.
@@ -247,8 +247,8 @@ def construct_models_in_parallel(sample, chr_id, chr_ids, saves_prefix, args,
     needs_barcode_pool = (
         args.mode.needs_pcr_deduplication()
         or getattr(args, 'barcoded_bam', False)
-        or any(pt == 'barcode' or pt.startswith('barcode_spot') or pt.startswith('barcode_barcode')
-               for pt in pool_types.values())
+        or any(pt in ('barcode', 'barcode_cell') or pt.startswith('barcode_spot')
+               or pt.startswith('barcode_barcode') for pt in pool_types.values())
     )
 
     # Build string pools for memory optimization

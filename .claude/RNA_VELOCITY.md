@@ -23,20 +23,47 @@ convention, so scVelo finds the layers it expects by name.
 
 ## When it runs
 
-No CLI flag. `_add_grouped_velocity_counter`
-(`isoquant_lib/assignment/assignment_aggregator.py`) adds the counter when
-**all** of the following hold:
+`--analysis velocity` (`AnalysisType.velocity` -> `args.rna_velocity`, set in
+`resolve_analyses`, `isoquant.py`). When `--analysis` is omitted it is added for
+`tenX_v3` / `tenX_v2` (`IsoQuantMode.velocity_by_default()`) and, in any
+single-cell/spatial mode, whenever `--barcode2cellid` is given; an explicit
+`--analysis` list without `velocity` wins. Dropped with a warning without
+`--genedb`. Explicit `velocity` in `bulk` mode exits (`INCOMPATIBLE_OPTIONS`).
+`args.velocity_explicit` records an explicit request.
 
-1. `args.read_group` and `args.genedb` are set (the enclosing
-   `_init_grouped_counters` gate), **and**
-2. `args.mode != IsoQuantMode.bulk`, **and**
-3. the grouping strategy's pool type starts with `barcode` — i.e. `barcode`,
-   `barcode_spot`, or `barcode_barcode`.
+Rule for conflicts with `--read_group`: **explicit request -> error, default ->
+warning and drop.** `check_velocity_grouping` (`isoquant.py`, right after
+`set_data_dependent_options` has auto-added groupings) applies it when
+`--barcode2cellid` is set but `barcode_cell` is absent (e.g. `no_auto`), or when
+neither `barcode` nor `barcode_cell` is present (`--barcode2spot` alone in
+10x, `tag:CB`, `--read_group none`). Separately, `check_barcode_mapping_files`
+rejects `barcode_spot` / `barcode_barcode` / `barcode_cell` groupings without
+their mapping option at startup.
 
-Condition 3 is what keeps velocity off `file_name` / `tag:` / `file:` groupings,
-where a "cell" would be a whole sample. It reads `get_grouping_pool_types(args)`
-(`isoquant_lib/assignment/read_groups.py`), computed **once** in
-`_init_grouped_counters` rather than per strategy.
+Per sample, after the read groups are loaded (derive step, always runs, so
+resume recomputes it), `DatasetProcessor.velocity_is_active` sets
+`args.rna_velocity_active`: default velocity on per-barcode grouping is skipped
+with a warning when more than `MAX_DEFAULT_VELOCITY_CELLS`
+(= `LARGE_WHITELIST_SIZE`, 100k) cells are expected. Explicit
+`--analysis velocity` and a `barcode_cell` grouping bypass the check.
+`expected_cell_count`: distinct barcodes on reads overcount cells (empty
+droplets, ambient reads — a stock 3M whitelist easily yields >100k), so when
+cell barcodes were detected (`args.detect_cell_barcodes`) it is `--n_cells` as
+given, or the line count of `<prefix>.cell_barcodes.tsv` for `--n_cells auto`;
+otherwise the distinct barcode count of the `barcode` strategy.
+
+`ReadAssignmentAggregator._velocity_pool_type` then picks exactly **one** kind
+of grouping (`isoquant_lib/assignment/assignment_aggregator.py`):
+`barcode_cell` (`--barcode2cellid`, auto-added like `--barcode2spot`) if
+present, otherwise `barcode`. `barcode_spot` / `barcode_barcode` never get
+velocity — spots and cell types are not cells — nor do `file_name` / `tag:` /
+`file:` groupings, where a "cell" would be a whole sample. All of this requires
+`args.read_group` and `args.genedb` (the enclosing `_init_grouped_counters` gate).
+
+`--barcode2cellid` is a 2-column TSV (barcode -> cell id; a `:col:col` spec must
+name one value column, checked in `check_barcode_mapping_files`). It reuses
+`BarcodeSpotGrouper`/`SharedTableData` and has its own string pool
+(`StringPoolManager.barcode_cell_pool`, pool type `barcode_cell`).
 
 > **Index alignment.** `get_grouping_pool_types` is keyed by *grouper* index,
 > not spec index (its docstring says "spec_index" and is stale — it increments a
@@ -49,12 +76,14 @@ where a "cell" would be a whole sample. It reads `get_grouping_pool_types(args)`
 Each strategy writes to its own path. Sharing one path across strategies makes
 the merge stage delete the same per-chr fragment twice (`FileNotFoundError`).
 
-### Why no CLI flag
+### Why it is gated
 
-Deliberate: the output is cheap enough that a flag would cost more than it
-saves. Conditions 2 and 3 already restrict it to runs where the output is
-meaningful, and guarding a small extra output behind an option makes the
-`--analysis` surface larger for no benefit.
+Originally there was no flag: velocity ran for every non-bulk barcode-derived
+grouping. On spatial data that is one dense loom column per spot barcode —
+days of writing and gigabytes of output (cost tracks genes x barcodes, see
+below) — for a result that is meaningless per spot. Hence the analysis switch,
+10x-only default, the barcode count gate, and `--barcode2cellid` to give
+spatial data real cells.
 
 The per-read cost is the part that has to be negligible, and it is:
 `add_read_info` walks `isoform_matches` and their `match_subclassifications`
@@ -68,7 +97,7 @@ see `create_loom` below. After the windowed write, peak RSS is flat in the cell
 count (0.79 GB at 5k genes x 20k cells, 0.65 GB at 80k cells, where a dense
 int32 grid would be 0.4 GB and 1.6 GB). What remains is *time*, linear in
 genes x cells because loom is dense: ~65 s and ~250 MB of file per 1e9 grid
-entries in a synthetic sweep.
+entries in a synthetic sweep — which is what the gating above is for.
 
 ### Measured end to end
 
