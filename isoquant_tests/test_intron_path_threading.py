@@ -84,3 +84,39 @@ def test_bare_read_start_beyond_a_tss_vertex_is_reachable():
     p = _processor(intron, incoming=[(TerminalVertex.tss_left, 800),
                                      (TerminalVertex.read_start, 500)])
     assert p.thread_starts(intron, 510, trusted=False) == (TerminalVertex.read_start, 500)
+
+
+# -- 5' ends at a predicted TSS (--fl_data) ------------------------------------
+
+def test_read_start_at_a_tss_inside_an_exon_with_incoming_introns_is_threaded():
+    # An upstream read-through transcript splices into this first exon; a read starting at a predicted
+    # TSS in it is a transcription start, not a truncated copy of the read-through.
+    intron = (1000, 2000)
+    p = _processor(intron, incoming=[(400, 600), (TerminalVertex.tss_left, 700)])
+    assert p.thread_starts(intron, 710, trusted=False) is None
+    assert p.thread_starts(intron, 710, trusted=False, five_prime=True) == (TerminalVertex.tss_left, 700)
+
+
+def test_read_end_at_a_tss_inside_an_exon_with_outgoing_introns_is_threaded():
+    # The same on the genomic right: the 5' end of a '-' strand read.
+    intron = (100, 200)
+    p = _processor(intron, outgoing=[(1500, 1700), (TerminalVertex.tss_right, 1300)])
+    assert p.thread_ends(intron, 1290, trusted=False) is None
+    assert p.thread_ends(intron, 1290, trusted=False, five_prime=True) == (TerminalVertex.tss_right, 1300)
+
+
+def test_read_start_at_a_tss_claims_the_nearest_read_start_vertex():
+    # the TSS was predicted for a transcript whose terminal intron is elsewhere, so no TSS vertex here
+    intron = (1000, 2000)
+    p = _processor(intron, incoming=[(400, 600), (TerminalVertex.read_start, 700),
+                                     (TerminalVertex.read_start, 760)])
+    assert p.thread_starts(intron, 745, trusted=False) is None
+    assert p.thread_starts(intron, 745, trusted=False, five_prime=True) == (TerminalVertex.read_start, 760)
+    assert p.thread_starts(intron, 710, trusted=False, five_prime=True) == (TerminalVertex.read_start, 700)
+
+
+def test_read_end_at_a_tss_claims_the_nearest_read_end_vertex():
+    intron = (100, 200)
+    p = _processor(intron, outgoing=[(1500, 1700), (TerminalVertex.read_end, 1300)])
+    assert p.thread_ends(intron, 1280, trusted=False) is None
+    assert p.thread_ends(intron, 1280, trusted=False, five_prime=True) == (TerminalVertex.read_end, 1300)

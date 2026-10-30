@@ -5,6 +5,7 @@
 # See file LICENSE for details.
 ############################################################################
 
+import bisect
 import logging
 import queue
 from collections import defaultdict
@@ -164,6 +165,11 @@ class IntronGraph:
         # (see _admissible_predictions).
         self.polya_predictions = polya_predictions
         self.tss_predictions = tss_predictions
+        # Every predicted TSS in the block, whichever transcript it was predicted for: a read 5' end
+        # at one of them is a transcription start (or a reproducible alignment start, e.g. a first exon
+        # behind a long intron left unaligned) rather than a random truncation point.
+        self.predicted_tss_positions: List[int] = \
+            sorted({int(position) for _, position in tss_predictions}) if tss_predictions else []
 
         self.incoming_edges = defaultdict(set)
         self.outgoing_edges = defaultdict(set)
@@ -646,9 +652,12 @@ class IntronGraph:
             polyt_detected = assignment.strand == '-' and \
                 (assignment.polya_info.external_polyt_pos != -1 or
                  assignment.polya_info.internal_polyt_pos != -1)
+            # a 5' end at a predicted TSS is kept even inside an exon that other reads splice into
+            # (alternative first exon, read-through transcript upstream)
             if polyt_detected:
                 polyt_starts[starting_intron][read_start] += 1
-            elif not self.is_start_internal(starting_intron, read_start):
+            elif (assignment.strand == '+' and self.is_at_predicted_tss(read_start)) or \
+                    not self.is_start_internal(starting_intron, read_start):
                 read_starts[starting_intron][read_start] += 1
 
             terminating_intron = self.intron_collector.substitute(assignment.corrected_introns[-1])
@@ -661,7 +670,8 @@ class IntronGraph:
                  assignment.polya_info.internal_polya_pos != -1)
             if polya_detected:
                 polya_ends[terminating_intron][read_end] += 1
-            elif not self.is_end_internal(terminating_intron, read_end):
+            elif (assignment.strand == '-' and self.is_at_predicted_tss(read_end)) or \
+                    not self.is_end_internal(terminating_intron, read_end):
                 read_ends[terminating_intron][read_end] += 1
 
         # self.print_terminal(read_starts, "Read starts")
@@ -715,6 +725,12 @@ class IntronGraph:
         if total_count < cutoff:
             return {}
         return {pos: total_count}
+
+    def is_at_predicted_tss(self, position: int) -> bool:
+        # TSS predictions exist only with --fl_data
+        i = bisect.bisect_left(self.predicted_tss_positions, position)
+        return any(abs(self.predicted_tss_positions[j] - position) <= self.params.apa_delta
+                   for j in (i - 1, i) if 0 <= j < len(self.predicted_tss_positions))
 
     def is_start_internal(self, intron, read_start):
         is_internal = False
