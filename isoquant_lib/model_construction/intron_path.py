@@ -35,7 +35,7 @@ class IntronPathStorage:
             is_end_trusted = a.strand == '+' and \
                 (a.polya_info.external_polya_pos != -1 or
                  a.polya_info.internal_polya_pos != -1)
-            is_end_tss = a.strand == '-' and self.intron_graph.is_at_predicted_tss(read_end)
+            is_end_tss = a.strand == '-' and self.intron_graph.is_trusted_five_prime(intron_path[-1], read_end, False)
             terminal_vertex = self.path_processor.thread_ends(intron_path[-1], read_end, is_end_trusted,
                                                               five_prime=is_end_tss)
             if terminal_vertex:
@@ -45,7 +45,7 @@ class IntronPathStorage:
             is_start_trusted = a.strand == '-' and \
                 (a.polya_info.external_polyt_pos != -1 or
                  a.polya_info.internal_polyt_pos != -1)
-            is_start_tss = a.strand == '+' and self.intron_graph.is_at_predicted_tss(read_start)
+            is_start_tss = a.strand == '+' and self.intron_graph.is_trusted_five_prime(intron_path[0], read_start, True)
             starting_vertex = self.path_processor.thread_starts(intron_path[0], read_start, is_start_trusted,
                                                                 five_prime=is_start_tss)
             if starting_vertex:
@@ -96,7 +96,7 @@ class IntronPathProcessor:
         return nearest
 
     def thread_ends(self, intron, end, trusted=False, five_prime=False):
-        # five_prime: the end is a '-' strand 5' end at a predicted TSS
+        # five_prime: the end is a trusted '-' strand 5' end (IntronGraph.is_trusted_five_prime)
         possible_polyas = self.intron_graph.get_outgoing(intron, TerminalVertex.polya)
         if trusted:
             # find closes polyA
@@ -146,7 +146,7 @@ class IntronPathProcessor:
         return None
 
     def thread_starts(self, intron, start, trusted=False, five_prime=False):
-        # five_prime: the start is a '+' strand 5' end at a predicted TSS
+        # five_prime: the start is a trusted '+' strand 5' end (IntronGraph.is_trusted_five_prime)
         possible_polyas = self.intron_graph.get_incoming(intron, TerminalVertex.polyt)
         if trusted:
             # find closes polyT
