@@ -652,11 +652,11 @@ class IntronGraph:
             polyt_detected = assignment.strand == '-' and \
                 (assignment.polya_info.external_polyt_pos != -1 or
                  assignment.polya_info.internal_polyt_pos != -1)
-            # a 5' end at a predicted TSS is kept even inside an exon that other reads splice into
+            # a trusted 5' end is kept even inside an exon that other reads splice into
             # (alternative first exon, read-through transcript upstream)
             if polyt_detected:
                 polyt_starts[starting_intron][read_start] += 1
-            elif (assignment.strand == '+' and self.is_at_predicted_tss(read_start)) or \
+            elif (assignment.strand == '+' and self.is_trusted_five_prime(starting_intron, read_start, True)) or \
                     not self.is_start_internal(starting_intron, read_start):
                 read_starts[starting_intron][read_start] += 1
 
@@ -670,7 +670,7 @@ class IntronGraph:
                  assignment.polya_info.internal_polya_pos != -1)
             if polya_detected:
                 polya_ends[terminating_intron][read_end] += 1
-            elif (assignment.strand == '-' and self.is_at_predicted_tss(read_end)) or \
+            elif (assignment.strand == '-' and self.is_trusted_five_prime(terminating_intron, read_end, False)) or \
                     not self.is_end_internal(terminating_intron, read_end):
                 read_ends[terminating_intron][read_end] += 1
 
@@ -731,6 +731,27 @@ class IntronGraph:
         i = bisect.bisect_left(self.predicted_tss_positions, position)
         return any(abs(self.predicted_tss_positions[j] - position) <= self.params.apa_delta
                    for j in (i - 1, i) if 0 <= j < len(self.predicted_tss_positions))
+
+    def is_trusted_five_prime(self, intron, position: int, genomic_left: bool) -> bool:
+        # a 5' end at a predicted TSS is a transcription start; with --fl_data so is any other 5' end,
+        # except near the acceptor of an annotated or well-supported intron entering this exon, where reads
+        # whose short first exon was soft-clipped by the aligner start
+        if self.is_at_predicted_tss(position):
+            return True
+        if not getattr(self.params, 'fl_data', False):
+            return False
+        collector = self.intron_collector
+        # rare novel introns are alignment noise and do not make an exon internal
+        min_coverage = max(self.params.min_novel_count,
+                           self.params.min_novel_count_rel * collector.clustered_introns[intron])
+        neighbours = self.get_incoming(intron) if genomic_left else self.get_outgoing(intron)
+        for v in neighbours:
+            if v not in collector.known_introns and collector.clustered_introns[v] < min_coverage:
+                continue
+            acceptor = v[1] + 1 if genomic_left else v[0] - 1
+            if abs(position - acceptor) <= self.params.apa_delta:
+                return False
+        return True
 
     def is_start_internal(self, intron, read_start):
         is_internal = False

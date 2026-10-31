@@ -202,21 +202,32 @@ def test_attach_side_ignores_prediction_inside_the_intron():
     assert not any(v[0] == TerminalVertex.tss_right for v in g.outgoing_edges[intron])
 
 
-# -- collect_terminal_positions: 5' ends at a predicted TSS (--fl_data) --------
+# -- collect_terminal_positions: trusted 5' ends (--fl_data) ------------------
 
 INNER_INTRON = (1000, 2000)
+UPSTREAM_INTRON = (400, 600)
+DOWNSTREAM_INTRON = (2500, 2700)
 
 
-def _terminal_graph(read_assignments, tss_positions):
-    # intron (1000, 2000) with an upstream intron (400, 600) entering it and a downstream one (2500, 2700)
-    # leaving it, so both read termini below lie inside exons that other reads splice through
+def _terminal_graph(read_assignments, tss_positions, fl_data=False, upstream=UPSTREAM_INTRON,
+                    downstream=DOWNSTREAM_INTRON, known_introns=(), coverage=None):
+    # intron (1000, 2000) with an upstream intron entering it and a downstream one leaving it, so both
+    # read termini below lie inside exons that other reads splice through; introns have 100 reads unless
+    # coverage says otherwise
     g = _bare_graph(apa_delta=50)
     g.params.delta = 5
+    g.params.fl_data = fl_data
+    g.params.min_novel_count = 3
+    g.params.min_novel_count_rel = 0.02
     g.read_assignments = read_assignments
     g.predicted_tss_positions = sorted(tss_positions)
-    g.intron_collector = types.SimpleNamespace(substitute=lambda v: v, discarded_introns=set())
-    g.incoming_edges[INNER_INTRON] = {(400, 600)}
-    g.outgoing_edges[INNER_INTRON] = {(2500, 2700)}
+    clustered_introns = defaultdict(int, {INNER_INTRON: 100, upstream: 100, downstream: 100})
+    clustered_introns.update(coverage or {})
+    g.intron_collector = types.SimpleNamespace(substitute=lambda v: v, discarded_introns=set(),
+                                               known_introns=set(known_introns),
+                                               clustered_introns=clustered_introns)
+    g.incoming_edges[INNER_INTRON] = {upstream}
+    g.outgoing_edges[INNER_INTRON] = {downstream}
     return g
 
 
@@ -227,8 +238,8 @@ def _terminal_read(strand: str):
                                                                   external_polyt_pos=-1, internal_polyt_pos=-1))
 
 
-def _collect(strand: str, tss_positions=()):
-    graph = _terminal_graph([_terminal_read(strand)], tss_positions)
+def _collect(strand: str, tss_positions=(), **graph_options):
+    graph = _terminal_graph([_terminal_read(strand)], tss_positions, **graph_options)
     _, read_ends, _, read_starts = graph.collect_terminal_positions()
     return dict(read_starts[INNER_INTRON]), dict(read_ends[INNER_INTRON])
 
@@ -248,6 +259,7 @@ def test_collect_terminal_positions_keeps_five_prime_ends_at_a_predicted_tss():
 
 
 def test_collect_terminal_positions_drops_other_internal_termini():
+    # without --fl_data only a predicted TSS makes a 5' end trusted
     for strand in ('+', '-'):
         assert _collect(strand) == ({}, {})
         # predictions further than apa_delta (50) away
@@ -255,3 +267,55 @@ def test_collect_terminal_positions_drops_other_internal_termini():
     # a TSS prediction does not keep a 3' end
     assert _collect('-', [700]) == ({}, {})
     assert _collect('+', [2300]) == ({}, {})
+
+
+# introns whose acceptors lie 19 bp from the read 5' ends: 681 vs 700 ('+'), 2319 vs 2300 ('-')
+NEAR_UPSTREAM_INTRON = (400, 680)
+NEAR_DOWNSTREAM_INTRON = (2320, 2700)
+
+
+def _collect_near(strand: str, tss_positions=(), **graph_options):
+    return _collect(strand, tss_positions, fl_data=True, upstream=NEAR_UPSTREAM_INTRON,
+                    downstream=NEAR_DOWNSTREAM_INTRON, **graph_options)
+
+
+def test_fl_data_keeps_five_prime_ends_away_from_acceptors():
+    # acceptors 601 and 2499 are 99 and 199 bp away; untailed 3' ends stay internal
+    assert _collect('+', fl_data=True) == ({700: 1}, {})
+    assert _collect('-', fl_data=True) == ({}, {2300: 1})
+
+
+def test_fl_data_drops_five_prime_ends_at_a_supported_acceptor():
+    # a read whose short first exon was soft-clipped starts at the acceptor of the exon it skipped
+    assert _collect_near('+') == ({}, {})
+    assert _collect_near('-') == ({}, {})
+    # an annotated intron counts whatever its coverage
+    rare = {NEAR_UPSTREAM_INTRON: 1, NEAR_DOWNSTREAM_INTRON: 1}
+    assert _collect_near('+', known_introns=[NEAR_UPSTREAM_INTRON], coverage=rare) == ({}, {})
+    assert _collect_near('-', known_introns=[NEAR_DOWNSTREAM_INTRON], coverage=rare) == ({}, {})
+    # a predicted TSS still wins
+    assert _collect_near('+', [700]) == ({700: 1}, {})
+    assert _collect_near('-', [2300]) == ({}, {2300: 1})
+
+
+def test_fl_data_ignores_rare_novel_introns():
+    # below min_novel_count (3)
+    rare = {NEAR_UPSTREAM_INTRON: 2, NEAR_DOWNSTREAM_INTRON: 2}
+    assert _collect_near('+', coverage=rare) == ({700: 1}, {})
+    assert _collect_near('-', coverage=rare) == ({}, {2300: 1})
+    # below min_novel_count_rel (2%) of the read's intron coverage
+    relative = {INNER_INTRON: 1000, NEAR_UPSTREAM_INTRON: 10, NEAR_DOWNSTREAM_INTRON: 19}
+    assert _collect_near('+', coverage=relative) == ({700: 1}, {})
+    assert _collect_near('-', coverage=relative) == ({}, {2300: 1})
+    relative = {INNER_INTRON: 1000, NEAR_UPSTREAM_INTRON: 20, NEAR_DOWNSTREAM_INTRON: 20}
+    assert _collect_near('+', coverage=relative) == ({}, {})
+    assert _collect_near('-', coverage=relative) == ({}, {})
+
+
+def test_is_trusted_five_prime_window_is_apa_delta():
+    for acceptor_offset, trusted in ((50, False), (51, True)):
+        upstream = (400, 700 - acceptor_offset - 1)
+        downstream = (2300 + acceptor_offset + 1, 2700)
+        g = _terminal_graph([], [], fl_data=True, upstream=upstream, downstream=downstream)
+        assert g.is_trusted_five_prime(INNER_INTRON, 700, True) is trusted
+        assert g.is_trusted_five_prime(INNER_INTRON, 2300, False) is trusted
