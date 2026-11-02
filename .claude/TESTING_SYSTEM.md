@@ -403,6 +403,7 @@ Data and configs are shared via `/abga/work/andreyp/ci_isoquant/`
 
 **Examples**:
 - `Mouse.ONT_simulated.R10.reduced_db.yaml`
+- `Mouse.PB_simulated.FL.reduced_db.yaml` (`--fl_data` on polyA-free, untruncated FLNC-like reads)
 - `Human.PB_simulated.uniform_cov.yaml`
 - `SIRVs.simulated_R10.yaml`
 
@@ -583,6 +584,7 @@ isoquant_tests/github/configs/
   _depr/                   # Deprecated .cfg/.etl/.qnt/.prf files
   ref/                     # Reference genomes and annotations
   mouse/                   # Mouse-specific data
+  mouse_fl/                # FLNC-like badread simulation (README.md lists the exact commands)
   groups/                  # Grouped read test data
   resume/                  # Resume test checkpoints
   barcodes/
