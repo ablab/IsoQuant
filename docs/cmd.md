@@ -85,6 +85,10 @@ See more in [examples](examples.md).
 
 `--fl_data`
     Input sequences represent full-length transcripts; both ends of the sequence are considered to be reliable.
+When no poly-A tail is detected (e.g. trimmed FLNC reads), the read 3' end is treated as a poly-A site.
+A read 5' end is kept as a transcript start even inside an exon that other reads splice into,
+unless it lies within 50 bp of where such a splice enters the exon and no TSS is predicted there
+(a read whose short first exon was not aligned starts there).
 
 `--polya_trimmed`
 

@@ -10,7 +10,7 @@ built **per gene block**; `process()` runs once per instance.
 
 | Module | Class | Responsibility |
 |---|---|---|
-| `context.py` | `ModelConstructionContext` | Read-only inputs (gene_info, args, string_pools, id_distributor, polyA/TSS predictions) + the intron graph (via `build_graph`) + shared helpers (`get_transcript_id`, `select_reference_gene`, `get_known_spliced_isoforms`). Owns `.store`. |
+| `context.py` | `ModelConstructionContext` | Read-only inputs (gene_info, args, string_pools, id_distributor, polyA/TSS predictions) + the intron graph (via `build_graph`) + shared helpers (`get_transcript_id`, `select_reference_gene`, `get_known_spliced_isoforms` -> path to *all* isoforms threading to it, `select_known_isoform` picks one: path assignment, read majority, closest ends). Owns `.store`. |
 | `context.py` | `ModelStore` | Mutable model list + per-read construction bookkeeping + read-binding primitives. Single source of truth. |
 | `intron_graph.py` | `IntronGraph`, `TerminalVertex`, `IntronCollector` | Intron graph over corrected read introns, with terminal polyA/TSS/read-end vertices. |
 | `intron_path.py` | `IntronPathStorage`, `IntronPathProcessor` | Thread a read's introns into a graph path + bucket reads by path (`fl_paths`, `paths_to_reads`). |
