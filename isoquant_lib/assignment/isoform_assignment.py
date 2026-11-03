@@ -831,6 +831,16 @@ class ReadAssignment:
         self.mapped_strand = "."  # Keep as single char (1 byte)
         self.strand = "."  # Keep as single char (1 byte)
         self.mapping_quality = 0
+        self.set_assignment(assignment_type, match)
+
+        self.additional_info = {}
+        self.additional_attributes = {}
+        self.introns_match = False
+        self.exon_gene_profile = []
+        self.intron_gene_profile = []
+
+    def set_assignment(self, assignment_type: ReadAssignmentType, match=None) -> None:
+        # assignment type and isoform matches; the gene assignment type is derived from them
         self.assignment_type = assignment_type
         if match is None:
             self.isoform_matches = []
@@ -859,12 +869,6 @@ class ReadAssignment:
                 self.gene_assignment_type = self.assignment_type
         else:
             self.gene_assignment_type = self.assignment_type
-
-        self.additional_info = {}
-        self.additional_attributes = {}
-        self.introns_match = False
-        self.exon_gene_profile = []
-        self.intron_gene_profile = []
 
     @property
     def chr_id(self):

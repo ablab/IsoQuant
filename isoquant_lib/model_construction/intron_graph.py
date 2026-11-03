@@ -636,6 +636,10 @@ class IntronGraph:
         read_ends = defaultdict(lambda: defaultdict(int))
         polyt_starts = defaultdict(lambda: defaultdict(int))
         read_starts = defaultdict(lambda: defaultdict(int))
+        # trusted 5' ends inside an exon that other reads splice into (alternative first exon,
+        # read-through transcript upstream)
+        internal_read_ends = defaultdict(lambda: defaultdict(int))
+        internal_read_starts = defaultdict(lambda: defaultdict(int))
 
         for assignment in self.read_assignments:
             if assignment.multimapper or not assignment.corrected_introns:
@@ -652,13 +656,16 @@ class IntronGraph:
             polyt_detected = assignment.strand == '-' and \
                 (assignment.polya_info.external_polyt_pos != -1 or
                  assignment.polya_info.internal_polyt_pos != -1)
-            # a trusted 5' end is kept even inside an exon that other reads splice into
-            # (alternative first exon, read-through transcript upstream)
             if polyt_detected:
                 polyt_starts[starting_intron][read_start] += 1
-            elif (assignment.strand == '+' and self.is_trusted_five_prime(starting_intron, read_start, True)) or \
-                    not self.is_start_internal(starting_intron, read_start):
+            elif not self.is_start_internal(starting_intron, read_start):
                 read_starts[starting_intron][read_start] += 1
+            elif assignment.strand == '+' and self.is_trusted_five_prime(starting_intron, read_start, True):
+                if self.five_prime_vertex_limit(starting_intron, read_start, True) is None:
+                    # inside the exon only by rare novel introns
+                    read_starts[starting_intron][read_start] += 1
+                else:
+                    internal_read_starts[starting_intron][read_start] += 1
 
             terminating_intron = self.intron_collector.substitute(assignment.corrected_introns[-1])
             read_end = assignment.corrected_exons[-1][1]
@@ -670,9 +677,23 @@ class IntronGraph:
                  assignment.polya_info.internal_polya_pos != -1)
             if polya_detected:
                 polya_ends[terminating_intron][read_end] += 1
-            elif (assignment.strand == '-' and self.is_trusted_five_prime(terminating_intron, read_end, False)) or \
-                    not self.is_end_internal(terminating_intron, read_end):
+            elif not self.is_end_internal(terminating_intron, read_end):
                 read_ends[terminating_intron][read_end] += 1
+            elif assignment.strand == '-' and self.is_trusted_five_prime(terminating_intron, read_end, False):
+                if self.five_prime_vertex_limit(terminating_intron, read_end, False) is None:
+                    read_ends[terminating_intron][read_end] += 1
+                else:
+                    internal_read_ends[terminating_intron][read_end] += 1
+
+        # an intron gets one read start/end vertex, at the outermost terminus; trusted 5' ends inside the exon
+        # make it only when no read starts (ends) outside the exon, since they are never threaded to a vertex
+        # past the annotated or well-supported intron entering (leaving) the exon (five_prime_vertex_limit)
+        for intron, positions in internal_read_starts.items():
+            if intron not in read_starts:
+                read_starts[intron] = positions
+        for intron, positions in internal_read_ends.items():
+            if intron not in read_ends:
+                read_ends[intron] = positions
 
         # self.print_terminal(read_starts, "Read starts")
         # self.print_terminal(polyt_starts, "Read polyT")
@@ -732,7 +753,7 @@ class IntronGraph:
         return any(abs(self.predicted_tss_positions[j] - position) <= self.params.apa_delta
                    for j in (i - 1, i) if 0 <= j < len(self.predicted_tss_positions))
 
-    def is_trusted_five_prime(self, intron, position: int, genomic_left: bool) -> bool:
+    def is_trusted_five_prime(self, intron: Tuple[int, int], position: int, genomic_left: bool) -> bool:
         # a 5' end at a predicted TSS is a transcription start; with --fl_data so is any other 5' end,
         # except near the acceptor of an annotated or well-supported intron entering this exon, where reads
         # whose short first exon was soft-clipped by the aligner start
@@ -740,18 +761,33 @@ class IntronGraph:
             return True
         if not getattr(self.params, 'fl_data', False):
             return False
-        collector = self.intron_collector
-        # rare novel introns are alignment noise and do not make an exon internal
-        min_coverage = max(self.params.min_novel_count,
-                           self.params.min_novel_count_rel * collector.clustered_introns[intron])
-        neighbours = self.get_incoming(intron) if genomic_left else self.get_outgoing(intron)
-        for v in neighbours:
-            if v not in collector.known_introns and collector.clustered_introns[v] < min_coverage:
-                continue
+        for v in self.supported_neighbours(intron, genomic_left):
             acceptor = v[1] + 1 if genomic_left else v[0] - 1
             if abs(position - acceptor) <= self.params.apa_delta:
                 return False
         return True
+
+    def supported_neighbours(self, intron: Tuple[int, int], genomic_left: bool) -> List[Tuple[int, int]]:
+        # annotated or well-supported introns entering (genomic_left) or leaving the exon next to intron;
+        # rare novel introns are alignment noise and do not bound the exon
+        collector = self.intron_collector
+        min_coverage = max(self.params.min_novel_count,
+                           self.params.min_novel_count_rel * collector.clustered_introns[intron])
+        neighbours = self.get_incoming(intron) if genomic_left else self.get_outgoing(intron)
+        return [v for v in neighbours if v in collector.known_introns or collector.clustered_introns[v] >= min_coverage]
+
+    def five_prime_vertex_limit(self, intron: Tuple[int, int], position: int, genomic_left: bool) -> Optional[int]:
+        # a trusted 5' end inside the exon that a supported intron enters (leaves) takes only a vertex inside
+        # that exon: the outermost vertex position it may take, with the bound of is_start_internal
+        # (is_end_internal); None when no supported intron makes the end internal
+        boundaries = [v[1] if genomic_left else v[0] for v in self.supported_neighbours(intron, genomic_left)]
+        if not boundaries:
+            return None
+        if genomic_left:
+            limit = min(boundaries) - self.params.delta
+            return limit if position >= limit else None
+        limit = max(boundaries) + self.params.delta
+        return limit if position <= limit else None
 
     def is_start_internal(self, intron, read_start):
         is_internal = False
