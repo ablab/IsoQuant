@@ -113,6 +113,7 @@ Indicate that reads were poly-A trimmed. Possible values are:
   Use this option only with `flnc.bam` input (where tails are removed).
 
 Note that IsoQuant still runs sequence-based polyA tail detection for every read. If the external information and the sequence disagree, the external information is used.
+A poly-A site set by these options (or by `--fl_data`) is used in read assignment as a tail found in the read sequence: it resolves isoforms that differ only in their 3' ends, and a read ending away from the 3' end of an isoform it otherwise matches is reported with an alternative poly-A site. The poly-A percentage in the log counts these sites too.
 
 `--illumina_bam`
     Sorted and indexed BAM file(s) with short Illumina reads from the same sample. Short reads are used only for

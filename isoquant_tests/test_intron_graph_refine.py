@@ -269,6 +269,35 @@ def test_collect_terminal_positions_drops_other_internal_termini():
     assert _collect('+', [2300]) == ({}, {})
 
 
+def test_fl_data_internal_five_prime_ends_do_not_join_an_outer_cluster():
+    # a read retaining the upstream (downstream) intron starts (ends) outside the exon: the intron's single
+    # vertex sits at that terminus, and the trusted 5' ends inside the exon, never threaded to it, do not count
+    outer = _terminal_read('+')
+    outer.corrected_exons = [(300, 999), (2001, 2300)]
+    _, _, _, read_starts = _terminal_graph([_terminal_read('+'), outer], [], fl_data=True).collect_terminal_positions()
+    assert dict(read_starts[INNER_INTRON]) == {300: 1}
+    outer = _terminal_read('-')
+    outer.corrected_exons = [(700, 999), (2001, 2800)]
+    _, read_ends, _, _ = _terminal_graph([_terminal_read('-'), outer], [], fl_data=True).collect_terminal_positions()
+    assert dict(read_ends[INNER_INTRON]) == {2800: 1}
+
+
+def test_fl_data_five_prime_ends_inside_an_exon_only_by_a_rare_intron_join_the_outer_cluster():
+    # (SIRV108) a 1-read intron ends 5 bp before the 5' ends: they count as outside the exon
+    outer = _terminal_read('+')
+    outer.corrected_exons = [(689, 999), (2001, 2300)]
+    graph = _terminal_graph([_terminal_read('+'), outer], [], fl_data=True, upstream=(400, 695),
+                            coverage={(400, 695): 1})
+    _, _, _, read_starts = graph.collect_terminal_positions()
+    assert dict(read_starts[INNER_INTRON]) == {689: 1, 700: 1}
+    outer = _terminal_read('-')
+    outer.corrected_exons = [(700, 999), (2001, 2311)]
+    graph = _terminal_graph([_terminal_read('-'), outer], [], fl_data=True, downstream=(2305, 2700),
+                            coverage={(2305, 2700): 1})
+    _, read_ends, _, _ = graph.collect_terminal_positions()
+    assert dict(read_ends[INNER_INTRON]) == {2300: 1, 2311: 1}
+
+
 # introns whose acceptors lie 19 bp from the read 5' ends: 681 vs 700 ('+'), 2319 vs 2300 ('-')
 NEAR_UPSTREAM_INTRON = (400, 680)
 NEAR_DOWNSTREAM_INTRON = (2320, 2700)

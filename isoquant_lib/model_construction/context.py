@@ -17,7 +17,7 @@ from collections import defaultdict
 from enum import Enum, unique
 from typing import Dict, List, Optional, Tuple
 
-from ..gene_info import StrandDetector, TranscriptModel
+from ..gene_info import GeneInfo, StrandDetector, TranscriptModel
 from isoquant_lib.model_construction.intron_graph import IntronGraph
 from ..assignment.isoform_assignment import ReadAssignment
 from ..assignment.long_read_assigner import LongReadAssigner
@@ -201,7 +201,7 @@ class ModelConstructionContext:
 
         return None
 
-    def get_known_spliced_isoforms(self, gene_info) -> Dict[tuple, List[str]]:
+    def get_known_spliced_isoforms(self, gene_info: GeneInfo) -> Dict[tuple, List[str]]:
         # graph path -> every annotated isoform threading to it. Isoforms with identical intron
         # chains (e.g. differing only in their ends) share a path; keeping a single id per path
         # silently dropped the others from both FL and assignment-based construction.
