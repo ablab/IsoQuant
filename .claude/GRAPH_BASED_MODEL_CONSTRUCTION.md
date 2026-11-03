@@ -387,8 +387,15 @@ def cluster_terminal_positions(position_dict, read_end=True, min_abs=1):
 ### Full-length reads (`--fl_data`)
 
 - 3' end: a read without a detected polyA tail (and without polyT soft-clipped at its 5' end) gets
-  an artificial polyA at its 3' end (`add_artificial_polya` -> `inject_external_polya`), re-verified
-  against the assigned isoforms, so its end is trusted when threading.
+  an artificial polyA at its 3' end (`add_artificial_polya` -> `inject_external_polya`), so its end is
+  trusted when threading. As for every site set after assignment (`--polya_trimmed`, tag/list tails
+  without a side), `AlignmentCollector.apply_artificial_polya` then has
+  `LongReadAssigner.reassign_with_polya_site` classify the read as for a tail found in its sequence:
+  consistent matches on the read strand are verified (`PolyAVerifier.verify_read_ends`), matches the
+  site contradicts are dropped when others agree with it, and the read is matched again
+  (`match_inconsistent`) when the site contradicts all of them or the read was inconsistent. A revised
+  read goes through the inconsistent-MAPQ filter, exon correction and the antisense check again; the
+  site itself stays at the first corrected end.
 - 5' end: `IntronGraph.is_trusted_five_prime(intron, position, genomic_left)` decides whether a read
   start ('+') or end ('-') is a transcription start. It is True at a predicted TSS
   (`is_at_predicted_tss`: within `apa_delta` of any TSS predicted in the block,
@@ -401,11 +408,18 @@ def cluster_terminal_positions(position_dict, read_end=True, min_abs=1):
   annotated introns and introns with coverage >= `max(min_novel_count, min_novel_count_rel *
   coverage of the read's intron)` count; ONT graphs carry many 1-3-read noise introns that would
   otherwise block real TSSs. Coverage comes from `clustered_introns`, as `collapse_vertex` does not
-  move `edge_weights`. `collect_terminal_positions` keeps trusted termini even when other reads splice
-  into the exon (`is_start_internal`/`is_end_internal`), and `thread_starts`/`thread_ends(five_prime=True)`
-  skip the "inside the previous exon" rejection and claim a TSS vertex or the nearest
-  read-start/read-end vertex within `apa_delta`. Without `--fl_data` there are no TSS predictions,
-  so this is inert.
+  move `edge_weights`; `IntronGraph.supported_neighbours` applies this filter.
+  `collect_terminal_positions` keeps trusted termini even when other reads splice into the exon
+  (`is_start_internal`/`is_end_internal`), but an intron has a single read-start/end vertex at its
+  outermost terminus, so a terminus inside the exon of a supported intron makes it only when no read
+  starts (ends) outside the exon; one inside the exon only by noise introns counts as outside.
+  `thread_starts`/`thread_ends(five_prime=True)` skip the "inside the previous exon" rejection and claim
+  a TSS vertex or the nearest read-start/read-end vertex within `apa_delta`, else fall back to the
+  outermost vertex; for a terminus inside the exon of a supported intron every candidate must lie
+  inside the exon too (`five_prime_vertex_limit`, the `is_start_internal` bound over supported
+  introns), never past that intron, else the read is not threaded. Noise introns do not bound the exon
+  here either: a 1-read intron ending at SIRV108's TSS (SIRVs Set4 R10) otherwise rejects the TSS
+  vertex 6 bp before it. Without `--fl_data` there are no TSS predictions, so this is inert.
 
 ### Finding Read Ends (`thread_ends`)
 

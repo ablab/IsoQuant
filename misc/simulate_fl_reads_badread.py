@@ -39,7 +39,7 @@ TRANSCRIPT_ID_RE = re.compile(r'transcript_id "([^"]+)"')
 GENE_ID_RE = re.compile(r'gene_id "([^"]+)"')
 
 
-def parse_args():
+def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--counts", required=True,
                         help="expression profile TSV: transcript_id<TAB>count[<TAB>...]")
@@ -174,7 +174,7 @@ def reduce_truth_gtf(source: str, target: str, transcripts: Dict[str, int]) -> i
     return kept
 
 
-def main():
+def main() -> None:
     args = parse_args()
     counts = load_counts(args.counts)
     sequences, gene_of = load_transcripts(args.transcripts, counts)

@@ -18,13 +18,17 @@ outermost candidate, never an inner truncation cluster.
 import types
 from collections import defaultdict
 
-from isoquant_lib.model_construction.intron_graph import TerminalVertex
+from isoquant_lib.model_construction.intron_graph import IntronGraph, TerminalVertex
 from isoquant_lib.model_construction.intron_path import IntronPathProcessor
 
 
-def _processor(intron, outgoing=(), incoming=(), apa_delta=50, delta=5):
+def _processor(intron, outgoing=(), incoming=(), apa_delta=50, delta=5, known_introns=(), coverage=None):
+    # introns have 100 reads unless coverage says otherwise
+    params = types.SimpleNamespace(apa_delta=apa_delta, delta=delta, min_novel_count=3, min_novel_count_rel=0.02)
     graph = types.SimpleNamespace(
-        intron_collector=types.SimpleNamespace(clustered_introns={intron: 10}),
+        params=params,
+        intron_collector=types.SimpleNamespace(clustered_introns=defaultdict(lambda: 100, coverage or {}),
+                                               known_introns=set(known_introns)),
         outgoing_edges=defaultdict(set),
         incoming_edges=defaultdict(set),
     )
@@ -36,7 +40,8 @@ def _processor(intron, outgoing=(), incoming=(), apa_delta=50, delta=5):
     graph.get_incoming = lambda i, vertex_type=None: {
         v for v in graph.incoming_edges[i]
         if (vertex_type is None and v[0] >= 0) or v[0] == vertex_type}
-    params = types.SimpleNamespace(apa_delta=apa_delta, delta=delta)
+    graph.supported_neighbours = types.MethodType(IntronGraph.supported_neighbours, graph)
+    graph.five_prime_vertex_limit = types.MethodType(IntronGraph.five_prime_vertex_limit, graph)
     return IntronPathProcessor(params, graph)
 
 
@@ -120,3 +125,55 @@ def test_read_end_at_a_tss_claims_the_nearest_read_end_vertex():
     p = _processor(intron, outgoing=[(1500, 1700), (TerminalVertex.read_end, 1300)])
     assert p.thread_ends(intron, 1280, trusted=False) is None
     assert p.thread_ends(intron, 1280, trusted=False, five_prime=True) == (TerminalVertex.read_end, 1300)
+
+
+def test_trusted_start_inside_an_exon_is_not_threaded_past_the_incoming_intron():
+    # the only read start vertex lies before the intron entering the exon (reads retaining that intron)
+    intron = (1000, 2000)
+    p = _processor(intron, incoming=[(400, 600), (TerminalVertex.read_start, 300)])
+    assert p.thread_starts(intron, 800, trusted=False, five_prime=True) is None
+    # nor to a TSS vertex there
+    p = _processor(intron, incoming=[(400, 600), (TerminalVertex.tss_left, 580)])
+    assert p.thread_starts(intron, 610, trusted=False, five_prime=True) is None
+    # a vertex inside the exon takes the start even further than apa_delta away, as for an outer start
+    p = _processor(intron, incoming=[(400, 600), (TerminalVertex.read_start, 700)])
+    assert p.thread_starts(intron, 800, trusted=False, five_prime=True) == (TerminalVertex.read_start, 700)
+
+
+def test_trusted_end_inside_an_exon_is_not_threaded_past_the_outgoing_intron():
+    intron = (100, 200)
+    p = _processor(intron, outgoing=[(1500, 1700), (TerminalVertex.read_end, 1900)])
+    assert p.thread_ends(intron, 1200, trusted=False, five_prime=True) is None
+    p = _processor(intron, outgoing=[(1500, 1700), (TerminalVertex.tss_right, 1520)])
+    assert p.thread_ends(intron, 1490, trusted=False, five_prime=True) is None
+    p = _processor(intron, outgoing=[(1500, 1700), (TerminalVertex.read_end, 1300)])
+    assert p.thread_ends(intron, 1200, trusted=False, five_prime=True) == (TerminalVertex.read_end, 1300)
+
+
+def test_rare_novel_intron_does_not_bound_the_exon_of_a_trusted_start():
+    # (SIRV108) a 1-read intron ends next to the start; the start vertex lies 7 bp before its acceptor
+    intron = (1000, 2000)
+    incoming = [(400, 600), (TerminalVertex.read_start, 594)]
+    p = _processor(intron, incoming=incoming, coverage={(400, 600): 1})
+    assert p.thread_starts(intron, 601, trusted=False, five_prime=True) == (TerminalVertex.read_start, 594)
+    # an annotated or well-supported intron still bounds it
+    p = _processor(intron, incoming=incoming, coverage={(400, 600): 1}, known_introns=[(400, 600)])
+    assert p.thread_starts(intron, 601, trusted=False, five_prime=True) is None
+    p = _processor(intron, incoming=incoming)
+    assert p.thread_starts(intron, 601, trusted=False, five_prime=True) is None
+    # an untrusted start stays rejected, as on master
+    p = _processor(intron, incoming=incoming, coverage={(400, 600): 1})
+    assert p.thread_starts(intron, 601, trusted=False) is None
+
+
+def test_rare_novel_intron_does_not_bound_the_exon_of_a_trusted_end():
+    intron = (100, 200)
+    outgoing = [(1500, 1700), (TerminalVertex.read_end, 1506)]
+    p = _processor(intron, outgoing=outgoing, coverage={(1500, 1700): 1})
+    assert p.thread_ends(intron, 1499, trusted=False, five_prime=True) == (TerminalVertex.read_end, 1506)
+    p = _processor(intron, outgoing=outgoing, coverage={(1500, 1700): 1}, known_introns=[(1500, 1700)])
+    assert p.thread_ends(intron, 1499, trusted=False, five_prime=True) is None
+    p = _processor(intron, outgoing=outgoing)
+    assert p.thread_ends(intron, 1499, trusted=False, five_prime=True) is None
+    p = _processor(intron, outgoing=outgoing, coverage={(1500, 1700): 1})
+    assert p.thread_ends(intron, 1499, trusted=False) is None
