@@ -11,65 +11,65 @@ reference_tpm: /abga/work/andreyp/ci_isoquant/data/mouse_fl/Mouse.PB_FL.badread.
 reference_gene_tpm: /abga/work/andreyp/ci_isoquant/data/mouse_fl/Mouse.PB_FL.badread.gene_counts.tsv
 baselines:
   transcripts:
-    full_recall: 93.0
+    full_recall: 93.1
     full_precision: 98.8
-    known_recall: 97.9
-    known_precision: 99.6
-    novel_recall: 67.4
-    novel_precision: 93.1
-  transcripts_td50:
-    full_recall: 93.0
-    full_precision: 98.8
-    known_recall: 97.9
+    known_recall: 98.0
     known_precision: 99.6
     novel_recall: 67.3
-    novel_precision: 92.9
-  transcripts_td10:
-    full_recall: 91.9
-    full_precision: 97.6
-    known_recall: 97.8
+    novel_precision: 93.1
+  transcripts_td50:
+    full_recall: 93.1
+    full_precision: 98.7
+    known_recall: 98.0
     known_precision: 99.6
-    novel_recall: 60.9
+    novel_recall: 67.2
+    novel_precision: 93.0
+  transcripts_td10:
+    full_recall: 92.0
+    full_precision: 97.5
+    known_recall: 98.0
+    known_precision: 99.5
+    novel_recall: 60.8
     novel_precision: 84.1
   quantification_ref:
-    reported_overlap: 24009.0
-    corr_overlap: 0.9408
-    good_matches_overlap: 46.0
-    fair_matches_overlap: 163.0
+    reported_overlap: 24090.0
+    corr_overlap: 0.9409
+    good_matches_overlap: 41.0
+    fair_matches_overlap: 155.0
     false_reports_overlap: 0.0
-    missed_overlap: 653.0
-    reported_full: 24127.0
+    missed_overlap: 572.0
+    reported_full: 24211.0
     corr_full: 0.8997
-    good_matches_full: 46.0
-    fair_matches_full: 163.0
-    false_reports_full: 118.0
-    missed_full: 5595.0
+    good_matches_full: 41.0
+    fair_matches_full: 155.0
+    false_reports_full: 121.0
+    missed_full: 5514.0
   quantification_novel:
-    reported_overlap: 27349.0
-    corr_overlap: 0.976
-    good_matches_overlap: 26699.0
-    fair_matches_overlap: 26778.0
+    reported_overlap: 27381.0
+    corr_overlap: 0.9756
+    good_matches_overlap: 26731.0
+    fair_matches_overlap: 26810.0
     false_reports_overlap: 0.0
     missed_overlap: 0.0
-    reported_full: 27709.0
-    corr_full: 0.9148
-    good_matches_full: 26699.0
-    fair_matches_full: 26778.0
+    reported_full: 27741.0
+    corr_full: 0.9144
+    good_matches_full: 26731.0
+    fair_matches_full: 26810.0
     false_reports_full: 360.0
-    missed_full: 2255.0
+    missed_full: 2223.0
   quantification_gene:
-    reported_overlap: 16602.0
-    corr_overlap: 0.9195
-    good_matches_overlap: 460.0
-    fair_matches_overlap: 15229.0
+    reported_overlap: 16589.0
+    corr_overlap: 0.9194
+    good_matches_overlap: 467.0
+    fair_matches_overlap: 15222.0
     false_reports_overlap: 0.0
-    missed_overlap: 1651.0
-    reported_full: 16625.0
-    corr_full: 0.9195
-    good_matches_full: 460.0
-    fair_matches_full: 15229.0
+    missed_overlap: 1664.0
+    reported_full: 16612.0
+    corr_full: 0.9194
+    good_matches_full: 467.0
+    fair_matches_full: 15222.0
     false_reports_full: 23.0
-    missed_full: 1651.0
+    missed_full: 1664.0
   performance:
     max_rss: 4690452480.0
     cpu_time: 2479.0
