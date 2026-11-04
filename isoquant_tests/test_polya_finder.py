@@ -5,18 +5,14 @@
 # See file LICENSE for details.
 ############################################################################
 
-import os
 from collections import namedtuple
 
 import pytest
 
 from isoquant_lib.terminal_prediction.polya_finder import PolyAFinder
-from isoquant_lib.terminal_prediction.cage_finder import CagePeakFinder
 
 
 PolyAAlignment = namedtuple('PolyAAlignment', ('query_name', 'cigartuples', 'seq', 'reference_start', 'reference_end'))
-CageAlignment = namedtuple('CageAlignment', ('query_name', 'reference_name', 'reference_start',
-                                             'reference_end', 'is_reverse'))
 
 
 TUPLES1 = [(4, 2), (0, 15), (1, 1), (0, 5), (2, 1), (0, 16), (3, 4642), (0, 5), (1, 1), (0, 1), (1, 1),
@@ -93,28 +89,3 @@ class TestPolyAFinder:
                               ('TGGCGGTACAAAAAAAAAAACGAAAAAAAAAAAAAAAA', 9)])
     def test_find_polya_pos(self, seq, expected):
         assert self.polya_finder.find_polya(seq) == expected
-
-
-class TestCagePeakFinder:
-    source_dir = os.path.dirname(os.path.realpath(__file__))
-    cage_peak_finder = CagePeakFinder(os.path.join(source_dir, 'toy_data/MAPT.Mouse.CAGE.bed'), 50)
-
-    @pytest.mark.parametrize("alignment",
-                             [CageAlignment('aligned_segment1', 'chr11', 24, 2165, False),
-                              CageAlignment('aligned_segment2', 'chr11', 0, 1296, False),
-                              CageAlignment('aligned_segment3', 'chr11', 80, 372, True)])
-    def test_no_intersection(self, alignment):
-        assert self.cage_peak_finder.find_cage_peak(alignment) == []
-
-    @pytest.mark.parametrize("alignment",
-                             [CageAlignment('aligned_segment1', 'chr11', 57, 522, False),
-                              CageAlignment('aligned_segment2', 'chr11', 69, 1499, False)])
-    def test_one_intersection(self, alignment):
-        assert len(self.cage_peak_finder.find_cage_peak(alignment)) == 1
-
-    @pytest.mark.parametrize("alignment",
-                             [CageAlignment('aligned_segment1', 'chr11', 134, 1322, False),
-                              CageAlignment('aligned_segment2', 'chr11', 102, 2191, False),
-                              CageAlignment('aligned_segment2', 'chr11', 11, 126, True)])
-    def test_several_hits(self, alignment):
-        assert len(self.cage_peak_finder.find_cage_peak(alignment)) > 1

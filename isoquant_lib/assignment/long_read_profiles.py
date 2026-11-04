@@ -35,13 +35,12 @@ class MappedReadProfile:
 
 class CombinedReadProfiles:
     def __init__(self, read_intron_profile, read_exon_profile, read_split_exon_profile,
-                 polya_info=None, cage_hits=-1, alignment=None):
+                 polya_info=None, alignment=None):
         self.read_intron_profile = read_intron_profile
         self.read_exon_profile = read_exon_profile
         self.read_split_exon_profile = read_split_exon_profile
         self.alignment = alignment
         self.polya_info = polya_info
-        self.cage_hits = cage_hits
 
 
 # The following 2 classes are very similar, but lets keep them separately for now
@@ -265,7 +264,7 @@ class CombinedProfileConstructor:
                                                                         delta=self.params.minimal_exon_overlap),
                                                      delta=self.params.delta)
 
-    def construct_profiles(self, sorted_blocks, polya_info, cage_hits):
+    def construct_profiles(self, sorted_blocks, polya_info):
         intron_profile = self.intron_profile_constructor.construct_intron_profile(sorted_blocks,
                                                                                   polya_info.external_polya_pos,
                                                                                   polya_info.external_polyt_pos)
@@ -278,4 +277,4 @@ class CombinedProfileConstructor:
                                                                                    polya_info.external_polya_pos,
                                                                                    polya_info.external_polyt_pos)
         return CombinedReadProfiles(intron_profile, exon_profile, split_exon_profile,
-                                    polya_info=polya_info, cage_hits=cage_hits)
+                                    polya_info=polya_info)

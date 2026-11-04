@@ -61,7 +61,6 @@ class TestAlignmentInfo:
         assert alignment_info.polya_info.internal_polyt_pos == -1
         assert alignment_info.combined_profile is None
         assert alignment_info.exons_changed is False
-        assert len(alignment_info.cage_hits) == 0
 
     def test_alignment_pairs(self):
         alignment = Alignment('query', TUPLES1, SEQ1, 75896, 113577, 'reference', 789, PAIRS)
