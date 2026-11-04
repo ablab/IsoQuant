@@ -567,6 +567,11 @@ class TSSCounter(TerminalCounter):
         cage = load_cage_peaks(self._cage_path)
         result['dist_to_closest_cage'] = np.nan
 
+        for chrom in result['chromosome'].unique():
+            if not cage.has_chromosome(chrom):
+                logger.warning("No CAGE peaks on chromosome %s, check that chromosome names "
+                               "in %s match the reference" % (chrom, self._cage_path))
+
         for (chrom, strand), tss_sub in result.groupby(['chromosome', 'strand']):
             distances = cage.distances(chrom, strand, tss_sub['prediction'].values)
             if distances is not None:

@@ -26,11 +26,15 @@ class CagePeaks:
     def __init__(self, bed_file: str) -> None:
         self._peaks: Dict[Tuple[str, str], Tuple[np.ndarray, np.ndarray]] = {}
         table = pd.read_csv(bed_file, sep='\t', header=None, usecols=[0, 1, 2, 5],
-                            names=['chrom', 'start', 'end', 'strand'], comment='#')
+                            names=['chrom', 'start', 'end', 'strand'], comment='#',
+                            dtype={'chrom': str})
         for key, peaks in table.groupby(['chrom', 'strand']):
             peaks = peaks.sort_values('start')
             self._peaks[key] = (peaks['start'].values.astype(np.int64),
                                 np.maximum.accumulate(peaks['end'].values.astype(np.int64)))
+
+    def has_chromosome(self, chrom: str) -> bool:
+        return any(chrom == peak_chrom for peak_chrom, _ in self._peaks)
 
     def distances(self, chrom: str, strand: str, positions: np.ndarray) -> Optional[np.ndarray]:
         """Distance from each position to the closest peak on the same strand,
