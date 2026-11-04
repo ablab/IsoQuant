@@ -197,8 +197,7 @@ Two ordering constraints, both respected in `process_sample`:
 - built **after** `filter_umis` (the `dedup_bam` stage) and **before** the experiment's
   intermediates are deleted (`remove_sample_intermediates`, after the `sample/<prefix>` checkpoint),
   which removes `out_raw_file + "_*"` including the survivors files;
-- only the first edit distance writes those files, and the `barcode2barcode` rounds never do,
-  so the subset is defined by the primary dedup round.
+- only the first edit distance writes those files, so the subset is defined by the primary dedup round.
 
 ### Deliberately *not* wired into fusion detection
 

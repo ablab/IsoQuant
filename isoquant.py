@@ -163,7 +163,6 @@ def parse_args(cmd_args=None, namespace=None):
                              "read_id:DELIM (read ID suffix), "
                              "file_name (filename), "
                              "barcode_spot (barcodes to spots/cell via --barcode2spot), "
-                             "barcode_barcode (barcodes to spots via --barcode2barcode), "
                              "barcode (barcode--barcoded_reads), "
                              "no_auto (only explicitly stated rules), "
                              "none (disable grouping)")
@@ -354,9 +353,9 @@ def parse_args(cmd_args=None, namespace=None):
     add_additional_option_to_group(sc_args_group, "--strip_barcode_suffix", action='store_true', default=False,
                                    help='remove suffix after dash from barcodes extracted from BAM tag')
     add_additional_option_to_group(sc_args_group, "--barcode2barcode", type=str,
-                                   help='TSV file mapping barcode to spot IDs, FILE[:barcode_col:spot_cols]; '
-                                        'when IsoQuant calls Visium HD barcodes, they are reported as spot IDs '
-                                        '(one spot column), otherwise used for UMI deduplication')
+                                   help='TSV file mapping barcodes to spot IDs, FILE[:barcode_col:spot_col]; '
+                                        'Visium HD barcodes are reported as spot IDs of this resolution '
+                                        'during barcode calling (visium_hd with --barcode_whitelist only)')
 
     # ALGORITHM
     add_additional_option_to_group(algo_args_group, "--report_novel_unspliced", "-u", type=bool_str,
@@ -1060,27 +1059,9 @@ def set_data_dependent_options(args):
         elif "barcode_spot" not in args.read_group and "no_auto" not in args.read_group:
             args.read_group.append("barcode_spot")
 
-    if hasattr(args, 'barcode2barcode') and args.barcode2barcode:
-        # Automatically add barcode_barcode grouping when --barcode2barcode is set, unless barcodes
-        # were called as spot IDs already: then the default barcode grouping is per spot
-        if getattr(args, "spot_barcode_calling", False):
-            pass
-        elif args.read_group is None:
-            args.read_group = ["barcode_barcode"]
-        elif "barcode_barcode" not in args.read_group and "no_auto" not in args.read_group:
-            args.read_group.append("barcode_barcode")
-
-        # Automatically add allinfo output
-        if args.large_output is None:
-            args.large_output = ["allinfo"]
-        elif "none" in args.large_output:
-            pass
-        elif "allinfo" not in args.large_output:
-            args.large_output.append("allinfo")
-
     # In SC modes, auto-add barcode grouping if no barcode-related grouping is set
     if args.mode.needs_barcode_calling():
-        barcode_groupings = {"barcode", "barcode_spot", "barcode_barcode", "no_auto"}
+        barcode_groupings = {"barcode", "barcode_spot", "no_auto"}
         has_barcode_grouping = (args.read_group is not None and
                                 any(rg in barcode_groupings for rg in args.read_group))
         if not has_barcode_grouping:

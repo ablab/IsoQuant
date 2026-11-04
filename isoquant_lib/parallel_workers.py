@@ -239,16 +239,15 @@ def construct_models_in_parallel(sample, chr_id, chr_ids, saves_prefix, args,
     read_group_file_prefix = read_group_file_from_saves(saves_prefix)
 
     # The barcode/UMI pool resolves read_assignment.barcode/.umi for barcode-derived
-    # grouping (barcode, barcode_spot, barcode_barcode) AND for printing the
+    # grouping (barcode, barcode_spot) AND for printing the
     # barcode/UMI columns in read_info / read_assignments. Any SC / barcoded_bam mode
     # sets barcode_id on reads, so load it whenever the mode uses barcodes; the old
-    # `pt == 'barcode'` check missed barcode_spot / barcode_barcode and crashed.
+    # `pt == 'barcode'` check missed barcode_spot and crashed.
     pool_types = get_grouping_pool_types(args)
     needs_barcode_pool = (
         args.mode.needs_pcr_deduplication()
         or getattr(args, 'barcoded_bam', False)
-        or any(pt == 'barcode' or pt.startswith('barcode_spot') or pt.startswith('barcode_barcode')
-               for pt in pool_types.values())
+        or any(pt == 'barcode' or pt.startswith('barcode_spot') for pt in pool_types.values())
     )
 
     # Build string pools for memory optimization
@@ -377,11 +376,9 @@ def construct_models_in_parallel(sample, chr_id, chr_ids, saves_prefix, args,
 
 
 def filter_umis_in_parallel(sample, chr_id, chr_ids, args, edit_distance, checkpoints: CheckpointStore,
-                            stage_name: str, output_filtered_reads=False,
-                            barcode_remap=None, output_prefix_override=None):
-    out_prefix = output_prefix_override if output_prefix_override else sample.out_umi_filtered_tmp
-    all_info_file_name = allinfo_file_name(out_prefix, chr_id, edit_distance)
-    stats_output_file_name = allinfo_stats_file_name(out_prefix, chr_id, edit_distance)
+                            stage_name: str, output_filtered_reads=False):
+    all_info_file_name = allinfo_file_name(sample.out_umi_filtered_tmp, chr_id, edit_distance)
+    stats_output_file_name = allinfo_stats_file_name(sample.out_umi_filtered_tmp, chr_id, edit_distance)
     chr_checkpoint = stage_name + "/" + checkpoint_name(chr_id)  # stage_name may already be nested
     if checkpoints.is_done(chr_checkpoint):
         logger.info("PCR duplicates were filtered for chromosome %s during the previous run" % chr_id)
@@ -415,14 +412,10 @@ def filter_umis_in_parallel(sample, chr_id, chr_ids, args, edit_distance, checkp
     # Load dynamic pools (for read groups from BAM tags/read IDs)
     load_dynamic_pools(string_pools, sample.get_dynamic_pools_file(chr_id))
 
-    # When using barcode_remap (spot-based dedup), never produce filtered reads
-    if barcode_remap:
-        output_filtered_reads = False
     # a deduplicated BAM needs the tags of every surviving read, and this is the only place
     # where the assignments carrying them are already loaded
     output_read_tags = output_filtered_reads and large_output_enabled(args, "deduplicated_bam")
-    umi_filter = UMIFilter(args.umi_length, edit_distance, barcode_remap=barcode_remap,
-                           output_read_tags=output_read_tags)
+    umi_filter = UMIFilter(args.umi_length, edit_distance, output_read_tags=output_read_tags)
     filtered_reads = sample.get_filtered_reads_file(chr_id) if output_filtered_reads else None
     umi_filter.process_single_chr(chr_id, sample.out_raw_file,
                                   transcript_type_dict,

@@ -134,8 +134,7 @@ def call_barcodes(args):
                                          output_barcodes_list, output_fasta_list, sample.aux_dir, bc_threads,
                                          molecule=getattr(args, 'molecule', None),
                                          split_molecules=args.split_molecules,
-                                         barcode2barcode=args.barcode2barcode
-                                         if getattr(args, "spot_barcode_calling", False) else None)
+                                         barcode2barcode=getattr(args, "barcode2barcode", None))
             logger.info("Detecting barcodes for %d file(s)" % len(input_files))
             run_barcode_calling(bc_args, bc_threads)
             for input_file, output_barcodes in zip(input_files, output_barcodes_list):

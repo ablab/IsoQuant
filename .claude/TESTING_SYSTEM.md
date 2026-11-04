@@ -549,7 +549,7 @@ See `.claude/BARCODE_CALLING.md` for detailed documentation of universal calling
 |--------|----------|------|-----------------|
 | `SC.Mouse.10x.allinfo.yaml` | `SC.Mouse.10x.yml` | tenX_v3 | Standard 10x pipeline with whitelist barcode calling |
 | `SC.Mouse.10x.barcoded_bam.allinfo.yaml` | `SC.Mouse.10x.barcoded_bam.yml` | tenX_v3 | `--barcoded_bam --strip_barcode_suffix` (barcodes from BAM CB/UB tags) |
-| `SC.Mouse.VisiumHD.barcode2barcode.allinfo.yaml` | `SC.Mouse.VisiumHD.barcode2barcode.yml` | visium_hd | `--barcode2barcode` spot-level UMI dedup + `check_input_files` for barcode_barcode output |
+| `SC.Mouse.VisiumHD.spot_calling.allinfo.yaml` | `SC.Mouse.VisiumHD.barcode2barcode.yml` | visium_hd | `--barcode2barcode` spot-level barcode calling |
 | `SC.Human.Curio.custom_sc.allinfo.yaml` | `SC.Human.Curio.custom_sc.yml` | custom_sc | Universal barcode calling via MDF |
 
 **Data locations** (`/abga/work/andreyp/ci_isoquant/data/barcodes/`):

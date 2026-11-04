@@ -61,7 +61,7 @@ Fresh vs resume (`isoquant.py`):
    every reloaded chromosome (and could flip `requires_polya_for_construction`). State: alignment stats +
    `covers_all_reads`, restored by `restore_collection_stats`. `_info` stays the source of totals /
    `all_read_groups`. "To keep these intermediate files for" is logged after the checkpoint (CI resume3 kills on it).
-6. `umi/ED<d>` (+ per-chr), `umi_barcode2barcode/col<c>/ED<d>` (+ per-chr). Per-chr allinfo/stats under
+6. `umi/ED<d>` (+ per-chr). Per-chr allinfo/stats under
    `out_umi_filtered_tmp` (aux), removed by the stage cleanup.
 7. `dedup_bam`
 - **Derive (always runs)**: `load_read_info`, barcode warning, polyA stats, polyA flags. D1: the flags are derived
