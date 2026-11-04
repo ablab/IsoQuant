@@ -30,7 +30,8 @@ class CagePeaks:
                             dtype={'chrom': str})
         for key, peaks in table.groupby(['chrom', 'strand']):
             peaks = peaks.sort_values('start')
-            self._peaks[key] = (peaks['start'].values.astype(np.int64),
+            # BED starts are 0-based, IsoQuant positions and BED ends are 1-based inclusive
+            self._peaks[key] = (peaks['start'].values.astype(np.int64) + 1,
                                 np.maximum.accumulate(peaks['end'].values.astype(np.int64)))
 
     def has_chromosome(self, chrom: str) -> bool:
