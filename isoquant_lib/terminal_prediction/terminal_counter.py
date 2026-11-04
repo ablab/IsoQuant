@@ -18,7 +18,6 @@ trained offline with ``scripts/train_polya_tss_model.py``.
 
 import logging
 from pathlib import Path
-import glob
 from typing import List, Optional, Tuple
 
 import numpy as np
@@ -558,23 +557,10 @@ class TSSCounter(TerminalCounter):
 
     @property
     def cage_df(self) -> Optional[pd.DataFrame]:
-        """Lazily load and deduplicate CAGE BED file(s) on first use in dump()."""
+        """Lazily load the CAGE BED file on first use."""
         if self._cage_df is None and self._cage_path:
-            if '*' in self._cage_path or '?' in self._cage_path:
-                count_files = sorted(glob.glob(self._cage_path))
-            else:
-                count_files = [self._cage_path]
-                
-            dfs = [
-                pd.read_csv(f, sep='\t', header=None, usecols=[0, 1, 2, 5],
-                            names=['chrom', 'start', 'end', 'strand'], comment='#')
-                for f in count_files
-            ]
-            self._cage_df = (
-                pd.concat(dfs, ignore_index=True)
-                .drop_duplicates(subset=['chrom', 'start', 'end', 'strand'])
-                if dfs else pd.DataFrame(columns=['chrom', 'start', 'end', 'strand'])
-            )
+            self._cage_df = pd.read_csv(self._cage_path, sep='\t', header=None, usecols=[0, 1, 2, 5],
+                                        names=['chrom', 'start', 'end', 'strand'], comment='#')
         return self._cage_df
 
     def _extra_columns(self):

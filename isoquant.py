@@ -956,11 +956,9 @@ def _check_annotation_files(args):
 
     # Check CAGE file
     if args.cage is not None:
-        matched_cage = glob.glob(args.cage) if ('*' in args.cage or '?' in args.cage) else [args.cage]
-        if not matched_cage or not all(os.path.isfile(f) for f in matched_cage):
-            logger.critical("Bed file(s) with CAGE peaks " + args.cage + " do not exist")
+        if not os.path.isfile(args.cage):
+            logger.critical("Bed file with CAGE peaks " + args.cage + " does not exist")
             sys.exit(IsoQuantExitCode.INPUT_FILE_NOT_FOUND)
-
 
     # Check gene database
     if args.genedb is not None:
