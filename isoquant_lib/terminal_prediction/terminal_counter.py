@@ -32,6 +32,7 @@ from isoquant_lib.assignment.isoform_assignment import (
     ReadAssignmentType,
 )
 from isoquant_lib.quantification.long_read_counter import AbstractCounter
+from .cage_peaks import CagePeaks
 from .terminal_peaks import (
     ANNOTATION_TOLERANCE,
     FEATURE_COLUMNS,
@@ -553,15 +554,14 @@ class TSSCounter(TerminalCounter):
         super().__init__(args, output_prefix, TSS_MODEL_PATH,
                          string_pools=string_pools, group_index=group_index)
         self._cage_path = getattr(args, "cage", None)
-        self._cage_df: Optional[pd.DataFrame] = None
+        self._cage_peaks: Optional[CagePeaks] = None
 
     @property
-    def cage_df(self) -> Optional[pd.DataFrame]:
+    def cage_peaks(self) -> Optional[CagePeaks]:
         """Lazily load the CAGE BED file on first use."""
-        if self._cage_df is None and self._cage_path:
-            self._cage_df = pd.read_csv(self._cage_path, sep='\t', header=None, usecols=[0, 1, 2, 5],
-                                        names=['chrom', 'start', 'end', 'strand'], comment='#')
-        return self._cage_df
+        if self._cage_peaks is None and self._cage_path:
+            self._cage_peaks = CagePeaks(self._cage_path)
+        return self._cage_peaks
 
     def _extra_columns(self):
         if self._cage_path:
@@ -572,31 +572,17 @@ class TSSCounter(TerminalCounter):
         if not self._cage_path or result.empty:
             return result
 
-        cage = self.cage_df
+        cage = self.cage_peaks
         result['dist_to_closest_cage'] = np.nan
 
         for (chrom, strand), tss_sub in result.groupby(['chromosome', 'strand']):
-            cage_sub = cage[(cage['chrom'] == chrom) & (cage['strand'] == strand)]
-            if cage_sub.empty:
-                continue
-
-            preds = tss_sub['prediction'].values.astype(np.int32)
-            starts = cage_sub['start'].values.astype(np.int32)
-            ends = cage_sub['end'].values.astype(np.int32)
-
-            dist_to_start = starts - preds[:, None]
-            dist_to_end = preds[:, None] - ends
-            all_distances = np.maximum(0, np.maximum(dist_to_start, dist_to_end))
-
-            min_distances = all_distances.min(axis=1)
-
-            result.loc[tss_sub.index, 'dist_to_closest_cage'] = min_distances
+            distances = cage.distances(chrom, strand, tss_sub['prediction'].values)
+            if distances is not None:
+                result.loc[tss_sub.index, 'dist_to_closest_cage'] = distances
 
         result['validated_by_cage'] = (result['dist_to_closest_cage'] == 0)
         result['dist_to_closest_cage'] = result['dist_to_closest_cage'].astype('Int64')
         return result
-        
-     
 
     def _passes_filter(self, read_assignment: ReadAssignment) -> bool:
         return read_assignment.strand in ('+', '-')
