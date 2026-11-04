@@ -966,6 +966,9 @@ def _check_annotation_files(args):
         except CageFormatError as e:
             logger.critical("Incorrect CAGE file: " + str(e))
             sys.exit(IsoQuantExitCode.INVALID_FILE_FORMAT)
+        if not (args.predict_terminal_sites and args.fl_data):
+            logger.warning("TSS prediction requires --genedb and --fl_data and will not be performed, "
+                           "CAGE peaks will be checked for reads and transcript models only")
 
     # Check gene database
     if args.genedb is not None:
