@@ -12,6 +12,7 @@ from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
+from isoquant_lib.gene_info import TranscriptModel
 from isoquant_lib.utils.file_utils import open_text_read
 
 NO_PEAK_DISTANCE = np.iinfo(np.int64).max
@@ -86,6 +87,18 @@ class CagePeaks:
     def is_confirmed(self, chrom: str, strand: str, position: int, max_distance: int) -> bool:
         distances = self.distances(chrom, strand, np.array([position]))
         return distances is not None and bool(distances[0] <= max_distance)
+
+    def add_model_info(self, model_storage: List[TranscriptModel], max_distance: int) -> None:
+        """Annotate transcript models with the same fields as TSS predictions."""
+        for model in model_storage:
+            if model.check_additional('validated_by_cage'):
+                continue
+            position = model.get_start() if model.strand == '+' else model.get_end()
+            distances = self.distances(model.chr_id, model.strand, np.array([position]))
+            validated = distances is not None and bool(distances[0] <= max_distance)
+            model.add_additional_attribute('validated_by_cage', str(validated))
+            if distances is not None:
+                model.add_additional_attribute('dist_to_closest_cage', str(int(distances[0])))
 
 
 @lru_cache(maxsize=1)
