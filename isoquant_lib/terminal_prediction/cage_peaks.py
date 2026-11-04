@@ -16,12 +16,13 @@ from isoquant_lib.utils.file_utils import open_text_read
 
 NO_PEAK_DISTANCE = np.iinfo(np.int64).max
 DEFAULT_CAGE_SHIFT = 50
+BED_MIN_COLUMNS = 3
 BED_STRAND_COLUMN = 5
 BED_HEADER_PREFIXES = ('#', 'track', 'browser')
 
 
 class CageFormatError(ValueError):
-    """The CAGE file is not a BED file with a strand column."""
+    """The CAGE file is not a BED file."""
 
 
 def _read_bed(bed_file: str) -> Dict[Tuple[str, str], List[Tuple[int, int]]]:
@@ -32,10 +33,10 @@ def _read_bed(bed_file: str) -> Dict[Tuple[str, str], List[Tuple[int, int]]]:
                 continue
             fields = line.rstrip('\r\n').split('\t')
             where = "%s, line %d: " % (bed_file, line_number)
-            if len(fields) <= BED_STRAND_COLUMN:
-                raise CageFormatError(where + "expected a tab-separated BED with at least 6 columns "
-                                              "(strand is required), found %d" % len(fields))
-            strand = fields[BED_STRAND_COLUMN]
+            if len(fields) < BED_MIN_COLUMNS:
+                raise CageFormatError(where + "expected a tab-separated BED with at least %d columns, found %d"
+                                      % (BED_MIN_COLUMNS, len(fields)))
+            strand = fields[BED_STRAND_COLUMN] if len(fields) > BED_STRAND_COLUMN else '.'
             if strand not in ('+', '-', '.'):
                 raise CageFormatError(where + "unexpected strand '%s'" % strand)
             try:
@@ -43,7 +44,9 @@ def _read_bed(bed_file: str) -> Dict[Tuple[str, str], List[Tuple[int, int]]]:
                 interval = (int(fields[1]) + 1, int(fields[2]))
             except ValueError:
                 raise CageFormatError(where + "peak coordinates are not integers")
-            peaks.setdefault((fields[0], strand), []).append(interval)
+            # an unstranded peak may confirm a TSS on either strand
+            for peak_strand in (('+', '-') if strand == '.' else (strand,)):
+                peaks.setdefault((fields[0], peak_strand), []).append(interval)
     if not peaks:
         raise CageFormatError(bed_file + " contains no peaks")
     return peaks
