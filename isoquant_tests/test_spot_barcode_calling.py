@@ -19,7 +19,7 @@ from isoquant_lib.barcode_calling.callers import (
     VisiumHDSplittingBarcodeDetector,
 )
 from isoquant_lib.barcode_calling.common import find_tied_candidates_ssw_var_len, reverese_complement
-from isoquant_lib.barcode_calling.options import resolve_spot_barcode_calling, validate_barcode_calling
+from isoquant_lib.barcode_calling.options import validate_barcode_calling, validate_spot_barcode_calling
 from isoquant_lib.barcode_calling.spot_mapping import SpotMapping, parse_spot_mapping_spec
 from isoquant_lib.modes import IsoQuantMode
 
@@ -187,34 +187,33 @@ def calling_args(**kwargs):
     return argparse.Namespace(**defaults)
 
 
-class TestResolveSpotBarcodeCalling:
+class TestValidateSpotBarcodeCalling:
     def test_visium_hd_with_whitelist(self):
-        args = calling_args()
-        resolve_spot_barcode_calling(args)
-        assert args.spot_barcode_calling
+        validate_spot_barcode_calling(calling_args())
+
+    def test_option_not_set(self):
+        validate_spot_barcode_calling(calling_args(barcode2barcode=None, mode=IsoQuantMode.tenX_v3))
 
     @pytest.mark.parametrize("kwargs", [
-        dict(barcode2barcode=None),
         dict(barcode_whitelist=None),  # barcodes from --barcoded_reads / --barcoded_bam
         dict(mode=IsoQuantMode.tenX_v3),
+        dict(mode=IsoQuantMode.bulk),
+        dict(barcode2barcode="map.tsv:0:1,2,3"),
     ])
-    def test_not_applied(self, kwargs):
-        args = calling_args(**kwargs)
-        resolve_spot_barcode_calling(args)
-        assert not args.spot_barcode_calling
-
-    def test_several_spot_columns_exit(self):
+    def test_invalid_use_exits(self, kwargs):
         with pytest.raises(SystemExit):
-            resolve_spot_barcode_calling(calling_args(barcode2barcode="map.tsv:0:1,2,3"))
+            validate_spot_barcode_calling(calling_args(**kwargs))
 
-    def test_barcode_barcode_group_exits(self):
+    @pytest.mark.parametrize("barcode2barcode", ["map.tsv:0:2", None])
+    def test_barcode_barcode_group_exits(self, barcode2barcode):
         with pytest.raises(SystemExit):
-            resolve_spot_barcode_calling(calling_args(read_group=["barcode_barcode"]))
+            validate_spot_barcode_calling(calling_args(barcode2barcode=barcode2barcode,
+                                                       read_group=["barcode_barcode"]))
 
-    def test_bulk_resets_flag(self):
-        args = argparse.Namespace(mode=IsoQuantMode.bulk)
-        validate_barcode_calling(args)
-        assert args.spot_barcode_calling is False
+    def test_bulk_mode_is_checked(self):
+        args = calling_args(mode=IsoQuantMode.bulk)
+        with pytest.raises(SystemExit):
+            validate_barcode_calling(args)
 
 
 class _InputData:
@@ -223,22 +222,20 @@ class _InputData:
         return False
 
 
-def data_dependent_args(spot_barcode_calling):
+def data_dependent_args():
     return argparse.Namespace(
         matching_strategy="default", data_type=isoquant.NANOPORE_DATA, model_construction_strategy="default_ont",
         fl_data=False, splice_correction_strategy="default_ont", read_group=None, input_data=_InputData(),
-        barcode2spot=None, barcode2barcode="map.tsv:0:2", large_output=None, mode=IsoQuantMode.visium_hd,
-        spot_barcode_calling=spot_barcode_calling)
+        barcode2spot=None, barcode2barcode="map.tsv:0:2", large_output=None, mode=IsoQuantMode.visium_hd)
 
 
 class TestReadGroupsWithSpotCalling:
     def test_spot_calling_groups_by_barcode(self):
-        args = data_dependent_args(True)
+        args = data_dependent_args()
         isoquant.set_data_dependent_options(args)
         assert args.read_group == ["barcode"]
-        assert "allinfo" in args.large_output
 
-    def test_barcode2barcode_at_umi_stage_keeps_its_group(self):
-        args = data_dependent_args(False)
+    def test_allinfo_is_not_forced(self):
+        args = data_dependent_args()
         isoquant.set_data_dependent_options(args)
-        assert args.read_group == ["barcode_barcode"]
+        assert args.large_output is None or "allinfo" not in args.large_output

@@ -45,7 +45,7 @@ RUN_CHECKPOINT_DIR = "checkpoints"
 RUN_RECORD = "run.json"
 # bump whenever stage names, checkpoint contents or the files a stage leaves behind change:
 # --resume then refuses stores written by other formats instead of trusting their checkpoints
-CHECKPOINT_FORMAT = 2
+CHECKPOINT_FORMAT = 3
 
 
 class DebugFailure(RuntimeError):

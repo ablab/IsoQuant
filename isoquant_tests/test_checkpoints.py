@@ -60,8 +60,8 @@ class TestCheckpointStore:
 
     def test_nested_names_and_no_tmp_left(self, tmp_path):
         fresh, resumed = fresh_and_resumed(str(tmp_path / "cp"))
-        fresh.mark_done(checkpoint_name("umi_barcode2barcode", "col0", "ED3", "chr1"))
-        assert resumed.is_done("umi_barcode2barcode/col0/ED3/chr1")
+        fresh.mark_done(checkpoint_name("umi", "ED3", "chr1"))
+        assert resumed.is_done("umi/ED3/chr1")
         leftovers = [f for _, _, files in os.walk(fresh.root) for f in files if ".tmp." in f]
         assert leftovers == []
 

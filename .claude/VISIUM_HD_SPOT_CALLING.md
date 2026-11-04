@@ -8,16 +8,14 @@ barcodes, the detector reports spot IDs and assigns a tie when all its candidate
 
 ## Behaviour and decisions
 
-- Applies when mode is `visium_hd`, `--barcode_whitelist` is given and `--barcode2barcode` is set
-  (`resolve_spot_barcode_calling`, `barcode_calling/options.py`). The result is `args.spot_barcode_calling`,
-  set before `.params` is saved and read with `getattr(args, "spot_barcode_calling", False)`, so runs started
-  before this change resume with the old behaviour; no `CHECKPOINT_FORMAT` bump (stage names unchanged).
-- Exactly one spot column (`FILE:0:2`); several columns abort (`parse_spot_mapping_spec`). An explicit
-  `--read_group barcode_barcode` aborts: barcodes are spot IDs already, every read would become `NA`.
-- Downstream: `barcode_barcode` group not auto-added (the default `barcode` group counts per spot),
-  `allinfo` still auto-added, `filter_umis` skips the barcode2barcode rounds (round 0 is spot-level).
-- `--barcoded_reads` / `--barcoded_bam` (e.g. CI `SC.Mouse.VisiumHD.barcode2barcode.allinfo`) and other modes:
-  the mapping is used at UMI deduplication as before.
+- `--barcode2barcode` has this one function: it needs mode `visium_hd` and `--barcode_whitelist`, otherwise
+  `validate_spot_barcode_calling` (`barcode_calling/options.py`) aborts, also with `--barcoded_reads` /
+  `--barcoded_bam` (use `--barcode2spot`). So a set `args.barcode2barcode` always means spot calling.
+- The earlier UMI-stage route (per-column dedup rounds, `barcode_barcode` group, forced `allinfo`) was removed:
+  it never reached the counts and duplicated `--barcode2spot`. `CHECKPOINT_FORMAT` was bumped to 3.
+- Exactly one spot column (`FILE:0:2`); several columns abort (`parse_spot_mapping_spec`). `--read_group
+  barcode_barcode` aborts during option validation.
+- Downstream: the default `barcode` group counts per spot and UMI deduplication is spot-level.
 - Standalone `isoquant_detect_barcodes.py --barcode2barcode FILE:0:COL` (visium_hd only).
 - `--barcode2spot` files must be keyed by spot ID in this mode.
 
@@ -41,11 +39,11 @@ barcodes, the detector reports spot IDs and assigns a tie when all its candidate
 - CI: barcode level `Mouse.VisiumHD.v1.s1.sep.10M.correct_struct.{8um,16um}` and
   `Mouse.VisiumHD_concat.v1.s1.800K.8um`; pipeline level `SC.Mouse.VisiumHD.spot_calling.allinfo` (simulated
   aligned BAM with `--barcode_whitelist ... --barcode2barcode ...:0:2 --split_molecules false`, i.e. the whole
-  route: flag resolution, spot IDs in allinfo, no extra UMI rounds), a step of `SC.Mouse.VisiumHD.barcode2barcode.yml`.
+  route: option validation, spot IDs in allinfo), a step of `SC.Mouse.VisiumHD.barcode2barcode.yml`.
 
 ## Measurements (simulated ONT, Stereo-seq NanoSim model, 800K-read CI sets, default `auto` splitting)
 
-Baseline = today's 2 µm calls mapped to spots afterwards (what `--barcode2barcode` at UMI dedup sees);
+Baseline = today's 2 µm calls mapped to spots afterwards (what the removed UMI-stage route saw);
 scored with the same QA. Scoring the baseline at 2 µm via the spot column reproduces the plain barcode QA
 exactly (97.58/74.66 non-concatenated, 97.69/73.97 concatenated).
 
@@ -59,8 +57,7 @@ exactly (97.58/74.66 non-concatenated, 97.69/73.97 concatenated).
 Without a mapping, Visium HD output (split and non-split, 100K reads) is byte-identical to `visium_hd_split`.
 Cost (800K non-concatenated, 16 threads): 3:59.7 → 4:05 wall clock (mapping load 12 s), peak RSS
 2.31 → 2.57 GB. Full-pipeline smoke test (50K concatenated reads, 8 µm): 83,677 molecules with `s_008um_*`
-IDs, count matrices keyed by spot, no `barcode_barcode_col*` outputs; `:0:1,2,3` and explicit
-`--read_group barcode_barcode` abort.
+IDs, count matrices keyed by spot; `:0:1,2,3` aborts.
 
 ## Why the gain is small: failure breakdown
 

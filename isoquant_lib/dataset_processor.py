@@ -61,7 +61,6 @@ from isoquant_lib.utils.file_naming import (
     read_stat_file_name,
     saves_file_name,
     transcript_stat_file_name,
-    umi_barcode2barcode_prefix,
     umi_output_prefix,
     tagged_bam_fragment_name,
 )
@@ -708,57 +707,24 @@ class DatasetProcessor:
                   enabled=bool(csv_path), keep_tmp=self.args.keep_tmp)
 
     def filter_umis(self, sample, checkpoints: CheckpointStore) -> None:
-        """UMI deduplication: one stage per edit distance, then per barcode2barcode column."""
+        """UMI deduplication: one stage per edit distance."""
         keep_tmp = self.args.keep_tmp
         for i, edit_distance in enumerate(UMI_EDIT_DISTANCES[self.args.mode]):
             stage_name = checkpoint_name("umi", "ED%d" % edit_distance)
             output_prefix = umi_output_prefix(sample.out_umi_filtered, edit_distance)
             run_stage(checkpoints, stage_name,
                       run=partial(self.filter_umis_round, sample, checkpoints, stage_name, edit_distance,
-                                  output_prefix, i == 0, None, None,
+                                  output_prefix, i == 0,
                                   "Filtering PCR duplicates with edit distance %d" % edit_distance),
                       cleanup=partial(self.remove_umi_fragments, sample.out_umi_filtered_tmp, edit_distance),
                       keep_tmp=keep_tmp)
 
-        # Barcode2barcode spot-based UMI dedup rounds; not needed when barcodes were called as spot IDs,
-        # the rounds above are spot-level already
-        if not getattr(self.args, 'barcode2barcode', None) or getattr(self.args, 'spot_barcode_calling', False):
-            return
-        from .assignment.read_groups import parse_barcode2spot_spec, load_barcode2barcode_mapping
-        filename, barcode_col, spot_cols = parse_barcode2spot_spec(self.args.barcode2barcode)
-        mapping_cache = {}
-
-        def barcode_to_spot_mapping_for_column(col_idx: int) -> Dict[str, str]:
-            if "full" not in mapping_cache:
-                mapping_cache["full"] = load_barcode2barcode_mapping(filename, barcode_col, spot_cols)
-            return {bc: spots[col_idx] for bc, spots in mapping_cache["full"].items()
-                    if col_idx < len(spots) and spots[col_idx]}
-
-        for col_idx in range(len(spot_cols)):
-            bc2bc_prefix = umi_barcode2barcode_prefix(sample.out_umi_filtered_tmp, col_idx)
-            for edit_distance in UMI_EDIT_DISTANCES[self.args.mode]:
-                stage_name = checkpoint_name("umi_barcode2barcode", "col%d" % col_idx, "ED%d" % edit_distance)
-                output_prefix = umi_output_prefix(
-                    sample.out_umi_filtered + ".barcode_barcode_col%d" % col_idx, edit_distance)
-
-                def run(col_idx=col_idx, edit_distance=edit_distance, stage_name=stage_name,
-                        output_prefix=output_prefix, bc2bc_prefix=bc2bc_prefix) -> None:
-                    self.filter_umis_round(sample, checkpoints, stage_name, edit_distance, output_prefix, False,
-                                           barcode_to_spot_mapping_for_column(col_idx), bc2bc_prefix,
-                                           "Filtering UMIs for barcode2barcode column %d with edit distance %d"
-                                           % (col_idx, edit_distance))
-                run_stage(checkpoints, stage_name, run=run,
-                          cleanup=partial(self.remove_umi_fragments, bc2bc_prefix, edit_distance),
-                          keep_tmp=keep_tmp)
-
     def filter_umis_round(self, sample, checkpoints: CheckpointStore, stage_name: str, edit_distance: int,
-                          output_prefix: str, output_filtered_reads: bool, barcode_remap: Optional[Dict[str, str]],
-                          tmp_prefix: Optional[str], message: str) -> None:
+                          output_prefix: str, output_filtered_reads: bool, message: str) -> None:
         logger.info(message)
         logger.info("Results will be saved to %s" % output_prefix)
         results = self.map_over_chromosomes(filter_umis_in_parallel, sample, self.get_chr_list(), self.args,
-                                            edit_distance, checkpoints, stage_name, output_filtered_reads,
-                                            barcode_remap, tmp_prefix)
+                                            edit_distance, checkpoints, stage_name, output_filtered_reads)
 
         stat_dict = defaultdict(int)
         if large_output_enabled(self.args, "allinfo"):

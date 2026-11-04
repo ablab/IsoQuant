@@ -30,8 +30,8 @@ No CLI flag. `_add_grouped_velocity_counter`
 1. `args.read_group` and `args.genedb` are set (the enclosing
    `_init_grouped_counters` gate), **and**
 2. `args.mode != IsoQuantMode.bulk`, **and**
-3. the grouping strategy's pool type starts with `barcode` — i.e. `barcode`,
-   `barcode_spot`, or `barcode_barcode`.
+3. the grouping strategy's pool type starts with `barcode` — i.e. `barcode`
+   or `barcode_spot`.
 
 Condition 3 is what keeps velocity off `file_name` / `tag:` / `file:` groupings,
 where a "cell" would be a whole sample. It reads `get_grouping_pool_types(args)`

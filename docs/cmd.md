@@ -144,17 +144,11 @@ Set barcode-to-spot mapping via `--barcode2spot` option.
 IsoQuant will add `--read_group barcode_spot` automatically if `--barcode2spot` is set.
 Useful for grouping single-cell/spatial data by cell type or spatial region instead of individual barcodes.
 
-   * `barcode_barcode` - group by spot-level barcode mapping for UMI deduplication.
-Set barcode-to-spot mapping via `--barcode2barcode` option.
-IsoQuant will add `--read_group barcode_barcode` automatically if `--barcode2barcode` is set,
-unless Visium HD barcodes are called as spot IDs (then `barcode` grouping is per spot already).
-Multiple barcodes mapping to the same spot are grouped together.
-
    * `barcode` - groups reads by cell barcode.
    When the number of barcodes is large, grouping counts by individual barcodes may take a long time.
    It is recommended to use `--barcode2spot` file instead.
    In single-cell/spatial modes, `barcode` grouping is added automatically if no barcode-related
-   grouping (`barcode`, `barcode_spot`, or `barcode_barcode`) is specified.
+   grouping (`barcode` or `barcode_spot`) is specified.
 
    * `no_auto` - disable automatic read grouping.
    By default, IsoQuant automatically adds grouping in certain cases
@@ -453,28 +447,14 @@ See [MDF format](single_cell.md#molecule-description-format-mdf) for details.
 
 `--barcode2barcode`
 
-_This option is still under development._
-
-Path to a TSV file with mapping barcodes to spot IDs for spot-level UMI deduplication.
-When multiple barcodes map to the same physical spot (e.g. at lower spatial resolution),
-this option groups them together during UMI deduplication, collapsing duplicates across the entire spot (not just the barcode).
-
-Format: `file.tsv` or `file.tsv:barcode_col:spot_col(s)` (same syntax as `--barcode2spot`).
-When multiple spot columns are provided, a separate UMI deduplication round is performed for each column and outputs 
-corresponding UMI-deduplicated reads only in [allinfo format](formats.md#umi-filtering-allinfo-deprecated-old-format).
-However, only the main (barcode-based) UMI-deduplicated reads will be used for quantification.
-
-When `--barcode2barcode` is set, `--read_group barcode_barcode` will be set automatically.
-Grouping by raw barcode sequences will be disabled in this case, use `--read_group barcode` to enable it.
-
-**Visium HD barcode calling.** When IsoQuant calls Visium HD barcodes itself (`--mode visium_hd` with
-`--barcode_whitelist`), the mapping is applied already during barcode calling: barcodes are reported as
-spot IDs, and a read whose barcode is ambiguous between neighbouring 2 µm barcodes is still assigned when
-all candidates belong to the same spot. Exactly one spot column must be selected, e.g.
-`barcode2spot.tsv:0:2`; several columns stop IsoQuant with an error. UMI deduplication and the default
-`--read_group barcode` then work on spot IDs, no extra deduplication rounds are run, and
-`--read_group barcode_barcode` cannot be used. With `--barcoded_reads` or `--barcoded_bam` the mapping is
-used for UMI deduplication as described above.
+`visium_hd` with `--barcode_whitelist` only. Path to a TSV file mapping Visium HD barcodes to spot IDs,
+`file.tsv` or `file.tsv:barcode_col:spot_col` with exactly one spot column, e.g. `barcode2spot.tsv:0:2`.
+Barcodes are reported as spot IDs of the selected resolution during barcode calling, and a read whose
+barcode is ambiguous between neighbouring 2 µm barcodes is still assigned when all candidates belong to
+the same spot. UMI deduplication and the default `--read_group barcode` then work on spot IDs, see
+[spot-level barcode calling](single_cell.md#spot-level-barcode-calling-visium-hd).
+With barcodes from `--barcoded_reads` or `--barcoded_bam` this option stops IsoQuant with an error,
+use `--barcode2spot` to group such barcodes into spots.
 
 For Visium HD composite barcodes, use `isoquant_lib/scripts/prepare_visium_spot_ids.py` to generate the mapping file.
 

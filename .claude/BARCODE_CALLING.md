@@ -323,46 +323,23 @@ Groups read counts by cell type/spatial region instead of individual barcodes.
 - CLI: `--read_group barcode_spot` or `--read_group barcode_spot:FILE`
 - Works with multi-grouping: `--read_group tag:CB file_name barcode_spot`
 
-## Barcode-to-Barcode Mapping (--barcode2barcode)
+## Spot-level barcode calling (--barcode2barcode)
 
-Enables spot-level UMI deduplication: reads with different barcodes but the same spatial spot ID are grouped together for dedup.
+Applied only while IsoQuant calls Visium HD barcodes (`visium_hd` + `--barcode_whitelist`): the detector reports
+spot IDs and resolves best-score ties whose pairs all map to one spot (`SpotMapping`, `spot_mapping.py`; design
+and measurements in `.claude/VISIUM_HD_SPOT_CALLING.md`). UMI deduplication and the default `barcode` grouping
+are then per spot. `validate_spot_barcode_calling` (`barcode_calling/options.py`) aborts on any other mode, on
+`--barcoded_reads`/`--barcoded_bam`, on several spot columns, and on the removed `--read_group barcode_barcode`.
 
-**Two routes** (decided by `resolve_spot_barcode_calling` in `barcode_calling/options.py`, stored in `.params`
-as `args.spot_barcode_calling`, read everywhere with `getattr(..., False)` so old runs resume unchanged):
-- **During barcode calling** — `visium_hd` + `--barcode_whitelist`: the Visium HD detector reports spot IDs and
-  resolves best-score ties whose pairs all map to one spot (`SpotMapping`, `spot_mapping.py`; design and
-  measurements in `.claude/VISIUM_HD_SPOT_CALLING.md`). Exactly one spot column (else abort),
-  `--read_group barcode_barcode` aborts, the `barcode_barcode` group is not auto-added (default `barcode`
-  grouping is per spot), and `filter_umis` skips the extra rounds below. `allinfo` is still auto-added.
-- **During UMI deduplication** (everything below) — any other mode, or barcodes from `--barcoded_reads`/`--barcoded_bam`.
+The option used to run extra per-column UMI rounds on given barcodes as well. They were removed: they wrote side
+allinfo files that never reached quantification, and `barcode_barcode` grouping was the same as `barcode_spot`.
+Use `--barcode2spot` for given barcodes.
 
-**CLI**: `--barcode2barcode file.tsv` or `--barcode2barcode file.tsv:barcode_col:spot_cols`
-
-**File format**: Same TSV spec as `--barcode2spot`:
-```
-ATGCATGC    spot_A    region_1
-GCTAGCTA    spot_A    region_2
-TTTTAAAA    spot_B    region_1
-```
-
-**UMI dedup behavior** (in `DatasetProcessor.filter_umis()`):
-- Round 0 (standard): Original barcodes, produces `.allinfo` AND `.filtered_*` read IDs
-- Rounds 1-N (per spot column): Grouped by spot_id via `barcode_remap`, produces `.allinfo` only (no `.filtered_*`)
-- Output naming: `{sample}.UMI_filtered.barcode_barcode_col{K}.ED{N}.allinfo`
-
-**Implementation across files**:
-- `isoquant.py`: CLI argument + file existence check
-- `isoquant_lib/assignment/read_groups.py`: `barcode_barcode` handling in `parse_grouping_spec()`, `get_grouping_strategy_names()`, `get_grouping_pool_types()`. Reuses `BarcodeSpotGrouper` and `SharedTableData`. Also `load_barcode2barcode_mapping()` helper
-- `isoquant_lib/barcode_calling/umi_filtering.py`: `UMIFilter` accepts optional `barcode_remap: Dict[str, str]`. When set, `process_single_chr()` uses remapped key instead of barcode for grouping in `gene_barcode_dict`
-- `isoquant_lib/parallel_workers.py`: `filter_umis_in_parallel()` accepts `barcode_remap` and `output_prefix_override` params. Forces `output_filtered_reads=False` when remap is active
-- `isoquant_lib/dataset_processor.py`: After standard dedup loop, iterates spot columns calling `filter_umis_in_parallel()` with column-specific `barcode_remap` and prefix
-- `isoquant_lib/utils/file_naming.py`: `umi_barcode2barcode_prefix()` helper (resume checkpoints: `umi_barcode2barcode/col<c>/ED<d>`, see `.claude/RESUME_CHECKPOINTS.md`)
-
-**Read grouping**: `--read_group barcode_barcode` works identically to `barcode_spot` but reads from `--barcode2barcode`. Auto-added when `--barcode2barcode` is set (same pattern as `--barcode2spot` auto-adds `barcode_spot`).
+**CLI**: `--barcode2barcode file.tsv` or `--barcode2barcode file.tsv:barcode_col:spot_col`
 
 **Utility script**: `misc/prepare_visium_spot_ids.py` generates the barcode-to-spot TSV from two per-part coordinate files (part1→Y, part2→X) via cartesian product. Produces composite barcodes (`BC1|BC2`) with spot IDs formatted as `prefix + Y_coord + delimiter + X_coord + suffix` for each resolution column. Default prefixes match Visium HD format (`s_002um_`, `s_008um_`, `s_016um_`). Supports custom prefix/suffix/delimiter. Output is directly usable as `--barcode2barcode` input.
 
-**Tests**: `tests/test_barcode2barcode.py` — 26 tests covering file naming, mapping loading, grouper behavior, parse_grouping_spec, strategy names, pool types, UMI remap grouping, and dedup logic.
+**Tests**: `isoquant_tests/test_spot_barcode_calling.py`.
 
 ## Barcoded BAM (--barcoded_bam)
 
@@ -375,14 +352,14 @@ Reads barcodes and UMIs directly from BAM tags (e.g. cellranger output) instead 
 - `AlignmentCollector` (`isoquant_lib/alignment/alignment_processor.py`) reads `CB` and `UB` tags from each BAM record
 - If `--strip_barcode_suffix` is set, removes the portion after the last `-` in the barcode (e.g. `ATCG-1` → `ATCG`)
 - Barcode/UMI populated into `ReadAssignment` objects, same as normal barcode calling path
-- Compatible with all downstream features: UMI dedup, read grouping, barcode2barcode
+- Compatible with all downstream features: UMI dedup, read grouping
 - Skips `detect_barcodes` and `split_read_barcode_table` steps (`DatasetProcessor` checks `barcoded_bam` flag)
 
 **Implementation across files**:
 - `isoquant.py`: CLI arguments (`--barcoded_bam`, `--barcode_tag`, `--umi_tag`, `--strip_barcode_suffix`), validation
 - `isoquant_lib/alignment/alignment_processor.py`: `AlignmentCollector.__init__` stores tag names and suffix stripping flag; `_collect_alignments_with_barcodes()` and `_process_alignment_group()` read tags from `pysam.AlignedSegment`
 - `isoquant_lib/dataset_processor.py`: Skips barcode table loading when `barcoded_bam` is set
-- `isoquant_lib/assignment/read_groups.py`: `barcode_spot` and `barcode_barcode` grouping accept `barcoded_bam` as valid barcode source
+- `isoquant_lib/assignment/read_groups.py`: `barcode_spot` grouping accepts `barcoded_bam` as valid barcode source
 
 **Data prep utility**: `misc/inject_bam_tags.py` — injects CB/UB tags from a `barcoded_reads.tsv` file into an existing BAM. Used to create test data from IsoQuant's own barcode calling output. Supports `--suffix` to add cellranger-style `-1` suffixes.
 

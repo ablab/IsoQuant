@@ -157,20 +157,8 @@ Coordinate lists use `;%;` as the element separator.
 In single-cell/spatial modes IsoQuant always writes UMI-deduplication statistics to
 `SAMPLE_ID.UMI_filtered.ED{N}.stats.tsv` (independently of `--large_output`).
 
-When `--barcode2barcode` (spot-level UMI deduplication) is set, IsoQuant runs one
-extra UMI deduplication per spot column. These extra rounds do **not** emit their
-own `read_info` and are not used for quantification.
-Only the main barcode-based UMI deduplication outputs the default
-`SAMPLE_ID.read_info.tsv.gz` and the counts. 
-
-Each extra round only writes UMI deduplicated reads in allinfo format to
-`SAMPLE_ID.UMI_filtered.barcode_barcode_col{C}.ED{N}.allinfo[.gz]` and corresponding
-statistics to `SAMPLE_ID.UMI_filtered.barcode_barcode_col{C}.ED{N}.stats.tsv`
-(`{C}` = 0-based spot-column index).
-
-When IsoQuant calls Visium HD barcodes itself, `--barcode2barcode` is applied during barcode calling
-instead: the barcode column of the barcoded reads table, `read_info` and the allinfo output contain spot IDs,
-the main UMI deduplication is already spot-level, and no extra rounds or `barcode_barcode_col{C}` files are written.
+When `--barcode2barcode` is set, the barcode column of the barcoded reads table, `read_info` and the allinfo
+output contain spot IDs, and UMI deduplication is spot-level.
 
 ### Tagged and deduplicated BAM
 

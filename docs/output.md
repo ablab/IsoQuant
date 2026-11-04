@@ -66,7 +66,7 @@ use `isoquant_lib/scripts/exon_splice_site_to_group_lists.py`.
 #### RNA velocity counts
 
 In single-cell and spatial modes, when reads are grouped by cell barcode
-(`--read_group barcode`, `barcode_spot` or `barcode_barcode`) and an annotation is given,
+(`--read_group barcode` or `barcode_spot`) and an annotation is given,
 IsoQuant also writes spliced/unspliced counts per cell and gene for downstream RNA velocity analysis:
 
 * `SAMPLE_ID.RNA_velocity_grouped_<strategy>` - tab-separated `cell_id`, `gene_id`, `spliced`, `unspliced`, `ambiguous`;
