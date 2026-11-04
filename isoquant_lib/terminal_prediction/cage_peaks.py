@@ -80,6 +80,10 @@ class CagePeaks:
                            starts[np.minimum(next_peak, len(starts) - 1)] - positions, NO_PEAK_DISTANCE)
         return np.maximum(np.minimum(to_previous, to_next), 0)
 
+    def is_confirmed(self, chrom: str, strand: str, position: int, max_distance: int) -> bool:
+        distances = self.distances(chrom, strand, np.array([position]))
+        return distances is not None and bool(distances[0] <= max_distance)
+
 
 @lru_cache(maxsize=1)
 def load_cage_peaks(bed_file: str) -> CagePeaks:
