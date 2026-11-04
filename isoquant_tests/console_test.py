@@ -5,6 +5,7 @@
 # See file LICENSE for details.
 ############################################################################
 
+import gzip
 import subprocess
 
 import pytest
@@ -212,31 +213,46 @@ def test_with_yaml():
         assert os.path.exists(os.path.join(sample_folder, sample_name + "." + f))
 
 
-# def test_cage():
-#    source_dir = os.path.dirname(os.path.realpath(__file__))
-#    data_dir = os.path.join(source_dir, 'toy_data/')
-#    out_dir = os.path.join(source_dir, "out_mapt/")
-#    shutil.rmtree(out_dir, ignore_errors=True)
-#    os.environ['HOME'] = source_dir # dirty hack to set $HOME for tox environment
-#    sample_name = "MAPT.Mouse.ONT"
-#
-#    result = subprocess.run(["python", "isoquant.py", '--clean_start',
-#                             "-o", out_dir,
-#                             "--data_type", "nanopore",
-#                             "--fastq", data_dir + "MAPT.Mouse.ONT.simulated.fastq",
-#                             "--genedb", data_dir + "MAPT.Mouse.genedb.gtf", "--complete_genedb",
-#                             "-r",  data_dir + "MAPT.Mouse.reference.fasta",
-#                             '--cage', data_dir + "MAPT.Mouse.CAGE.bed",
-#                             "-t", "2",
-#                             "--prefix", sample_name])
-#
-    # assert result.returncode == 0
-    # sample_folder = os.path.join(out_dir, sample_name)
-    # assert os.path.isdir(sample_folder)
-    # resulting_files = ["gene_counts.tsv", "read_info.tsv.gz", "transcript_counts.tsv",
-    #                    "transcript_model_counts.tsv", "transcript_models.gtf", "transcript_model_reads.tsv.gz"]
-    # for f in resulting_files:
-    #     assert os.path.exists(os.path.join(sample_folder, sample_name + "." + f))
+def test_cage():
+    source_dir = os.path.dirname(os.path.realpath(__file__))
+    data_dir = os.path.join(source_dir, 'toy_data/')
+    out_dir = os.path.join(source_dir, "out_cage/")
+    shutil.rmtree(out_dir, ignore_errors=True)
+    sample_name = "MAPT.Mouse.ONT"
+
+    result = subprocess.run(["python3", "isoquant.py",
+                             "-o", out_dir,
+                             "--data_type", "nanopore",
+                             "--fastq", os.path.join(data_dir, "MAPT.Mouse.ONT.simulated.fastq"),
+                             "--genedb", os.path.join(data_dir, "MAPT.Mouse.genedb.gtf"), "--complete_genedb",
+                             "-r",  os.path.join(data_dir, "MAPT.Mouse.reference.fasta"),
+                             "--cage", os.path.join(data_dir, "MAPT.Mouse.CAGE.bed"),
+                             "--fl_data",
+                             "-t", "2",
+                             "--prefix", sample_name])
+
+    assert result.returncode == 0
+    sample_folder = os.path.join(out_dir, sample_name)
+    assert os.path.isdir(sample_folder)
+
+    def output_file(suffix):
+        return os.path.join(sample_folder, sample_name + "." + suffix)
+
+    with gzip.open(output_file("read_info.tsv.gz"), "rt") as read_info:
+        rows = [line.rstrip("\n").split("\t") for line in read_info if not line.startswith("#")]
+    cage_column = rows[0].index("CAGE")
+    assert {row[cage_column] for row in rows[1:]} == {"True", "False"}
+
+    with open(output_file("TSS_prediction.tsv")) as predictions:
+        header = predictions.readline().rstrip("\n").split("\t")
+        assert header[-2:] == ["validated_by_cage", "dist_to_closest_cage"]
+        assert predictions.readline()
+
+    for gtf in ["transcript_models.gtf", "extended_annotation.gtf"]:
+        with open(output_file(gtf)) as models:
+            transcripts = [line for line in models if line.split("\t")[2:3] == ["transcript"]]
+        assert transcripts
+        assert all('validated_by_cage "' in line for line in transcripts)
 
 
 # ---------------------------------------------------------------------------
