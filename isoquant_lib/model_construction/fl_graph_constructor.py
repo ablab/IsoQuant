@@ -110,7 +110,7 @@ class GraphBasedConstructor:
                 polya_info = PolyAInfo(intron_path[-1][1], -1, -1, -1)
             else:
                 polya_info = PolyAInfo(-1, -1, -1, -1)
-            combined_profile = self.profile_constructor.construct_profiles(novel_exons, polya_info, [])
+            combined_profile = self.profile_constructor.construct_profiles(novel_exons, polya_info)
             assignment = self.assigner.assign_to_isoform(new_transcript_id, combined_profile)
             # check that no serious contradiction occurs
             # logger.debug("uuu Checking novel transcript %s: %s; assignment type %s" %

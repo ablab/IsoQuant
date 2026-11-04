@@ -32,6 +32,7 @@ from isoquant_lib.assignment.isoform_assignment import (
     ReadAssignmentType,
 )
 from isoquant_lib.quantification.long_read_counter import AbstractCounter
+from .cage_peaks import DEFAULT_CAGE_SHIFT, load_cage_peaks
 from .terminal_peaks import (
     ANNOTATION_TOLERANCE,
     FEATURE_COLUMNS,
@@ -196,6 +197,7 @@ class TerminalCounter(AbstractCounter):
         if entry is None:
             entry = {
                 'chr': read_assignment.chr_id,
+                'strand': read_assignment.strand,
                 'gene_id': isoform_match.assigned_gene,
                 'data': [],
                 'annotated': self._annotated_position(read_assignment, transcript_id),
@@ -264,7 +266,7 @@ class TerminalCounter(AbstractCounter):
             if result is None:
                 self._write_empty()
             else:
-                self._write_grouped(result)
+                self._write_grouped(self._postprocess_predictions(result))
             return
 
         # Ungrouped: flush the last gene into the chromosome-wide buffer, then
@@ -276,7 +278,7 @@ class TerminalCounter(AbstractCounter):
         if result is None:
             self._write_empty()
         else:
-            self._write_ungrouped(result)
+            self._write_ungrouped(self._postprocess_predictions(result))
 
     def _predict_rows(self) -> Optional[pd.DataFrame]:
         """Peak detection + XGBoost filter over the currently accumulated
@@ -339,6 +341,7 @@ class TerminalCounter(AbstractCounter):
             records.append({
                 'transcript_id': tid,
                 'chromosome': entry['chr'],
+                'strand': entry['strand'],
                 'gene_id': entry['gene_id'],
                 'annotated': entry['annotated'],
                 'start': data_min,
@@ -351,7 +354,7 @@ class TerminalCounter(AbstractCounter):
                 'entropy': float(stats.entropy(padded)),
                 'mean_height': float(np.mean(padded)),
                 'histogram': padded,
-            })
+                })
         df = pd.DataFrame.from_records(records)
 
         # find_peaks returns padded-array indices; subtract HISTOGRAM_PAD to
@@ -456,13 +459,25 @@ class TerminalCounter(AbstractCounter):
         high = start + int(row['peak_right'])
         return int(sum(1 for p in positions if low <= p <= high))
 
+    def _postprocess_predictions(self, result: pd.DataFrame) -> pd.DataFrame:
+        return result
+
+    def _extra_columns(self) -> List[str]:
+        return []
+
+    def _output_columns(self) -> List[str]:
+        base = list(EMPTY_COLUMNS) + self._extra_columns()
+        if not self.ignore_read_groups:
+            base.extend(['counts_byGroup', 'group_id'])
+        return base   
+    
     def _write_empty(self) -> None:
-        cols = EMPTY_COLUMNS if self.ignore_read_groups else EMPTY_COLUMNS_GROUPED
+        cols = self._output_columns()
         pd.DataFrame(columns=cols).to_csv(
             self.output_file, sep="\t", index=False, mode="w", header=True)
 
     def _write_ungrouped(self, result: pd.DataFrame) -> None:
-        out = result[EMPTY_COLUMNS].copy()
+        out = result[self._output_columns()].copy()
         out.to_csv(self.output_file, sep="\t", index=False, mode="w", header=True)
 
     def _write_grouped(self, result: pd.DataFrame) -> None:
@@ -473,24 +488,30 @@ class TerminalCounter(AbstractCounter):
         if not seen_groups:
             self._write_empty()
             return
-
+        extra_cols = self._extra_columns()
         rows = []
         for _, peak in result.iterrows():
             for gid in seen_groups:
                 count = self._counts_for_group(peak, gid)
                 if count == 0:
                     continue
-                rows.append({
+                row_dict = {
                     'chromosome': peak['chromosome'],
                     'transcript_id': peak['transcript_id'],
                     'gene_id': peak['gene_id'],
                     'prediction': peak['prediction'],
                     'counts': peak['counts'],
                     'flag': peak['flag'],
-                    'counts_byGroup': count,
-                    'group_id': self._get_group_name(gid),
-                })
-        out = pd.DataFrame(rows, columns=EMPTY_COLUMNS_GROUPED)
+                }
+                
+                for col in extra_cols:
+                    row_dict[col] = peak[col]
+                    
+                row_dict['counts_byGroup'] = count
+                row_dict['group_id'] = self._get_group_name(gid)
+                
+                rows.append(row_dict)
+        out = pd.DataFrame(rows, columns=self._output_columns())
         out.to_csv(self.output_file, sep="\t", index=False, mode="w", header=True)
 
 
@@ -532,6 +553,34 @@ class TSSCounter(TerminalCounter):
                  string_pools=None, group_index: int = 0) -> None:
         super().__init__(args, output_prefix, TSS_MODEL_PATH,
                          string_pools=string_pools, group_index=group_index)
+        self._cage_path = getattr(args, "cage", None)
+        self._cage_shift = getattr(args, "cage_shift", DEFAULT_CAGE_SHIFT)
+
+    def _extra_columns(self) -> List[str]:
+        if self._cage_path:
+            return ['validated_by_cage', 'dist_to_closest_cage']
+        return []
+
+    def _postprocess_predictions(self, result: pd.DataFrame) -> pd.DataFrame:
+        if not self._cage_path or result.empty:
+            return result
+
+        cage = load_cage_peaks(self._cage_path)
+        result['dist_to_closest_cage'] = np.nan
+
+        for chrom in result['chromosome'].unique():
+            if not cage.has_chromosome(chrom):
+                logger.warning("No CAGE peaks on chromosome %s, check that chromosome names "
+                               "in %s match the reference" % (chrom, self._cage_path))
+
+        for (chrom, strand), tss_sub in result.groupby(['chromosome', 'strand']):
+            distances = cage.distances(chrom, strand, tss_sub['prediction'].values)
+            if distances is not None:
+                result.loc[tss_sub.index, 'dist_to_closest_cage'] = distances
+
+        result['validated_by_cage'] = (result['dist_to_closest_cage'] <= self._cage_shift)
+        result['dist_to_closest_cage'] = result['dist_to_closest_cage'].astype('Int64')
+        return result
 
     def _passes_filter(self, read_assignment: ReadAssignment) -> bool:
         return read_assignment.strand in ('+', '-')
@@ -550,3 +599,4 @@ class TSSCounter(TerminalCounter):
         if read_assignment.strand == '+':
             return exons[0][0] - 1
         return exons[-1][1] + 1
+

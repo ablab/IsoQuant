@@ -327,7 +327,7 @@ CI/CD workflows in `.github/workflows/`:
 
 **Specialized Features**:
 - `isoquant_lib/terminal_prediction/polya_finder.py`, `isoquant_lib/terminal_prediction/polya_verification.py` - PolyA detection
-- `isoquant_lib/terminal_prediction/cage_finder.py` - CAGE peak integration
+- `isoquant_lib/terminal_prediction/cage_peaks.py` - CAGE peak validation of reads, TSS predictions and transcript models
 - `isoquant_lib/assignment/illumina_exon_corrector.py` - Short-read correction
 - `isoquant_lib/barcode_calling/umi_filtering.py` - UMI-based deduplication
 

@@ -212,7 +212,7 @@ class ModelFilter:
                     polya_info = PolyAInfo(m.intron_path[-1][1], -1, -1, -1)
                 else:
                     polya_info = PolyAInfo(-1, -1, -1, -1)
-                combined_profile = profile_constructor.construct_profiles(m.exon_blocks, polya_info, [])
+                combined_profile = profile_constructor.construct_profiles(m.exon_blocks, polya_info)
                 assignment = assigner.assign_to_isoform(m.transcript_id, combined_profile)
 
                 if is_matching_assignment(assignment):

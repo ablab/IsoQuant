@@ -135,7 +135,7 @@ class ConstructionReadAssigner:
 
             read_exons = assignment.corrected_exons
             # logger.debug("# Checking read %s: %s" % (assignment.read_id, str(read_exons)))
-            model_combined_profile = profile_constructor.construct_profiles(read_exons, assignment.polya_info, [])
+            model_combined_profile = profile_constructor.construct_profiles(read_exons, assignment.polya_info)
             model_assignment = assigner.assign_to_isoform(assignment.read_id, model_combined_profile)
             model_assignment.read_group = assignment.read_group  # Full list, not just [0]
             # check that no serious contradiction occurs

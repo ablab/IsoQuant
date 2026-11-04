@@ -42,6 +42,7 @@ from .assignment.assignment_aggregator import ReadAssignmentAggregator
 from isoquant_lib.utils.string_pools import setup_string_pools
 from isoquant_lib.utils.checkpoints import CheckpointStore, mark_done_with_debug_hook, checkpoint_name
 from .common import large_output_enabled
+from isoquant_lib.terminal_prediction.cage_peaks import load_cage_peaks
 from isoquant_lib.utils.bam_utils import (load_barcode_umi_tags, load_survivor_tags,
                                          write_tagged_chromosome_bam)
 
@@ -305,6 +306,7 @@ def construct_models_in_parallel(sample, chr_id, chr_ids, saves_prefix, args,
     # same path would truncate it and leave two handles writing to one file
     sqanti_t2t_printer = aggregator.t2t_sqanti_printer
     novel_model_storage = []
+    cage_peaks = load_cage_peaks(args.cage) if construct_models and args.cage else None
 
     while loader.has_next():
         gene_info, assignment_storage = loader.get_next()
@@ -340,6 +342,8 @@ def construct_models_in_parallel(sample, chr_id, chr_ids, saves_prefix, args,
             model_constructor.process(assignment_storage)
             if args.check_canonical:
                 io_support.add_canonical_info(model_constructor.transcript_model_storage, gene_info)
+            if cage_peaks:
+                cage_peaks.add_model_info(model_constructor.transcript_model_storage, args.cage_shift)
             tmp_gff_printer.dump(model_constructor.gene_info, model_constructor.transcript_model_storage)
             # process() already built the honest per-read model assignments (and fed
             # them to the counters); print them when read2transcripts is enabled.
@@ -361,6 +365,8 @@ def construct_models_in_parallel(sample, chr_id, chr_ids, saves_prefix, args,
             all_models, gene_info = create_extended_storage(loader.genedb, chr_id, loader.chr_record, novel_model_storage)
             if args.check_canonical:
                 io_support.add_canonical_info(all_models, gene_info)
+            if cage_peaks:
+                cage_peaks.add_model_info(all_models, args.cage_shift)
             tmp_extended_gff_printer.dump(gene_info, all_models)
         aggregator.transcript_model_global_counter.dump()
         aggregator.gene_model_global_counter.dump()

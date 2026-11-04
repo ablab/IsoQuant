@@ -175,7 +175,7 @@ class GraphBasedModelConstructor:
                 polya_info = PolyAInfo(model.exon_blocks[-1][1], -1, -1, -1)
 
             combined_profile = self.model_comparison_profile_constructor.construct_profiles(model.exon_blocks,
-                                                                                            polya_info, [])
+                                                                                            polya_info)
             assignment = self.model_comparison_assigner.assign_to_isoform(model.transcript_id, combined_profile)
             if assignment is None:
                 continue
