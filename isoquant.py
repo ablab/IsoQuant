@@ -46,7 +46,7 @@ from isoquant_lib.modes import (IsoQuantMode, ISOQUANT_MODES, AnalysisType, ANAL
                                 DEPRECATED_MODE_ALIASES, SPLIT_MOLECULES_CHOICES, SPLIT_MOLECULES_TRUE,
                                 SPLIT_MOLECULES_FALSE, SPLIT_MOLECULES_AUTO)
 from isoquant_lib.gtf2db import convert_gtf_to_db
-from isoquant_lib.terminal_prediction.cage_peaks import CageFormatError, load_cage_peaks
+from isoquant_lib.terminal_prediction.cage_peaks import CageFormatError, DEFAULT_CAGE_SHIFT, load_cage_peaks
 from isoquant_lib.utils.read_mapper import (
     DATA_TYPE_ALIASES,
     SUPPORTED_STRANDEDNESS,
@@ -413,7 +413,8 @@ def parse_args(cmd_args=None, namespace=None):
                       help="intron graph clustering distance, "
                            "splice junctions less that this number of bp apart will not be differentiated")
     add_hidden_option("--cage", help="bed file with CAGE peaks", type=str, default=None)
-    add_hidden_option("--cage-shift", type=int, default=50, help="maximal distance from a TSS to a CAGE peak confirming it")
+    add_hidden_option("--cage-shift", type=int, default=DEFAULT_CAGE_SHIFT,
+                      help="maximal distance from a TSS to a CAGE peak confirming it, 0 means inside the peak")
 
     # PolyA / TSS training-data collection (developer-only).
     # When either flag is given to a normal IsoQuant run, the matching
