@@ -15,6 +15,7 @@ import numpy as np
 from isoquant_lib.utils.file_utils import open_text_read
 
 NO_PEAK_DISTANCE = np.iinfo(np.int64).max
+DEFAULT_CAGE_SHIFT = 50
 BED_STRAND_COLUMN = 5
 BED_HEADER_PREFIXES = ('#', 'track', 'browser')
 

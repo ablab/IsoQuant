@@ -413,7 +413,7 @@ def parse_args(cmd_args=None, namespace=None):
                       help="intron graph clustering distance, "
                            "splice junctions less that this number of bp apart will not be differentiated")
     add_hidden_option("--cage", help="bed file with CAGE peaks", type=str, default=None)
-    add_hidden_option("--cage-shift", type=int, default=50, help="interval before read start to look for CAGE peak")
+    add_hidden_option("--cage-shift", type=int, default=50, help="maximal distance from a TSS to a CAGE peak confirming it")
 
     # PolyA / TSS training-data collection (developer-only).
     # When either flag is given to a normal IsoQuant run, the matching

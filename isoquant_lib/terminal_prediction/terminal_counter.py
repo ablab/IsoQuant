@@ -32,7 +32,7 @@ from isoquant_lib.assignment.isoform_assignment import (
     ReadAssignmentType,
 )
 from isoquant_lib.quantification.long_read_counter import AbstractCounter
-from .cage_peaks import load_cage_peaks
+from .cage_peaks import DEFAULT_CAGE_SHIFT, load_cage_peaks
 from .terminal_peaks import (
     ANNOTATION_TOLERANCE,
     FEATURE_COLUMNS,
@@ -554,6 +554,7 @@ class TSSCounter(TerminalCounter):
         super().__init__(args, output_prefix, TSS_MODEL_PATH,
                          string_pools=string_pools, group_index=group_index)
         self._cage_path = getattr(args, "cage", None)
+        self._cage_shift = getattr(args, "cage_shift", DEFAULT_CAGE_SHIFT)
 
     def _extra_columns(self):
         if self._cage_path:
@@ -577,7 +578,7 @@ class TSSCounter(TerminalCounter):
             if distances is not None:
                 result.loc[tss_sub.index, 'dist_to_closest_cage'] = distances
 
-        result['validated_by_cage'] = (result['dist_to_closest_cage'] == 0)
+        result['validated_by_cage'] = (result['dist_to_closest_cage'] <= self._cage_shift)
         result['dist_to_closest_cage'] = result['dist_to_closest_cage'].astype('Int64')
         return result
 
