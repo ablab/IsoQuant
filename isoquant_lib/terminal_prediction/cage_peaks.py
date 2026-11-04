@@ -8,12 +8,44 @@
 """CAGE peaks indexed for nearest-peak distance queries."""
 
 from functools import lru_cache
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
-import pandas as pd
+
+from isoquant_lib.utils.file_utils import open_text_read
 
 NO_PEAK_DISTANCE = np.iinfo(np.int64).max
+BED_STRAND_COLUMN = 5
+BED_HEADER_PREFIXES = ('#', 'track', 'browser')
+
+
+class CageFormatError(ValueError):
+    """The CAGE file is not a BED file with a strand column."""
+
+
+def _read_bed(bed_file: str) -> Dict[Tuple[str, str], List[Tuple[int, int]]]:
+    peaks: Dict[Tuple[str, str], List[Tuple[int, int]]] = {}
+    with open_text_read(bed_file) as bed:
+        for line_number, line in enumerate(bed, 1):
+            if not line.strip() or line.startswith(BED_HEADER_PREFIXES):
+                continue
+            fields = line.rstrip('\r\n').split('\t')
+            where = "%s, line %d: " % (bed_file, line_number)
+            if len(fields) <= BED_STRAND_COLUMN:
+                raise CageFormatError(where + "expected a tab-separated BED with at least 6 columns "
+                                              "(strand is required), found %d" % len(fields))
+            strand = fields[BED_STRAND_COLUMN]
+            if strand not in ('+', '-', '.'):
+                raise CageFormatError(where + "unexpected strand '%s'" % strand)
+            try:
+                # BED starts are 0-based, IsoQuant positions and BED ends are 1-based inclusive
+                interval = (int(fields[1]) + 1, int(fields[2]))
+            except ValueError:
+                raise CageFormatError(where + "peak coordinates are not integers")
+            peaks.setdefault((fields[0], strand), []).append(interval)
+    if not peaks:
+        raise CageFormatError(bed_file + " contains no peaks")
+    return peaks
 
 
 class CagePeaks:
@@ -25,14 +57,9 @@ class CagePeaks:
 
     def __init__(self, bed_file: str) -> None:
         self._peaks: Dict[Tuple[str, str], Tuple[np.ndarray, np.ndarray]] = {}
-        table = pd.read_csv(bed_file, sep='\t', header=None, usecols=[0, 1, 2, 5],
-                            names=['chrom', 'start', 'end', 'strand'], comment='#',
-                            dtype={'chrom': str})
-        for key, peaks in table.groupby(['chrom', 'strand']):
-            peaks = peaks.sort_values('start')
-            # BED starts are 0-based, IsoQuant positions and BED ends are 1-based inclusive
-            self._peaks[key] = (peaks['start'].values.astype(np.int64) + 1,
-                                np.maximum.accumulate(peaks['end'].values.astype(np.int64)))
+        for key, intervals in _read_bed(bed_file).items():
+            peaks = np.array(sorted(intervals), dtype=np.int64)
+            self._peaks[key] = (peaks[:, 0], np.maximum.accumulate(peaks[:, 1]))
 
     def has_chromosome(self, chrom: str) -> bool:
         return any(chrom == peak_chrom for peak_chrom, _ in self._peaks)

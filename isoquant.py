@@ -46,6 +46,7 @@ from isoquant_lib.modes import (IsoQuantMode, ISOQUANT_MODES, AnalysisType, ANAL
                                 DEPRECATED_MODE_ALIASES, SPLIT_MOLECULES_CHOICES, SPLIT_MOLECULES_TRUE,
                                 SPLIT_MOLECULES_FALSE, SPLIT_MOLECULES_AUTO)
 from isoquant_lib.gtf2db import convert_gtf_to_db
+from isoquant_lib.terminal_prediction.cage_peaks import CageFormatError, load_cage_peaks
 from isoquant_lib.utils.read_mapper import (
     DATA_TYPE_ALIASES,
     SUPPORTED_STRANDEDNESS,
@@ -959,6 +960,11 @@ def _check_annotation_files(args):
         if not os.path.isfile(args.cage):
             logger.critical("Bed file with CAGE peaks " + args.cage + " does not exist")
             sys.exit(IsoQuantExitCode.INPUT_FILE_NOT_FOUND)
+        try:
+            load_cage_peaks(args.cage)
+        except CageFormatError as e:
+            logger.critical("Incorrect CAGE file: " + str(e))
+            sys.exit(IsoQuantExitCode.INVALID_FILE_FORMAT)
 
     # Check gene database
     if args.genedb is not None:
