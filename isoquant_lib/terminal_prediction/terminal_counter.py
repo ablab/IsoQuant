@@ -32,7 +32,7 @@ from isoquant_lib.assignment.isoform_assignment import (
     ReadAssignmentType,
 )
 from isoquant_lib.quantification.long_read_counter import AbstractCounter
-from .cage_peaks import CagePeaks
+from .cage_peaks import load_cage_peaks
 from .terminal_peaks import (
     ANNOTATION_TOLERANCE,
     FEATURE_COLUMNS,
@@ -266,7 +266,7 @@ class TerminalCounter(AbstractCounter):
             if result is None:
                 self._write_empty()
             else:
-                self._write_grouped(result)
+                self._write_grouped(self._postprocess_predictions(result))
             return
 
         # Ungrouped: flush the last gene into the chromosome-wide buffer, then
@@ -278,7 +278,7 @@ class TerminalCounter(AbstractCounter):
         if result is None:
             self._write_empty()
         else:
-            self._write_ungrouped(result)
+            self._write_ungrouped(self._postprocess_predictions(result))
 
     def _predict_rows(self) -> Optional[pd.DataFrame]:
         """Peak detection + XGBoost filter over the currently accumulated
@@ -309,7 +309,7 @@ class TerminalCounter(AbstractCounter):
             (result['prediction'] - result['annotated']).abs()
             .gt(ANNOTATION_TOLERANCE).map({True: 'Novel', False: 'Known'}))
         result['counts'] = result.apply(self._counts_for_peak, axis=1)
-        return self._postprocess_predictions(result)
+        return result
 
     def _dump_training(self) -> None:
         """Training-data collection: emit per-peak features + true_peak label
@@ -554,14 +554,6 @@ class TSSCounter(TerminalCounter):
         super().__init__(args, output_prefix, TSS_MODEL_PATH,
                          string_pools=string_pools, group_index=group_index)
         self._cage_path = getattr(args, "cage", None)
-        self._cage_peaks: Optional[CagePeaks] = None
-
-    @property
-    def cage_peaks(self) -> Optional[CagePeaks]:
-        """Lazily load the CAGE BED file on first use."""
-        if self._cage_peaks is None and self._cage_path:
-            self._cage_peaks = CagePeaks(self._cage_path)
-        return self._cage_peaks
 
     def _extra_columns(self):
         if self._cage_path:
@@ -572,7 +564,7 @@ class TSSCounter(TerminalCounter):
         if not self._cage_path or result.empty:
             return result
 
-        cage = self.cage_peaks
+        cage = load_cage_peaks(self._cage_path)
         result['dist_to_closest_cage'] = np.nan
 
         for (chrom, strand), tss_sub in result.groupby(['chromosome', 'strand']):

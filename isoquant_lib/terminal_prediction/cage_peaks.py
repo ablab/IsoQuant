@@ -7,6 +7,7 @@
 
 """CAGE peaks indexed for nearest-peak distance queries."""
 
+from functools import lru_cache
 from typing import Dict, Optional, Tuple
 
 import numpy as np
@@ -45,3 +46,9 @@ class CagePeaks:
         to_next = np.where(next_peak < len(starts),
                            starts[np.minimum(next_peak, len(starts) - 1)] - positions, NO_PEAK_DISTANCE)
         return np.maximum(np.minimum(to_previous, to_next), 0)
+
+
+@lru_cache(maxsize=1)
+def load_cage_peaks(bed_file: str) -> CagePeaks:
+    """Parse the file once per process, it is shared by all its counters and chromosomes."""
+    return CagePeaks(bed_file)
