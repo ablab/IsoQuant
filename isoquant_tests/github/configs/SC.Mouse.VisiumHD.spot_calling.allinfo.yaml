@@ -7,7 +7,7 @@ bam: /abga/work/andreyp/ci_isoquant/data/barcodes/Mouse.VisiumHD.800K.aligned.ba
 datatype: ont
 isoquant_options: '"-m visium_hd --split_molecules false --complete_genedb --barcode_whitelist /abga/work/andreyp/ci_isoquant/data/barcodes/visium_v1_hd.slide1.barcodes1.tsv /abga/work/andreyp/ci_isoquant/data/barcodes/visium_v1_hd.slide1.barcodes2.tsv
   --barcode2barcode /abga/work/andreyp/data/visium/spaceranger/barcode_seq_to_spots.tsv:0:2
-  --large_output read_info  -t 10"'
+  --large_output read_info allinfo -t 10"'
 edit_distance: '4'
 baselines:
   allinfo:

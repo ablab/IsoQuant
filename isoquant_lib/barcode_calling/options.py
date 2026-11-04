@@ -175,33 +175,37 @@ def validate_barcode_whitelist(args):
         sys.exit(IsoQuantExitCode.INCOMPATIBLE_OPTIONS)
 
 
-def resolve_spot_barcode_calling(args):
-    """Apply --barcode2barcode already during barcode calling when IsoQuant calls Visium HD barcodes.
+def validate_spot_barcode_calling(args) -> None:
+    """Check --barcode2barcode, which applies only while IsoQuant calls Visium HD barcodes.
 
     The barcoded reads then carry spot IDs, so a read whose barcode is ambiguous between neighbouring
-    spots of one coarser spot is still assigned; the mapping is not applied again downstream. With
-    barcodes taken from --barcoded_reads/--barcoded_bam it keeps working at UMI deduplication.
-    Resolved before the parameters are saved, so that a resumed run keeps the decision of its start.
+    barcodes of one coarser spot is still assigned. Barcodes taken from elsewhere are grouped into spots
+    with --barcode2spot. Stops here rather than in a worker, after reads have been mapped.
     """
-    args.spot_barcode_calling = (bool(getattr(args, "barcode2barcode", None))
-                                 and args.mode == IsoQuantMode.visium_hd and bool(args.barcode_whitelist))
-    if not args.spot_barcode_calling:
+    if any(spec.split(":")[0] == "barcode_barcode" for spec in getattr(args, "read_group", None) or []):
+        logger.critical("--read_group barcode_barcode is no longer supported, use --barcode2spot and "
+                        "--read_group barcode_spot to group barcodes into spots")
+        sys.exit(IsoQuantExitCode.INCOMPATIBLE_OPTIONS)
+    if not getattr(args, "barcode2barcode", None):
         return
+    if args.mode != IsoQuantMode.visium_hd:
+        logger.critical("--barcode2barcode is supported only for --mode %s, use --barcode2spot to group "
+                        "barcodes into spots" % IsoQuantMode.visium_hd.name)
+        sys.exit(IsoQuantExitCode.INCOMPATIBLE_OPTIONS)
+    if not args.barcode_whitelist:
+        logger.critical("--barcode2barcode is applied during barcode calling and requires "
+                        "--barcode_whitelist; use --barcode2spot to group barcodes from --barcoded_reads "
+                        "or --barcoded_bam into spots")
+        sys.exit(IsoQuantExitCode.INCOMPATIBLE_OPTIONS)
     # exits unless exactly one spot column is selected
     parse_spot_mapping_spec(args.barcode2barcode)
-    if args.read_group and "barcode_barcode" in args.read_group:
-        logger.critical("--read_group barcode_barcode cannot be used when barcodes are called with "
-                        "--barcode2barcode: they are already spot IDs. The default barcode grouping "
-                        "counts reads per spot.")
-        sys.exit(IsoQuantExitCode.INCOMPATIBLE_OPTIONS)
-    logger.info("Barcodes will be reported as spot IDs from --barcode2barcode during barcode calling; "
-                "the mapping will not be applied again during UMI deduplication")
+    logger.info("Barcodes will be reported as spot IDs from --barcode2barcode during barcode calling")
 
 
 def validate_barcode_calling(args):
     args.umi_length = 0
     args.detect_cell_barcodes = False
-    args.spot_barcode_calling = False
+    validate_spot_barcode_calling(args)
     if not args.mode.needs_barcode_calling():
         return
     validate_barcode_whitelist(args)
@@ -223,7 +227,6 @@ def validate_barcode_calling(args):
         args.umi_length = get_umi_length(args.mode)
 
     resolve_barcode_correction(args)
-    resolve_spot_barcode_calling(args)
 
 
 def detect_umi_length_from_bam(bam_path: str, umi_tag: str) -> int:

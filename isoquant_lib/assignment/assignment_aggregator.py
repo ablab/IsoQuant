@@ -317,7 +317,7 @@ class ReadAssignmentAggregator:
     def _add_grouped_velocity_counter(self, sample, chr_id, group_idx, strategy_name,
                                       grouping_pool_types):
         # RNA velocity (spliced/unspliced) counts. Only meaningful for
-        # cell-barcode groupings (barcode / barcode_spot / barcode_barcode);
+        # cell-barcode groupings (barcode / barcode_spot);
         # groupings like file_name or BAM tags would collapse the whole
         # sample into a single "cell". Each strategy writes to its own
         # path -- otherwise grouped counters would share one file and the
