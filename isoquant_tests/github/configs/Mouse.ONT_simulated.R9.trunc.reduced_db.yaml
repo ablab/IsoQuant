@@ -11,26 +11,26 @@ reference_tpm: /abga/work/andreyp/ci_isoquant/data/mouse/Mouse.ONT.R9.4.trunc.si
 reference_gene_tpm: /abga/work/andreyp/ci_isoquant/data/mouse/Mouse.ONT.R9.4.trunc.simulated.gene_counts.tsv
 baselines:
   transcripts:
-    full_recall: 92.2
-    full_precision: 94.7
-    known_recall: 96.9
-    known_precision: 95.5
-    novel_recall: 63.2
-    novel_precision: 87.8
+    full_recall: 93.7
+    full_precision: 94.5
+    known_recall: 97.9
+    known_precision: 95.2
+    novel_recall: 67.9
+    novel_precision: 88.9
   transcripts_td50:
-    full_recall: 91.6
-    full_precision: 94.1
-    known_recall: 96.8
-    known_precision: 95.4
-    novel_recall: 60.3
-    novel_precision: 83.7
+    full_recall: 93.1
+    full_precision: 93.9
+    known_recall: 97.9
+    known_precision: 95.1
+    novel_recall: 64.5
+    novel_precision: 84.5
   transcripts_td10:
-    full_recall: 87.3
-    full_precision: 89.7
-    known_recall: 96.8
-    known_precision: 95.4
-    novel_recall: 32.1
-    novel_precision: 44.6
+    full_recall: 88.4
+    full_precision: 89.1
+    known_recall: 97.9
+    known_precision: 95.1
+    novel_recall: 32.8
+    novel_precision: 43.0
   quantification_ref:
     reported_overlap: 29866.0
     corr_overlap: 0.8797
@@ -45,18 +45,18 @@ baselines:
     false_reports_full: 8876.0
     missed_full: 5686.0
   quantification_novel:
-    reported_overlap: 32646.0
-    corr_overlap: 0.9542
-    good_matches_overlap: 8722.0
-    fair_matches_overlap: 23440.0
+    reported_overlap: 33252.0
+    corr_overlap: 0.9564
+    good_matches_overlap: 12689.0
+    fair_matches_overlap: 28017.0
     false_reports_overlap: 0.0
     missed_overlap: 0.0
-    reported_full: 34512.0
-    corr_full: 0.8342
-    good_matches_full: 8722.0
-    fair_matches_full: 23440.0
-    false_reports_full: 1866.0
-    missed_full: 2906.0
+    reported_full: 35175.0
+    corr_full: 0.8637
+    good_matches_full: 12689.0
+    fair_matches_full: 28017.0
+    false_reports_full: 1923.0
+    missed_full: 2300.0
   quantification_gene:
     reported_overlap: 20878.0
     corr_overlap: 0.8708

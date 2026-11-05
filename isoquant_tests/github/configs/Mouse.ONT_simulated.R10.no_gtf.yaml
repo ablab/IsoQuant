@@ -30,15 +30,15 @@ baselines:
     novel_recall: 41.9
     novel_precision: 68.8
   quantification_novel:
-    reported_overlap: 19964.0
-    corr_overlap: 0.9091
-    good_matches_overlap: 355.0
-    fair_matches_overlap: 777.0
+    reported_overlap: 19976.0
+    corr_overlap: 0.9111
+    good_matches_overlap: 358.0
+    fair_matches_overlap: 782.0
     false_reports_overlap: 0.0
     missed_overlap: 0.0
-    reported_full: 21575.0
-    corr_full: 0.5315
-    good_matches_full: 355.0
-    fair_matches_full: 777.0
-    false_reports_full: 1611.0
-    missed_full: 15706.0
+    reported_full: 21579.0
+    corr_full: 0.5399
+    good_matches_full: 358.0
+    fair_matches_full: 782.0
+    false_reports_full: 1603.0
+    missed_full: 15694.0
