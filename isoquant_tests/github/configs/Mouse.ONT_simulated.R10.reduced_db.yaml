@@ -45,18 +45,18 @@ baselines:
     false_reports_full: 8229.0
     missed_full: 6587.0
   quantification_novel:
-    reported_overlap: 30265.0
-    corr_overlap: 0.8968
-    good_matches_overlap: 1692.0
-    fair_matches_overlap: 3780.0
+    reported_overlap: 30471.0
+    corr_overlap: 0.8966
+    good_matches_overlap: 1698.0
+    fair_matches_overlap: 3763.0
     false_reports_overlap: 0.0
     missed_overlap: 0.0
-    reported_full: 31470.0
+    reported_full: 31675.0
     corr_full: 0.869
-    good_matches_full: 1692.0
-    fair_matches_full: 3780.0
-    false_reports_full: 1205.0
-    missed_full: 5405.0
+    good_matches_full: 1698.0
+    fair_matches_full: 3763.0
+    false_reports_full: 1204.0
+    missed_full: 5199.0
   quantification_gene:
     reported_overlap: 20975.0
     corr_overlap: 0.9056
