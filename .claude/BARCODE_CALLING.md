@@ -337,7 +337,7 @@ Use `--barcode2spot` for given barcodes.
 
 **CLI**: `--barcode2barcode file.tsv` or `--barcode2barcode file.tsv:barcode_col:spot_col`
 
-**Utility script**: `misc/prepare_visium_spot_ids.py` generates the barcode-to-spot TSV from two per-part coordinate files (part1→Y, part2→X) via cartesian product. Produces composite barcodes (`BC1|BC2`) with spot IDs formatted as `prefix + Y_coord + delimiter + X_coord + suffix` for each resolution column. Default prefixes match Visium HD format (`s_002um_`, `s_008um_`, `s_016um_`). Supports custom prefix/suffix/delimiter. Output is directly usable as `--barcode2barcode` input.
+**Utility script**: `isoquant_lib/scripts/prepare_visium_spot_ids.py` generates the barcode-to-spot TSV from two per-part coordinate files (part1→Y, part2→X) via cartesian product. Produces composite barcodes (`BC1|BC2`) with spot IDs formatted as `prefix + Y_coord + delimiter + X_coord + suffix` for each resolution column. Default prefixes match Visium HD format (`s_002um_`, `s_008um_`, `s_016um_`). Supports custom prefix/suffix/delimiter. Output is directly usable as `--barcode2barcode` input.
 
 **Tests**: `isoquant_tests/test_spot_barcode_calling.py`.
 
