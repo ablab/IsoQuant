@@ -11,8 +11,9 @@ barcodes, the detector reports spot IDs and assigns a tie when all its candidate
 - `--barcode2barcode` has this one function: it needs mode `visium_hd` and `--barcode_whitelist`, otherwise
   `validate_spot_barcode_calling` (`barcode_calling/options.py`) aborts, also with `--barcoded_reads` /
   `--barcoded_bam` (use `--barcode2spot`). So a set `args.barcode2barcode` always means spot calling.
-- The earlier UMI-stage route (per-column dedup rounds, `barcode_barcode` group, forced `allinfo`) was removed:
-  it never reached the counts and duplicated `--barcode2spot`. `CHECKPOINT_FORMAT` was bumped to 3.
+- The earlier UMI-stage route was removed: its per-column dedup rounds and forced `allinfo` never reached the
+  counts, and its `barcode_barcode` group wrote the same grouped counts as `barcode_spot`, under another name.
+  `CHECKPOINT_FORMAT` was bumped to 3.
 - Exactly one spot column (`FILE:0:2`); several columns abort (`parse_spot_mapping_spec`). `--read_group
   barcode_barcode` aborts during option validation.
 - Downstream: the default `barcode` group counts per spot and UMI deduplication is spot-level.
