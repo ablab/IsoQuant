@@ -224,7 +224,7 @@ For each read with unique assignment:
 
 Then:
   - construct_monoexon_isoforms(): Add mono-exon reference transcripts
-  - construct_nonfl_isoforms(): Add spliced reference transcripts (if not FL-only mode)
+  - construct_nonfl_isoforms(): Add spliced reference transcripts (all presets)
   - construct_monoexon_novel(): Discover novel mono-exon transcripts (if enabled)
 ```
 
@@ -247,11 +247,14 @@ For each novel transcript:
 
 #### Similar Isoform Detection (`detect_similar_isoforms`)
 ```
-For each multi-exon model:
+For each multi-exon model (known models first, then novel ones by decreasing read count):
   Create temporary GeneInfo from model
   For each other model:
     If other model can be assigned to this model → mark for substitution
 ```
+
+The order matters for two novel models that match each other, e.g. models that differ only at two
+annotated splice sites a few bases apart (never merged in the graph): the better supported one is kept.
 
 ### Phase 5: Read Assignment (`assign_reads_to_models`)
 
@@ -380,6 +383,43 @@ def cluster_terminal_positions(position_dict, read_end=True, min_abs=1):
 **Note**: This is much simpler - just takes the extreme position.
 
 ## Terminal Vertex Logic
+
+### Full-length reads (`--fl_data`)
+
+- 3' end: a read without a detected polyA tail (and without polyT soft-clipped at its 5' end) gets
+  an artificial polyA at its 3' end (`add_artificial_polya` -> `inject_external_polya`), so its end is
+  trusted when threading. As for every site set after assignment (`--polya_trimmed`, tag/list tails
+  without a side), `AlignmentCollector.apply_artificial_polya` then has
+  `LongReadAssigner.reassign_with_polya_site` classify the read as for a tail found in its sequence:
+  consistent matches on the read strand are verified (`PolyAVerifier.verify_read_ends`), matches the
+  site contradicts are dropped when others agree with it, and the read is matched again
+  (`match_inconsistent`) when the site contradicts all of them or the read was inconsistent. A revised
+  read goes through the inconsistent-MAPQ filter, exon correction and the antisense check again; the
+  site itself stays at the first corrected end.
+- 5' end: `IntronGraph.is_trusted_five_prime(intron, position, genomic_left)` decides whether a read
+  start ('+') or end ('-') is a transcription start. It is True at a predicted TSS
+  (`is_at_predicted_tss`: within `apa_delta` of any TSS predicted in the block,
+  `predicted_tss_positions`, all predictions, not only admissible ones: minimap2 often truncates the
+  first exons behind long introns, so the read starts at a later exon). With `--fl_data` it is also
+  True everywhere else except within `apa_delta` of the acceptor of an intron entering the read's
+  first exon (incoming introns of the first intron for '+', outgoing of the last for '-'): reads
+  whose short first exon (median ~30 bp) is soft-clipped by minimap2 start there, and trusting them
+  builds 5'-truncated models or reports the truncated chain as an unexpressed annotated parent. Only
+  annotated introns and introns with coverage >= `max(min_novel_count, min_novel_count_rel *
+  coverage of the read's intron)` count; ONT graphs carry many 1-3-read noise introns that would
+  otherwise block real TSSs. Coverage comes from `clustered_introns`, as `collapse_vertex` does not
+  move `edge_weights`; `IntronGraph.supported_neighbours` applies this filter.
+  `collect_terminal_positions` keeps trusted termini even when other reads splice into the exon
+  (`is_start_internal`/`is_end_internal`), but an intron has a single read-start/end vertex at its
+  outermost terminus, so a terminus inside the exon of a supported intron makes it only when no read
+  starts (ends) outside the exon; one inside the exon only by noise introns counts as outside.
+  `thread_starts`/`thread_ends(five_prime=True)` skip the "inside the previous exon" rejection and claim
+  a TSS vertex or the nearest read-start/read-end vertex within `apa_delta`, else fall back to the
+  outermost vertex; for a terminus inside the exon of a supported intron every candidate must lie
+  inside the exon too (`five_prime_vertex_limit`, the `is_start_internal` bound over supported
+  introns), never past that intron, else the read is not threaded. Noise introns do not bound the exon
+  here either: a 1-read intron ending at SIRV108's TSS (SIRVs Set4 R10) otherwise rejects the TSS
+  vertex 6 bp before it. Without `--fl_data` there are no TSS predictions, so this is inert.
 
 ### Finding Read Ends (`thread_ends`)
 
@@ -548,7 +588,8 @@ def calculate_coverage_cutoff(self, intron_path):
 A vertex is collapsed if:
 1. It's within `graph_clustering_distance` of another vertex
 2. Its count is less than `graph_clustering_ratio` × the other vertex's count
-3. It's not a known intron
+3. The two are not both known introns (annotated introns a few bases apart, e.g. NAGNAG
+   acceptors, are never merged, otherwise their isoforms thread to one path and one is lost)
 
 ### Singleton Dead End Removal (`remove_singleton_dead_ends`)
 

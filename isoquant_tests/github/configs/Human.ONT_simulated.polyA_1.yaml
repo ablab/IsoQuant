@@ -11,26 +11,26 @@ datatype: ont
 isoquant_options: '"-t 16 --complete_genedb --force "'
 baselines:
   transcripts:
-    full_recall: 71.5
-    full_precision: 87.4
-    known_recall: 75.4
-    known_precision: 73.2
-    novel_recall: 36.6
-    novel_precision: 94.7
+    full_recall: 72.7
+    full_precision: 87.5
+    known_recall: 77.0
+    known_precision: 73.3
+    novel_recall: 37.2
+    novel_precision: 96.3
   transcripts_td50:
-    full_recall: 65.0
-    full_precision: 79.4
-    known_recall: 75.3
-    known_precision: 73.1
-    novel_recall: 34.4
-    novel_precision: 89.1
+    full_recall: 66.3
+    full_precision: 79.8
+    known_recall: 76.9
+    known_precision: 73.3
+    novel_recall: 35.0
+    novel_precision: 90.6
   transcripts_td10:
-    full_recall: 60.4
-    full_precision: 73.8
-    known_recall: 75.3
-    known_precision: 73.1
-    novel_recall: 30.3
-    novel_precision: 78.4
+    full_recall: 61.6
+    full_precision: 74.2
+    known_recall: 76.9
+    known_precision: 73.3
+    novel_recall: 30.8
+    novel_precision: 79.8
   polya_prediction:
     precision: 95.5879
     recall: 58.7875

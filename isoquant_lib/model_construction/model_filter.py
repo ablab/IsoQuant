@@ -193,7 +193,13 @@ class ModelFilter:
 
     def detect_similar_isoforms(self, model_storage, remove_unconfirmed=False):
         to_substitute = {}
-        for model in model_storage:
+        # known models first, then novel ones by decreasing read support: a novel model is replaced
+        # by a known one or by a better supported novel one, never by a weaker near-identical sibling
+        # (e.g. two novel models that differ only at two annotated splice sites a few bases apart)
+        ordered_models = sorted(model_storage,
+                                key=lambda m: (m.transcript_type != TranscriptModelType.known,
+                                               -self.store.internal_counter[m.transcript_id]))
+        for model in ordered_models:
             if len(model.exon_blocks) <= 2 or model.transcript_id in to_substitute:
                 continue
             transcript_model_gene_info = GeneInfo.from_models([model], self.args.delta)

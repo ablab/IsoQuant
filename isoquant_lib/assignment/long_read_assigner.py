@@ -9,6 +9,7 @@ import logging
 from collections import namedtuple
 from enum import Enum, unique
 from functools import partial
+from typing import List
 
 from isoquant_lib.common import (
     contains,
@@ -34,7 +35,7 @@ from .isoform_assignment import (
     event_subtype_cost,
     elongation_cost,
 )
-from .long_read_profiles import OverlappingFeaturesProfileConstructor
+from .long_read_profiles import CombinedReadProfiles, OverlappingFeaturesProfileConstructor
 from .junction_comparator import JunctionComparator
 from isoquant_lib.terminal_prediction.polya_verification import PolyAVerifier
 
@@ -42,6 +43,9 @@ from isoquant_lib.terminal_prediction.polya_verification import PolyAVerifier
 logger = logging.getLogger('IsoQuant')
 
 IsoformDiff = namedtuple("IsoformDiff", ("id", "diff"))
+
+# events AlignmentCollector adds to the matches once the read is assigned
+POST_ASSIGNMENT_EVENTS = {MatchEventSubtype.aligned_polya_tail, MatchEventSubtype.antisense}
 
 
 @unique
@@ -828,3 +832,49 @@ class LongReadAssigner:
             match_dict[match.assigned_transcript] = match.match_subclassifications
 
         assignment.assignment_type = self.classify_assignment(match_dict.keys(), match_dict)
+
+    def reassign_with_polya_site(self, combined_read_profile: CombinedReadProfiles, assignment: ReadAssignment,
+                                 strand: str) -> bool:
+        # a polyA site was set on the read's strand after the read was assigned (--fl_data, --polya_trimmed):
+        # classify the read again as if the tail had been found in its sequence (see match_consistent);
+        # returns True when the assignment was revised
+        if not any(m.assigned_transcript is not None for m in assignment.isoform_matches):
+            return False
+        if assignment.assignment_type.is_inconsistent():
+            # the site changes the events and the penalties the isoforms were selected by
+            self.rematch_inconsistent(combined_read_profile, assignment)
+            return True
+        if not assignment.assignment_type.is_consistent():
+            return False
+
+        consistent_matches = []
+        for match in assignment.isoform_matches:
+            isoform_id = match.assigned_transcript
+            if isoform_id is not None and self.gene_info.isoform_strands[isoform_id] == strand:
+                match.match_subclassifications = \
+                    self.polya_verifier.verify_read_ends(combined_read_profile, isoform_id,
+                                                         match.match_subclassifications)
+                if self.classify_matches([match]).is_inconsistent():
+                    continue
+            consistent_matches.append(match)
+
+        if not consistent_matches:
+            # the site contradicts every assigned isoform
+            self.rematch_inconsistent(combined_read_profile, assignment)
+        else:
+            # isoforms contradicting the site are dropped when others agree with it
+            assignment.set_assignment(self.classify_matches(consistent_matches), consistent_matches)
+        return True
+
+    def classify_matches(self, matches: List[IsoformMatch]) -> ReadAssignmentType:
+        # classify_assignment over existing matches, leaving out the events the alignment processor
+        # adds after the assignment (aligned polyA tail, antisense), which classify_assignment does not know
+        match_dict = {m.assigned_transcript: [e for e in m.match_subclassifications
+                                              if e.event_type not in POST_ASSIGNMENT_EVENTS]
+                      for m in matches if m.assigned_transcript is not None}
+        return self.classify_assignment(match_dict.keys(), match_dict)
+
+    def rematch_inconsistent(self, combined_read_profile: CombinedReadProfiles,
+                             assignment: ReadAssignment) -> None:
+        new_assignment = self.match_inconsistent(assignment.read_id, combined_read_profile)
+        assignment.set_assignment(new_assignment.assignment_type, new_assignment.isoform_matches)

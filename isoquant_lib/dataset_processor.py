@@ -44,7 +44,7 @@ from isoquant_lib.utils.checkpoints import (CheckpointStore, enum_stats_to_state
 from isoquant_lib.utils.bam_utils import (PLACEHOLDERS, collect_unmapped_read_ids,
                                          load_barcode_umi_tags, merge_bam_files,
                                          references_with_alignments, write_unmapped_bam)
-from .alignment.alignment_processor import AlignmentType
+from .alignment.alignment_processor import AlignmentType, PolyATrimmed
 from .report.run_summary import RunSummary
 from .report.html_report import render_html
 from .terminal_prediction.external_polya import normalize_polya_reads
@@ -282,6 +282,11 @@ class DatasetProcessor:
         logger.info("Total assignments used for analysis: %d, polyA tail detected in %d (%.1f%%)" %
                     (total_assignments, polya_found, polya_fraction * 100.0))
         self.run_summary.set_polya_stats(total_assignments, polya_found)
+        trusted_end_options = (["--fl_data"] if self.args.fl_data else []) + \
+            (["--polya_trimmed %s" % self.args.polya_trimmed.name] if self.args.polya_trimmed != PolyATrimmed.none else [])
+        if trusted_end_options:
+            logger.info("Note: the polyA percentage is not based on read sequences only, it also counts read ends "
+                        "taken as polyA sites because of %s" % " and ".join(trusted_end_options))
         if (polya_fraction < self.args.low_polya_percentage_threshold and
                 self.args.polya_requirement_strategy != PolyAUsageStrategies.never):
             logger.warning("PolyA percentage is suspiciously low. IsoQuant expects non-polya-trimmed reads. "

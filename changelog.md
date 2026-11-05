@@ -1,5 +1,13 @@
 # IsoQuant changelog
 
+## IsoQuant 4.1.1, in development
+
+- Fixed annotated isoforms missing from discovered transcripts when their intron chains are identical or differ by a few bases at one splice site (e.g. NAGNAG acceptors);
+- Annotated isoforms are now recovered from read assignments with all `--model_construction_strategy` presets (`fl_pacbio` and `reliable` included);
+- `--fl_data`: read 3' ends are treated as poly-A sites when no poly-A tail is detected, and read 5' ends are kept as transcript starts unless they lie next to a splice acceptor, where reads with an unaligned short first exon start, which restores many expressed genes and isoforms for poly-A trimmed FLNC reads;
+- Reads with a poly-A site set by `--polya_trimmed` or `--fl_data` are assigned to isoforms as reads with a detected tail: the site resolves isoforms differing only in their 3' ends, and reads ending away from the isoform end get an alternative poly-A site;
+- New CI test on simulated full-length PacBio reads with `--fl_data`.
+
 ## IsoQuant 4.1.0, 20 October 2026
 
 - New options for cell barcode calling:
