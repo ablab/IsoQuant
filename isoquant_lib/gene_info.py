@@ -876,17 +876,16 @@ class GeneInfo:
 
     # calculate junction profiles for known isoforms
     def set_junction_profiles(self, all_isoforms_introns, all_isoforms_exons):
-        for gene_db in self.gene_db_list:
-            for t_id in self.all_isoforms_exons.keys():
-                transcript_region = self.transcript_region(t_id)
-                # setting up intron profiles for current isoform
-                self.intron_profiles.set_profiles(t_id, all_isoforms_introns[t_id], transcript_region,
-                                                  partial(equal_ranges, delta=0))
-                # setting up exon profiles for current isoform
-                self.exon_profiles.set_profiles(t_id, all_isoforms_exons[t_id], transcript_region,
-                                                partial(equal_ranges, delta=0))
-                # setting up split exon profiles for current isoform
-                self.split_exon_profiles.set_profiles(t_id, all_isoforms_exons[t_id], transcript_region, contains)
+        for t_id in self.all_isoforms_exons.keys():
+            transcript_region = self.transcript_region(t_id)
+            # setting up intron profiles for current isoform
+            self.intron_profiles.set_profiles(t_id, all_isoforms_introns[t_id], transcript_region,
+                                              partial(equal_ranges, delta=0))
+            # setting up exon profiles for current isoform
+            self.exon_profiles.set_profiles(t_id, all_isoforms_exons[t_id], transcript_region,
+                                            partial(equal_ranges, delta=0))
+            # setting up split exon profiles for current isoform
+            self.split_exon_profiles.set_profiles(t_id, all_isoforms_exons[t_id], transcript_region, contains)
 
     def transcript_start(self, transcript_id):
         return self.all_isoforms_exons[transcript_id][0][0]
