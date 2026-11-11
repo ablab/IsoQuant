@@ -131,7 +131,7 @@ class GFFPrinter:
                     exon_id = model.transcript_id + "_%d_%d_%s" % (e[0], e[1], model.strand)
                     exon_additiional_info = ""
                     if gene_info and exon_id in gene_info.feature_attributes:
-                        exon_additiional_info = " " + gene_info.feature_attributes[model.transcript_id]
+                        exon_additiional_info = " " + gene_info.feature_attributes[exon_id]
                     feature_type = e[2]
                     self.out_gff.write(prefix_columns + "%s\t%d\t%d\t" % (feature_type, e[0], e[1]) + suffix_columns +
                                        ' exon_number "%d"; exon_id "%s"; %s\n' % ((i + 1), exon_str_id, exon_additiional_info))
