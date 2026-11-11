@@ -587,13 +587,13 @@ class GeneInfo:
                         continue
                     if t.attributes[attr]:
                         self.feature_attributes[t.id] += '%s "%s"; ' % (attr, t.attributes[attr][0])
-                for e in self.db.children(gene_db, featuretype=('exon')):
+                for e in self.db.children(t, featuretype='exon'):
                     exon_id = t.id + "_%d_%d_%s" % (e.start, e.end, e.strand)
-                    for attr in t.attributes.keys():
+                    for attr in e.attributes.keys():
                         if attr in ['transcript_id', 'gene_id', 'ID', 'Parent', 'level', 'exon_id', 'exon', 'exon_number']:
                             continue
-                        if t.attributes[attr]:
-                            self.feature_attributes[exon_id] += '%s "%s"; ' % (attr, t.attributes[attr][0])
+                        if e.attributes[attr]:
+                            self.feature_attributes[exon_id] += '%s "%s"; ' % (attr, e.attributes[attr][0])
 
     # assigns an ordered list of all known exons and introns to self.exons and self.introns
     # returns 2 maps, isoform id -> intron / exon list
