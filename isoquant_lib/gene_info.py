@@ -581,13 +581,14 @@ class GeneInfo:
                     continue
                 if gene_db.attributes[attr]:
                     self.feature_attributes[gene_db.id] += '%s "%s"; ' % (attr, gene_db.attributes[attr][0])
+            gene_exons = list(self.db.children(gene_db, featuretype=('exon')))
             for t in self.db.children(gene_db, featuretype=self.DEFAULT_RNA_TYPES):
                 for attr in t.attributes.keys():
                     if attr in ['transcript_id', 'gene_id', 'ID', 'level', 'exons', 'Parent']:
                         continue
                     if t.attributes[attr]:
                         self.feature_attributes[t.id] += '%s "%s"; ' % (attr, t.attributes[attr][0])
-                for e in self.db.children(gene_db, featuretype=('exon')):
+                for e in gene_exons:
                     exon_id = t.id + "_%d_%d_%s" % (e.start, e.end, e.strand)
                     for attr in t.attributes.keys():
                         if attr in ['transcript_id', 'gene_id', 'ID', 'Parent', 'level', 'exon_id', 'exon', 'exon_number']:
