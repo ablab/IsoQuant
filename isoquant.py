@@ -1195,32 +1195,32 @@ def set_model_construction_options(args):
                                             'min_known_count', 'min_nonfl_count',
                                             'min_novel_count', 'min_novel_count_rel',
                                             'min_mono_count_rel', 'singleton_adjacent_cov',
-                                            'fl_only', 'novel_monoexonic',
+                                            'novel_monoexonic',
                                             'require_monointronic_polya', 'require_monoexonic_polya',
                                             'report_canonical'))
     strategies = {
         'reliable':        ModelConstructionStrategy(2, 0.5, 20,  5, 0.05,  1, 0.1,  0.1,  2, 4, 8, 0.05, 0.05, 50,
-                                                     True, False, True, True, StrandnessReportingLevel.only_canonical),
+                                                     False, True, True, StrandnessReportingLevel.only_canonical),
         'default_pacbio':  ModelConstructionStrategy(1, 0.5, 10,  2, 0.02,  1, 0.05,  0.05,  1, 2, 2, 0.02, 0.005, 100,
-                                                     False, True, False, True, StrandnessReportingLevel.only_canonical),
+                                                     True, False, True, StrandnessReportingLevel.only_canonical),
         'sensitive_pacbio': ModelConstructionStrategy(1, 0.5, 5,   2, 0.005,  1, 0.01,  0.02,  1, 2, 2, 0.005, 0.001, 100,
-                                                      False, True, False, False, StrandnessReportingLevel.only_stranded),
+                                                      True, False, False, StrandnessReportingLevel.only_stranded),
         # Like sensitive_pacbio but admits single-read novel isoforms (min_novel_count=1)
         # with a lower relative floor. Very sensitive discovery for clean full-length
         # PacBio reads (e.g. Iso-Seq FLNC); recovers 5'-truncated genes at the cost of
         # some novel precision, so not recommended for noisy data.
         'pacbio_all':      ModelConstructionStrategy(1, 0.5, 5,   2, 0.005,  1, 0.01,  0.02,  1, 2, 1, 0.002, 0.001, 100,
-                                                     False, True, False, False, StrandnessReportingLevel.only_stranded),
+                                                     True, False, False, StrandnessReportingLevel.only_stranded),
         'default_ont':     ModelConstructionStrategy(1, 0.5, 20,  3, 0.02,  1, 0.05,  0.05,  1, 3, 3, 0.02, 0.02, 10,
-                                                     False, False, True, True, StrandnessReportingLevel.only_canonical),
+                                                     False, True, True, StrandnessReportingLevel.only_canonical),
         'sensitive_ont':   ModelConstructionStrategy(1, 0.5, 20,  3, 0.005,  1, 0.01,  0.02,  1, 2, 3, 0.005, 0.005, 10,
-                                                     False, True, False, False, StrandnessReportingLevel.only_stranded),
+                                                     True, False, False, StrandnessReportingLevel.only_stranded),
         'fl_pacbio':       ModelConstructionStrategy(1, 0.5, 10,  2, 0.02,  1, 0.05,  0.01,  1, 2, 3, 0.02, 0.005, 100,
-                                                     True, True, False, False, StrandnessReportingLevel.only_canonical),
+                                                     True, False, False, StrandnessReportingLevel.only_canonical),
         'all':             ModelConstructionStrategy(0, 0.3, 5,   1, 0.002,  1, 0.01, 0.01, 1, 1, 1, 0.002, 0.001, 500,
-                                                     False, True, False, False, StrandnessReportingLevel.all),
+                                                     True, False, False, StrandnessReportingLevel.all),
         'assembly':        ModelConstructionStrategy(0, 0.3, 5,   1, 0.05,  1, 0.01, 0.02,  1, 1, 1, 0.05, 0.01, 50,
-                                                     False, True, False, False, StrandnessReportingLevel.only_stranded)
+                                                     True, False, False, StrandnessReportingLevel.only_stranded)
     }
     strategy = strategies[args.model_construction_strategy]
 
@@ -1243,7 +1243,6 @@ def set_model_construction_options(args):
     args.min_mono_count_rel = strategy.min_mono_count_rel
     args.min_novel_count_rel = strategy.min_novel_count_rel
     args.singleton_adjacent_cov = strategy.singleton_adjacent_cov
-    args.fl_only = strategy.fl_only
     args.min_mono_exon_coverage = 0.75
 
     if args.report_novel_unspliced is None:

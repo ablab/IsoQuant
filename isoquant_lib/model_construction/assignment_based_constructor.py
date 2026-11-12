@@ -99,9 +99,7 @@ class AssignmentBasedConstructor:
                     isoform_right_support[refrenence_isoform_id] += 1
 
         self.construct_monoexon_isoforms(mono_exon_isoform_reads, mono_exon_isoform_coverage, polya_sites)
-        if not self.args.fl_only:
-            logger.debug("Constructing nonFL isoforms")
-            self.construct_nonfl_isoforms(spliced_isoform_reads, isoform_left_support, isoform_right_support)
+        self.construct_nonfl_isoforms(spliced_isoform_reads, isoform_left_support, isoform_right_support)
         if self.args.report_novel_unspliced:
             self.construct_monoexon_novel(novel_mono_exon_reads)
 

@@ -85,6 +85,10 @@ See more in [examples](examples.md).
 
 `--fl_data`
     Input sequences represent full-length transcripts; both ends of the sequence are considered to be reliable.
+When no poly-A tail is detected (e.g. trimmed FLNC reads), the read 3' end is treated as a poly-A site.
+A read 5' end is kept as a transcript start even inside an exon that other reads splice into,
+unless it lies within 50 bp of where such a splice enters the exon and no TSS is predicted there
+(a read whose short first exon was not aligned starts there).
 
 `--polya_trimmed`
 
@@ -109,6 +113,7 @@ Indicate that reads were poly-A trimmed. Possible values are:
   Use this option only with `flnc.bam` input (where tails are removed).
 
 Note that IsoQuant still runs sequence-based polyA tail detection for every read. If the external information and the sequence disagree, the external information is used.
+A poly-A site set by these options (or by `--fl_data`) is used in read assignment as a tail found in the read sequence: it resolves isoforms that differ only in their 3' ends, and a read ending away from the 3' end of an isoform it otherwise matches is reported with an alternative poly-A site. The poly-A percentage in the log counts these sites too.
 
 `--illumina_bam`
     Sorted and indexed BAM file(s) with short Illumina reads from the same sample. Short reads are used only for

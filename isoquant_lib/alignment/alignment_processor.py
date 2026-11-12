@@ -31,7 +31,10 @@ from isoquant_lib.terminal_prediction.external_polya import (
     UNKNOWN,
     external_polya_from_tag,
     has_any_polya,
+    has_polya_on_strand,
+    has_soft_clipped_polya_at_5_prime,
     hint_from_strandedness,
+    inject_external_polya,
     resolve_external_strand,
 )
 from isoquant_lib.assignment.exon_corrector import ExonCorrector
@@ -443,8 +446,7 @@ class AlignmentCollector:
             read_assignment.multimapper = alignment.is_secondary
             read_assignment.mapping_quality = alignment.mapping_quality
 
-            self.add_artificial_polya(read_assignment, external_polya)
-            read_assignment.polyA_found = has_any_polya(alignment_info.polya_info)
+            self.apply_artificial_polya(read_assignment, alignment_info, external_polya)
 
             AlignmentCollector.import_bam_tags(alignment, read_assignment, self.params.bam_tags)
             yield read_assignment
@@ -483,14 +485,11 @@ class AlignmentCollector:
             alignment_info.construct_profiles(profile_constructor)
             read_assignment = assigner.assign_to_isoform(read_id, alignment_info.combined_profile)
 
-            if (read_assignment.assignment_type not in [ReadAssignmentType.unique,
-                                                        ReadAssignmentType.unique_minor_difference,
-                                                        ReadAssignmentType.ambiguous])\
-                    and alignment.mapping_quality < self.params.inconsistent_mapq_cutoff:
+            if self.is_low_mapq_inconsistent(read_assignment, alignment):
                 continue
 
             if alignment_info.exons_changed:
-                read_assignment.add_match_attribute(MatchEvent(MatchEventSubtype.aligned_polya_tail))
+                AlignmentCollector.mark_aligned_polya_tail(read_assignment)
 
             read_assignment.polya_info = alignment_info.polya_info
             read_assignment.cage_found = len(alignment_info.cage_hits) > 0
@@ -523,8 +522,16 @@ class AlignmentCollector:
             read_assignment.multimapper = alignment.is_secondary
             read_assignment.mapping_quality = alignment.mapping_quality
 
-            self.add_artificial_polya(read_assignment, external_polya)
-            read_assignment.polyA_found = has_any_polya(alignment_info.polya_info)
+            if self.apply_artificial_polya(read_assignment, alignment_info, external_polya, assigner):
+                # the read was classified again with the added polyA site: redo the steps that depend on it
+                if self.is_low_mapq_inconsistent(read_assignment, alignment):
+                    continue
+                if alignment_info.exons_changed:
+                    AlignmentCollector.mark_aligned_polya_tail(read_assignment)
+                read_assignment.corrected_exons = exon_corrector.correct_assigned_read(alignment_info,
+                                                                                       read_assignment)
+                read_assignment.corrected_introns = junctions_from_blocks(read_assignment.corrected_exons)
+                AlignmentCollector.check_antisense(read_assignment)
 
             if self.params.count_exons:
                 read_assignment.exon_gene_profile = alignment_info.combined_profile.read_exon_profile.gene_profile
@@ -619,6 +626,32 @@ class AlignmentCollector:
                                       external_strand=resolve_external_strand(external_polya, mapped_strand),
                                       external_no_tail=external_polya.status == ExternalPolyAStatus.no_tail)
 
+    def apply_artificial_polya(self, read_assignment: ReadAssignment, alignment_info: AlignmentInfo,
+                               external_polya: ExternalPolyA = UNKNOWN,
+                               assigner: Optional[LongReadAssigner] = None) -> bool:
+        # returns True when the read was classified again because of the added site
+        had_site = has_polya_on_strand(alignment_info.polya_info, read_assignment.strand)
+        self.add_artificial_polya(read_assignment, external_polya)
+        read_assignment.polyA_found = has_any_polya(alignment_info.polya_info)
+        if assigner is None or had_site or not has_polya_on_strand(alignment_info.polya_info, read_assignment.strand):
+            return False
+        # the assigner did not see this site: classify the read as for a tail found in its sequence
+        # (the profile shares polya_info with the alignment, so the matching sees the site)
+        return assigner.reassign_with_polya_site(alignment_info.combined_profile, read_assignment,
+                                                 read_assignment.strand)
+
+    def is_low_mapq_inconsistent(self, read_assignment: ReadAssignment, alignment) -> bool:
+        return (read_assignment.assignment_type not in [ReadAssignmentType.unique,
+                                                        ReadAssignmentType.unique_minor_difference,
+                                                        ReadAssignmentType.ambiguous]
+                and alignment.mapping_quality < self.params.inconsistent_mapq_cutoff)
+
+    @staticmethod
+    def mark_aligned_polya_tail(read_assignment: ReadAssignment) -> None:
+        for match in read_assignment.isoform_matches:
+            if all(e.event_type != MatchEventSubtype.aligned_polya_tail for e in match.match_subclassifications):
+                match.add_subclassification(MatchEvent(MatchEventSubtype.aligned_polya_tail))
+
     def add_artificial_polya(self, read_assignment, external_polya: ExternalPolyA = UNKNOWN) -> None:
         if self.params.polya_trimmed == PolyATrimmed.stranded:
             AlignmentCollector.set_artificial_polya(read_assignment, read_assignment.strand)
@@ -628,6 +661,13 @@ class AlignmentCollector:
               and not has_any_polya(read_assignment.polya_info)):
             # phase 2: the source only says there is a tail, its side comes from the assigned strand
             AlignmentCollector.set_artificial_polya(read_assignment, read_assignment.strand)
+        elif (self.params.polya_trimmed == PolyATrimmed.none and self.params.fl_data
+              and not has_soft_clipped_polya_at_5_prime(read_assignment.polya_info, read_assignment.strand)):
+            # full-length reads end at the polyA site even when the tail was trimmed (e.g. FLNC);
+            # a genomic A-run at the 5' end does not count as a tail, but a soft-clipped tail there
+            # means the read comes from the other strand
+            inject_external_polya(read_assignment.polya_info, read_assignment.corrected_exons,
+                                  read_assignment.strand)
 
     @staticmethod
     def set_artificial_polya(read_assignment, strand: str) -> None:
@@ -692,7 +732,9 @@ class AlignmentCollector:
             if match.match_classification not in \
                     [MatchClassification.novel_in_catalog, MatchClassification.novel_not_in_catalog]:
                 match.match_classification = MatchClassification.antisense
-            match.match_subclassifications.append(MatchEvent(MatchEventSubtype.antisense))
+            # also called again after a read is classified anew (apply_artificial_polya)
+            if all(e.event_type != MatchEventSubtype.antisense for e in match.match_subclassifications):
+                match.match_subclassifications.append(MatchEvent(MatchEventSubtype.antisense))
 
     @staticmethod
     def import_bam_tags(bam_record, read_assignment, tag_list):
