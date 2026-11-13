@@ -46,6 +46,7 @@ from isoquant_lib.modes import (IsoQuantMode, ISOQUANT_MODES, AnalysisType, ANAL
                                 DEPRECATED_MODE_ALIASES, SPLIT_MOLECULES_CHOICES, SPLIT_MOLECULES_TRUE,
                                 SPLIT_MOLECULES_FALSE, SPLIT_MOLECULES_AUTO)
 from isoquant_lib.gtf2db import convert_gtf_to_db
+from isoquant_lib.terminal_prediction.cage_peaks import CageFormatError, DEFAULT_CAGE_SHIFT, load_cage_peaks
 from isoquant_lib.utils.read_mapper import (
     DATA_TYPE_ALIASES,
     SUPPORTED_STRANDEDNESS,
@@ -412,7 +413,8 @@ def parse_args(cmd_args=None, namespace=None):
                       help="intron graph clustering distance, "
                            "splice junctions less that this number of bp apart will not be differentiated")
     add_hidden_option("--cage", help="bed file with CAGE peaks", type=str, default=None)
-    add_hidden_option("--cage-shift", type=int, default=50, help="interval before read start to look for CAGE peak")
+    add_hidden_option("--cage-shift", type=int, default=DEFAULT_CAGE_SHIFT,
+                      help="maximal distance from a TSS to a CAGE peak confirming it, 0 means inside the peak")
 
     # PolyA / TSS training-data collection (developer-only).
     # When either flag is given to a normal IsoQuant run, the matching
@@ -954,13 +956,19 @@ def _check_annotation_files(args):
     if hasattr(args, 'junc_bed_file') and args.junc_bed_file:
         check_file_exists(args.junc_bed_file, "Junction BED file")
 
-    # Check CAGE file (currently not supported)
+    # Check CAGE file
     if args.cage is not None:
-        logger.critical("CAGE data is not supported yet")
-        sys.exit(IsoQuantExitCode.INVALID_PARAMETER)
         if not os.path.isfile(args.cage):
             logger.critical("Bed file with CAGE peaks " + args.cage + " does not exist")
             sys.exit(IsoQuantExitCode.INPUT_FILE_NOT_FOUND)
+        try:
+            load_cage_peaks(args.cage)
+        except CageFormatError as e:
+            logger.critical("Incorrect CAGE file: " + str(e))
+            sys.exit(IsoQuantExitCode.INVALID_FILE_FORMAT)
+        if not (args.predict_terminal_sites and args.fl_data):
+            logger.warning("TSS prediction requires --genedb and --fl_data and will not be performed, "
+                           "CAGE peaks will be checked for reads and transcript models only")
 
     # Check gene database
     if args.genedb is not None:
