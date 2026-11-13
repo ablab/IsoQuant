@@ -164,6 +164,7 @@ def parse_args(cmd_args=None, namespace=None):
                              "file_name (filename), "
                              "barcode_spot (barcodes to spots/cell via --barcode2spot), "
                              "barcode_barcode (barcodes to spots via --barcode2barcode), "
+                             "barcode_cell (barcodes to cells via --barcode2cellid), "
                              "barcode (barcode--barcoded_reads), "
                              "no_auto (only explicitly stated rules), "
                              "none (disable grouping)")
@@ -199,7 +200,7 @@ def parse_args(cmd_args=None, namespace=None):
                         metavar="ANALYSIS",
                         help="analyses to run (space-separated); supported values: "
                              "quantification/quant, transcript_discovery/td, "
-                             "exon_quantification/ex_quant, fusion [auto]")
+                             "exon_quantification/ex_quant, fusion, velocity [auto]")
 
     add_option_to_group(pipeline_args_group, "--threads", "-t", help="number of threads [16]", type=int,
                         default="16")
@@ -327,6 +328,9 @@ def parse_args(cmd_args=None, namespace=None):
                                    help='extract barcodes and UMIs from BAM tags (CB/UB by default)')
     add_option_to_group(sc_args_group, "--barcode2spot", type=str,
                                    help='TSV file mapping barcode to cell type / spot id.')
+    add_option_to_group(sc_args_group, "--barcode2cellid", type=str,
+                                   help='TSV file mapping barcode to cell id (2 columns), '
+                                        'used for per-cell RNA velocity in spatial data')
     add_option_to_group(sc_args_group, "--molecule", type=str,
                                    help='molecule definition file (MDF) for custom_sc mode: '
                                         'defines molecule structure for universal barcode extraction')
@@ -713,6 +717,7 @@ def resolve_analyses(args):
     legacy_count_exons = args.count_exons
     legacy_intron_retentions = args.count_intron_retentions
     legacy_no_model = args.no_model_construction
+    barcode2cellid = getattr(args, "barcode2cellid", None)
 
     if args.analysis is not None:
         analyses = {ANALYSIS_ALIASES[a] for a in args.analysis}
@@ -722,6 +727,9 @@ def resolve_analyses(args):
         analyses = {AnalysisType.quantification, AnalysisType.transcript_discovery}
     else:
         analyses = {AnalysisType.transcript_discovery}
+    # velocity is per cell: on by default only when barcodes are cells or are mapped to cells
+    if args.analysis is None and (args.mode.velocity_by_default() or (barcode2cellid and is_single_cell)):
+        analyses.add(AnalysisType.velocity)
 
     # apply deprecated stage flags additively, on top of the chosen analyses
     if legacy_count_exons:
@@ -735,7 +743,8 @@ def resolve_analyses(args):
 
     # feasibility: annotation-dependent analyses cannot run without a gene database
     if not args.genedb:
-        for analysis in (AnalysisType.quantification, AnalysisType.exon_quantification, AnalysisType.fusion):
+        for analysis in (AnalysisType.quantification, AnalysisType.exon_quantification, AnalysisType.fusion,
+                         AnalysisType.velocity):
             if analysis in analyses:
                 logger.warning("%s requires a reference annotation (--genedb) and will not be run" % analysis.name)
                 analyses.discard(analysis)
@@ -751,12 +760,21 @@ def resolve_analyses(args):
                        "it will not yield novel genes and may be incomplete; "
                        "consider a pseudo-bulk run for transcript discovery")
 
+    # velocity needs cells, which bulk data does not have
+    if AnalysisType.velocity in analyses and not is_single_cell:
+        logger.critical("velocity analysis is incompatible with %s mode, use a single-cell or spatial mode"
+                        % args.mode.name)
+        sys.exit(IsoQuantExitCode.INCOMPATIBLE_OPTIONS)
+
     # canonical internal flags (names reused across the pipeline)
     args.run_quantification = AnalysisType.quantification in analyses
     args.count_exons = AnalysisType.exon_quantification in analyses or legacy_count_exons
     args.count_intron_retentions = AnalysisType.exon_quantification in analyses or legacy_intron_retentions
     args.fusion = AnalysisType.fusion in analyses
     args.no_model_construction = AnalysisType.transcript_discovery not in analyses
+    args.rna_velocity = AnalysisType.velocity in analyses
+    # an explicit request bypasses the barcode count check (see DatasetProcessor)
+    args.velocity_explicit = args.rna_velocity and args.analysis is not None
     # polyA/TSS site prediction is part of quantification and is also needed for
     # model construction; gated by the annotation (TSS additionally needs --fl_data)
     args.predict_terminal_sites = bool(args.genedb) and (args.run_quantification or not args.no_model_construction)
@@ -1058,6 +1076,13 @@ def set_data_dependent_options(args):
         elif "barcode_spot" not in args.read_group and "no_auto" not in args.read_group:
             args.read_group.append("barcode_spot")
 
+    # Automatically add barcode_cell grouping when --barcode2cellid is set
+    if getattr(args, 'barcode2cellid', None):
+        if args.read_group is None:
+            args.read_group = ["barcode_cell"]
+        elif "barcode_cell" not in args.read_group and "no_auto" not in args.read_group:
+            args.read_group.append("barcode_cell")
+
     if hasattr(args, 'barcode2barcode') and args.barcode2barcode:
         # Automatically add barcode_barcode grouping when --barcode2barcode is set
         if args.read_group is None:
@@ -1075,7 +1100,7 @@ def set_data_dependent_options(args):
 
     # In SC modes, auto-add barcode grouping if no barcode-related grouping is set
     if args.mode.needs_barcode_calling():
-        barcode_groupings = {"barcode", "barcode_spot", "barcode_barcode", "no_auto"}
+        barcode_groupings = {"barcode", "barcode_spot", "barcode_barcode", "barcode_cell", "no_auto"}
         has_barcode_grouping = (args.read_group is not None and
                                 any(rg in barcode_groupings for rg in args.read_group))
         if not has_barcode_grouping:
@@ -1281,9 +1306,32 @@ def set_configs_directory(args):
                 json.dump({}, f_out, indent=2)
 
 
+def check_velocity_grouping(args):
+    """Velocity runs on barcode_cell grouping (with --barcode2cellid) or on barcode grouping.
+
+    When --read_group leaves neither, an explicit --analysis velocity is an error, while
+    velocity enabled by default is dropped with a warning.
+    """
+    if not getattr(args, "rna_velocity", False):
+        return
+    groupings = set(args.read_group) if args.read_group else set()
+    if getattr(args, "barcode2cellid", None) and "barcode_cell" not in groupings:
+        problem = "--barcode2cellid is set, but --read_group does not include barcode_cell"
+    elif not groupings & {"barcode", "barcode_cell"}:
+        problem = "--read_group includes neither barcode nor barcode_cell"
+    else:
+        return
+    if getattr(args, "velocity_explicit", False):
+        logger.critical("velocity analysis is requested, but %s; adjust --read_group" % problem)
+        sys.exit(IsoQuantExitCode.INCOMPATIBLE_OPTIONS)
+    logger.warning("%s, RNA velocity will not be computed" % problem)
+    args.rna_velocity = False
+
+
 def set_additional_params(args):
     set_configs_directory(args)
     set_data_dependent_options(args)
+    check_velocity_grouping(args)
     set_matching_options(args)
     set_model_construction_options(args)
     set_splice_correction_options(args)

@@ -65,9 +65,11 @@ use `isoquant_lib/scripts/exon_splice_site_to_group_lists.py`.
 
 #### RNA velocity counts
 
-In single-cell and spatial modes, when reads are grouped by cell barcode
-(`--read_group barcode`, `barcode_spot` or `barcode_barcode`) and an annotation is given,
-IsoQuant also writes spliced/unspliced counts per cell and gene for downstream RNA velocity analysis:
+When `velocity` analysis is enabled (by default in `tenX_v3`/`tenX_v2` modes and with `--barcode2cellid`,
+see [`--analysis`](cmd.md#pipeline-options)) and an annotation is given,
+IsoQuant writes spliced/unspliced counts per cell and gene for downstream RNA velocity analysis.
+Cells are cell ids from `--barcode2cellid` (`barcode_cell` grouping) if provided, and barcodes (`barcode` grouping) otherwise;
+spots and cell types (`barcode_spot`, `barcode_barcode`) never get velocity output:
 
 * `SAMPLE_ID.RNA_velocity_grouped_<strategy>` - tab-separated `cell_id`, `gene_id`, `spliced`, `unspliced`, `ambiguous`;
 * `SAMPLE_ID.RNA_velocity_grouped_<strategy>.loom` - the same counts as a velocyto-style loom file

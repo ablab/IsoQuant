@@ -232,6 +232,15 @@ def check_barcode_input_files(args):
 def check_barcode_mapping_files(args):
     from isoquant_lib.assignment.read_groups import parse_barcode2spot_spec
 
+    # Barcode mapping groupings cannot run without their mapping file
+    grouping_options = {"barcode_spot": "barcode2spot", "barcode_barcode": "barcode2barcode",
+                        "barcode_cell": "barcode2cellid"}
+    for grouping in getattr(args, 'read_group', None) or []:
+        option = grouping_options.get(grouping)
+        if option and not getattr(args, option, None):
+            logger.critical("%s grouping requires --%s" % (grouping, option))
+            sys.exit(IsoQuantExitCode.MISSING_REQUIRED_OPTION)
+
     # Check barcode2spot file (parse spec to extract filename)
     if hasattr(args, 'barcode2spot') and args.barcode2spot:
         bc2spot_file, _, _ = parse_barcode2spot_spec(args.barcode2spot)
@@ -241,3 +250,11 @@ def check_barcode_mapping_files(args):
     if hasattr(args, 'barcode2barcode') and args.barcode2barcode:
         bc2bc_file, _, _ = parse_barcode2spot_spec(args.barcode2barcode)
         check_file_exists(bc2bc_file, "Barcode to barcode mapping file")
+
+    # Check barcode2cellid file: barcode -> cell id, a single cell id column
+    if getattr(args, 'barcode2cellid', None):
+        bc2cell_file, _, cell_cols = parse_barcode2spot_spec(args.barcode2cellid)
+        check_file_exists(bc2cell_file, "Barcode to cell id mapping file")
+        if len(cell_cols) != 1:
+            logger.critical("--barcode2cellid expects a single cell id column, got %d" % len(cell_cols))
+            sys.exit(IsoQuantExitCode.INVALID_PARAMETER)
