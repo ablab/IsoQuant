@@ -438,7 +438,7 @@ class UMIFilter:
         assigned = gene_id != "."
         spliced = len(read_assignment.corrected_exons) > 1
         barcoded = read_assignment.barcode is not None
-        unique = assigned  # In simplified logic, we only process unique/consistent assignments
+        unique = assigned and read_assignment.assignment_type.is_unique()
 
         if assigned:
             self.stats["Assigned to any gene"] += 1
