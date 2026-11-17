@@ -318,7 +318,8 @@ class UMIFilter:
                       best_read.corrected_exons[-1][1] - best_read.corrected_exons[0][0]):
                     best_read = m
 
-            # Check for ambiguity in transcript annotation among duplicates with same read ID
+            # Alignments of a multimapped read kept within one gene share the read id and UMI;
+            # their transcripts may differ even though each copy has a single match
             polyas = set()
             transcript_types = set()
             isoform_ids = set()
@@ -339,13 +340,6 @@ class UMIFilter:
                 # Clear the transcript ID by removing all matches except the gene
                 if best_read.isoform_matches:
                     best_read.isoform_matches[0].assigned_transcript = "None"
-
-            # Clear annotation for inconsistent assignments
-            if best_read.assignment_type.is_inconsistent():
-                if best_read.isoform_matches:
-                    best_read.isoform_matches[0].assigned_transcript = "None"
-                best_read.set_additional_attribute('polya_site', -1)
-                best_read.set_additional_attribute('transcript_type', 'None')
 
             logger.debug("Selected %s %s" % (best_read.read_id, best_read.umi))
             resulting_reads.append((best_read, umi))
@@ -526,23 +520,22 @@ class UMIFilter:
                             cell_type = cell_types
                     read_assignment.set_additional_attribute('cell_type', cell_type)
 
-                    # Process based on number of isoform matches
-                    if len(read_assignment.isoform_matches) == 1:
-                        # Single match - simplest case
-                        isoform_match = read_assignment.isoform_matches[0]
-                        if read_assignment.assignment_type.is_consistent():
-                            transcript_id = isoform_match.assigned_transcript
-                            transcript_type, polya_site = (
-                                transcript_type_dict[transcript_id] if transcript_id in transcript_type_dict
-                                else ("unknown_type", -1))
-                            read_assignment.set_additional_attribute('transcript_type', transcript_type)
-                            read_assignment.set_additional_attribute('polya_site', polya_site)
-                        else:
-                            # Inconsistent single match
-                            read_assignment.set_additional_attribute('transcript_type', 'unknown_type')
-                            read_assignment.set_additional_attribute('polya_site', -1)
+                    if not read_assignment.assignment_type.is_consistent():
+                        # Inconsistent: the closest isoform is not the read's transcript
+                        read_assignment.set_additional_attribute('transcript_type', 'unknown_type')
+                        read_assignment.set_additional_attribute('polya_site', -1)
+                        if read_assignment.isoform_matches:
+                            read_assignment.isoform_matches[0].assigned_transcript = "None"
 
-                    elif read_assignment.assignment_type.is_consistent():
+                    elif len(read_assignment.isoform_matches) == 1:
+                        transcript_id = read_assignment.isoform_matches[0].assigned_transcript
+                        transcript_type, polya_site = (
+                            transcript_type_dict[transcript_id] if transcript_id in transcript_type_dict
+                            else ("unknown_type", -1))
+                        read_assignment.set_additional_attribute('transcript_type', transcript_type)
+                        read_assignment.set_additional_attribute('polya_site', polya_site)
+
+                    else:
                         # Multiple consistent matches - need to resolve ambiguity
                         transcript_types = set()
                         polya_sites = set()
@@ -566,18 +559,9 @@ class UMIFilter:
                         read_assignment.set_additional_attribute('transcript_type', transcript_type)
                         read_assignment.set_additional_attribute('polya_site', polya_site)
 
-                        # Set transcript_id to "None" for ambiguous case
+                        # Transcript-ambiguous: report no transcript
                         if read_assignment.isoform_matches:
                             read_assignment.isoform_matches[0].assigned_transcript = "None"
-                    else:
-                        # Multiple inconsistent matches
-                        read_assignment.set_additional_attribute('transcript_type', 'unknown_type')
-                        read_assignment.set_additional_attribute('polya_site', -1)
-
-                        # Set transcript_id to "None" for ambiguous case
-                        if read_assignment.isoform_matches:
-                            read_assignment.isoform_matches[0].assigned_transcript = "None"
-
 
                     self.total_assignments += 1
                     self.add_stats_for_read(read_assignment)
