@@ -24,7 +24,7 @@ The default per-read output format. Tab-separated values, the columns are:
 * `canonical` - `True` if all introns are canonical, `Unspliced` for mono-exon reads, `.` if `--check_canonical` is not set;
 * `barcode` - cell barcode (`.` in bulk mode);
 * `umi` - UMI sequence (`.` in bulk mode);
-* `cell_type` - cell type or spot ID (`.` in bulk mode);
+* `cell_type` - cell type or spot ID from `--barcode2spot`, comma-separated when several spot columns are given (`.` if `--barcode2spot` is not set);
 * `groups` - comma-separated read group IDs;
 * `additional` - remaining key=value pairs (BAM tags, transcript_type, etc.).
 

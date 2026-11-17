@@ -6,6 +6,7 @@
 ############################################################################
 
 import logging
+from typing import List, Tuple
 
 from isoquant_lib.common import (
     CANONICAL_FWD_SITES,
@@ -27,6 +28,7 @@ from .isoform_assignment import (match_subtype_to_str_with_additional_info,
                                  BasicReadAssignment,
                                  MatchClassification,
                                  ReadAssignmentType)
+from .read_groups import AbstractReadGrouper, get_grouping_strategy_names
 from isoquant_lib.gene_info import GeneInfo, GeneList
 
 
@@ -360,6 +362,20 @@ class ReadInfoPrinter(TextFileAssignmentPrinter):
         self.output_file.write(additional_header)
         self.output_file.write(self.HEADER)
         self.io_support = io_support
+        # cell_type is the barcode2spot value(s); --barcode2spot adds one barcode_spot
+        # grouping strategy per spot column, so they are already among the read groups
+        self.cell_type_indices: List[int] = [
+            i for i, name in enumerate(get_grouping_strategy_names(params))
+            if name == "barcode_spot" or name.startswith("barcode_spot_col")]
+
+    def _get_group_columns(self, read_assignment) -> Tuple[str, str]:
+        """Return the (cell_type, groups) columns."""
+        groups = read_assignment.read_group
+        if not groups:
+            return ".", "."
+        groups = [g if g is not None else AbstractReadGrouper.default_group_id for g in groups]
+        cell_types = [groups[i] for i in self.cell_type_indices if i < len(groups)]
+        return (",".join(cell_types) if cell_types else "."), ",".join(groups)
 
     def _get_exons_str(self, read_assignment) -> str:
         exon_blocks = read_assignment.corrected_exons if read_assignment.corrected_exons else read_assignment.exons
@@ -382,9 +398,6 @@ class ReadInfoPrinter(TextFileAssignmentPrinter):
         u = read_assignment.umi
         return u if u else "."
 
-    def _get_cell_type(self, read_assignment) -> str:
-        return read_assignment.additional_attributes.get('cell_type', '.')
-
     def _get_additional(self, read_assignment, exclude_keys: set) -> str:
         parts = []
         for attr, val in read_assignment.additional_attributes.items():
@@ -398,6 +411,7 @@ class ReadInfoPrinter(TextFileAssignmentPrinter):
         # survives): the caller passes the match's gene so it is not lost.
         read_introns = junctions_from_blocks(read_assignment.exons) if read_assignment.exons else []
         strand = read_assignment.strand
+        cell_type_str, groups_str = self._get_group_columns(read_assignment)
         fields = [
             read_assignment.read_id,
             read_assignment.chr_id,
@@ -414,8 +428,8 @@ class ReadInfoPrinter(TextFileAssignmentPrinter):
             self._get_canonical(read_introns, read_assignment, strand),  # canonical
             self._get_barcode(read_assignment),                         # barcode
             self._get_umi(read_assignment),                             # umi
-            self._get_cell_type(read_assignment),                       # cell_type
-            ",".join(read_assignment.read_group) if read_assignment.read_group else ".",  # groups
+            cell_type_str,                                              # cell_type
+            groups_str,                                                 # groups
             self._get_additional(read_assignment, {'cell_type'}),       # additional
         ]
         self.output_file.write("\t".join(fields) + "\n")
@@ -440,6 +454,7 @@ class ReadInfoPrinter(TextFileAssignmentPrinter):
             self._write_unmatched(read_assignment)
             return
 
+        cell_type_str, groups_str = self._get_group_columns(read_assignment)
         for m in read_assignment.isoform_matches:
             if m.assigned_transcript is None:
                 self._write_unmatched(read_assignment, m.match_classification.name,
@@ -471,8 +486,8 @@ class ReadInfoPrinter(TextFileAssignmentPrinter):
                 canonical_str,                                          # canonical
                 self._get_barcode(read_assignment),                     # barcode
                 self._get_umi(read_assignment),                         # umi
-                self._get_cell_type(read_assignment),                   # cell_type
-                ",".join(read_assignment.read_group) if read_assignment.read_group else ".",  # groups
+                cell_type_str,                                          # cell_type
+                groups_str,                                             # groups
                 self._get_additional(read_assignment, {'cell_type'}),   # additional
             ]
             self.output_file.write("\t".join(fields) + "\n")
