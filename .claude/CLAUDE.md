@@ -286,7 +286,8 @@ Main branch: `master`
 Current development: `isoquant_4.0.0` branch
 
 CI/CD workflows in `.github/workflows/`:
-- `Unit_tests.yml` - Primary test suite (Python 3.8, Ubuntu)
+- `Unit_tests.yml` - Primary test suite (Python 3.10, ubuntu-latest)
+- `Unit_tests_py38.yml` - Same suite on Python 3.8 / ubuntu-24.04, weekly only (ubuntu-latest = 26.04 has no 3.8 builds)
 - `Group_tests.yml` - Multi-group functionality
 - `YAML_tests.yml` - Configuration parsing
 - Various performance and resume tests
