@@ -570,9 +570,14 @@ class UMIFilter:
                         if read_assignment.isoform_matches:
                             read_assignment.isoform_matches[0].assigned_transcript = "None"
                     else:
-                        # Multiple inconsistent matches - skip
-                        self.total_assignments += 1
-                        continue
+                        # Multiple inconsistent matches
+                        read_assignment.set_additional_attribute('transcript_type', 'unknown_type')
+                        read_assignment.set_additional_attribute('polya_site', -1)
+
+                        # Set transcript_id to "None" for ambiguous case
+                        if read_assignment.isoform_matches:
+                            read_assignment.isoform_matches[0].assigned_transcript = "None"
+
 
                     self.total_assignments += 1
                     self.add_stats_for_read(read_assignment)
