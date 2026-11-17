@@ -12,9 +12,11 @@
 
 import os
 import tempfile
+from argparse import Namespace
 
 import pytest
 
+from isoquant_lib.assignment.assignment_io import ReadInfoPrinter
 from isoquant_lib.assignment.isoform_assignment import (
     ReadAssignment, ReadAssignmentType, IsoformMatch,
     MatchClassification, MatchEvent, MatchEventSubtype,
@@ -455,6 +457,46 @@ class TestConvertToAllinfo:
             os.unlink(input_path)
             if os.path.exists(output_path):
                 os.unlink(output_path)
+
+
+# ── ReadInfoPrinter cell_type tests ──────────────────────────────────────
+
+class TestReadInfoCellType:
+    CELL_TYPE_COL = ReadInfoPrinter.HEADER.rstrip("\n").split("\t").index("cell_type")
+    GROUPS_COL = ReadInfoPrinter.HEADER.rstrip("\n").split("\t").index("groups")
+
+    @staticmethod
+    def _print_read(tmp_path, read_group_specs, barcode2spot, read_groups):
+        params = Namespace(read_group=read_group_specs, barcode2spot=barcode2spot,
+                           check_canonical=False, cage=None)
+        out_file = str(tmp_path / "read_info.tsv")
+        printer = ReadInfoPrinter(out_file, params, io_support=None)
+        ra = _make_assignment(_make_string_pools(), assignment_type=ReadAssignmentType.unique)
+        ra.gene_info = _FakeGeneInfo([], {}, {"tx1": [(201, 299), (401, 499)]})
+        ra.read_group = read_groups
+        printer.add_read_info(ra)
+        printer.close()
+        with open(out_file) as f:
+            lines = [l for l in f if not l.startswith("read_id")]
+        assert len(lines) == 1
+        return lines[0].rstrip("\n").split("\t")
+
+    def test_multi_column_barcode2spot(self, tmp_path):
+        cols = self._print_read(tmp_path, ["tag:CB", "barcode_spot"], "bc2spot.tsv:0:1,2",
+                                ["CB1", "TypeA", "Region1"])
+        assert cols[self.CELL_TYPE_COL] == "TypeA,Region1"
+        assert cols[self.GROUPS_COL] == "CB1,TypeA,Region1"
+
+    def test_single_column_barcode2spot(self, tmp_path):
+        cols = self._print_read(tmp_path, ["barcode_spot", "tag:CB"], "bc2spot.tsv",
+                                ["TypeA", "CB1"])
+        assert cols[self.CELL_TYPE_COL] == "TypeA"
+        assert cols[self.GROUPS_COL] == "TypeA,CB1"
+
+    def test_no_barcode2spot(self, tmp_path):
+        cols = self._print_read(tmp_path, ["tag:CB"], None, ["CB1"])
+        assert cols[self.CELL_TYPE_COL] == "."
+        assert cols[self.GROUPS_COL] == "CB1"
 
 
 if __name__ == '__main__':
