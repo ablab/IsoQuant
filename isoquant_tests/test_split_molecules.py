@@ -12,6 +12,7 @@ import pytest
 
 import isoquant
 from isoquant_lib.barcode_calling import options
+from isoquant_lib.utils.input_data_storage import InputDataType, SampleData
 from isoquant_lib.modes import (
     DEPRECATED_MODE_ALIASES,
     IsoQuantMode,
@@ -189,3 +190,25 @@ class TestDetectorSelection:
     def test_exact_detector_mapping(self, mode, split, expected):
         from isoquant_lib.barcode_calling.detect_barcodes import barcode_detector_class
         assert barcode_detector_class(IsoQuantMode[mode], split).__name__ == expected
+
+
+class TestSplitReadsAreMappedAsFasta:
+    """Split reads are written as FASTA, so they are mapped as FASTA whatever the input was."""
+
+    @pytest.mark.parametrize("input_type, split, expected", [
+        (InputDataType.unmapped_bam, True, InputDataType.fastq),
+        (InputDataType.fastq, True, InputDataType.fastq),
+        (InputDataType.unmapped_bam, False, InputDataType.unmapped_bam),
+    ])
+    def test_input_type_after_barcode_calling(self, tmp_path, monkeypatch, input_type, split, expected):
+        from isoquant_lib.barcode_calling import pipeline
+        monkeypatch.setattr(pipeline, "run_barcode_calling", lambda bc_args, threads: None)
+        sample = SampleData([[str(tmp_path / "reads.bam")]], "sample", str(tmp_path / "sample"), {}, None)
+        args = argparse.Namespace(barcoded_bam=None, barcoded_reads=None, output=str(tmp_path), resume=False,
+                                  input_data=argparse.Namespace(samples=[sample], input_type=input_type),
+                                  split_molecules=split, gzipped=True, mode=IsoQuantMode.visium_hd, threads=1,
+                                  barcode_whitelist=["part1.tsv", "part2.tsv"], detect_cell_barcodes=False)
+        pipeline.call_barcodes(args)
+        assert args.input_data.input_type == expected
+        if split:
+            assert sample.file_list == [[sample.split_reads_fasta + "_0.fa.gz"]]

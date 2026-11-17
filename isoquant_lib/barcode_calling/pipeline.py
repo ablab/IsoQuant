@@ -18,6 +18,7 @@ from typing import Optional
 
 from ..common import setup_worker_logging, _get_log_params
 from ..utils.checkpoints import CheckpointStore, checkpoint_name, run_checkpoint_dir, run_stage
+from ..utils.input_data_storage import InputDataType
 from .detect_barcodes import detect_cell_barcode_list, get_barcode_length, \
     process_in_parallel, process_single_thread
 
@@ -148,3 +149,7 @@ def call_barcodes(args):
             logger.info("Reads were split during barcode calling")
             logger.info("The following files will be used instead of original reads %s " % ", ".join(map(lambda x: x[0], new_reads)))
             sample.file_list = new_reads
+
+    if args.split_molecules:
+        # split reads are FASTA whatever the input was (e.g. unmapped BAM), and are mapped as such
+        args.input_data.input_type = InputDataType.fastq
