@@ -183,16 +183,13 @@ See the [MDF format](#molecule-description-format-mdf) section below for details
 
 `--barcode2barcode`
 
-`visium_hd` with `--barcode_whitelist` only. Path to a TSV file mapping Visium HD barcodes to spot IDs,
+Only valid with `visium_hd` mode and `--barcode_whitelist`. Path to a TSV file mapping Visium HD barcodes to spot IDs,
 `file.tsv` or `file.tsv:barcode_col:spot_col` with exactly one spot column, e.g. `barcode2spot.tsv:0:2`.
-Barcodes are reported as spot IDs of the selected resolution during barcode calling, and a read whose
-barcode is ambiguous between neighbouring 2 µm barcodes is still assigned when all candidates belong to
-the same spot. UMI deduplication and the default `--read_group barcode` then work on spot IDs, see
+Barcodes will be reported as spot IDs. Ambioguous barcode sequences representing the same spot will still be called.
+Spot IDs will be used instead barcode sequences in all output and UMI deduplication, see
 [spot-level barcode calling](#spot-level-barcode-calling-visium-hd).
-With barcodes from `--barcoded_reads` or `--barcoded_bam` this option stops IsoQuant with an error,
-use `--barcode2spot` to group such barcodes into spots.
 
-For Visium HD composite barcodes, use `isoquant_lib/scripts/prepare_visium_spot_ids.py` to generate the mapping file.
+For Visium HD composite barcodes, you can use `isoquant_lib/scripts/prepare_visium_spot_ids.py` to generate the mapping file.
 
 
 ## Molecule description format (MDF)
