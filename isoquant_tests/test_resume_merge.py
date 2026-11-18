@@ -37,7 +37,8 @@ def make_args() -> SimpleNamespace:
         transcript_quantification="with_ambiguous", no_model_construction=False, count_exons=True,
         old_exon_count_format=True, delta=6, minimal_exon_overlap=5, predict_terminal_sites=True,
         fl_data=True, count_intron_retentions=True, read_group=["file_name", "barcode"],
-        mode=IsoQuantMode.tenX_v3, collect_polya_training="training.csv", collect_tss_training=None)
+        mode=IsoQuantMode.tenX_v3, collect_polya_training="training.csv", collect_tss_training=None,
+        rna_velocity=True)
 
 
 def make_pools() -> StringPoolManager:

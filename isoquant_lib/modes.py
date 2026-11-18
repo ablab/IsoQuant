@@ -59,6 +59,14 @@ class IsoQuantMode(Enum):
                         IsoQuantMode.tenX_v2,
                         IsoQuantMode.visium_5prime]
 
+    def velocity_by_default(self):
+        """Chemistries whose barcodes are cells, so per-barcode RNA velocity is on by default.
+
+        Spatial barcodes are spots, not cells: velocity there needs --barcode2cellid.
+        """
+        return self in [IsoQuantMode.tenX_v3,
+                        IsoQuantMode.tenX_v2]
+
     def enforces_single_thread(self):
         return False
 
@@ -101,6 +109,10 @@ class BarcodeCorrectionMethod(Enum):
 # match (see TenXBarcodeDetector.__init__), so taking it as the cell list is worth a warning.
 LARGE_WHITELIST_SIZE = 100000
 
+# Default RNA velocity is skipped above this many barcodes: the loom is dense in genes x cells,
+# so a spatial-sized barcode set takes days and gigabytes to write. --analysis velocity overrides.
+MAX_DEFAULT_VELOCITY_CELLS = LARGE_WHITELIST_SIZE
+
 
 @unique
 class AnalysisType(Enum):
@@ -108,6 +120,7 @@ class AnalysisType(Enum):
     exon_quantification = 2
     fusion = 3
     transcript_discovery = 4
+    velocity = 5
 
 
 # Maps user-facing analysis names (and their short aliases) to AnalysisType.
@@ -119,6 +132,7 @@ ANALYSIS_ALIASES = {
     "fusion": AnalysisType.fusion,
     "transcript_discovery": AnalysisType.transcript_discovery,
     "td": AnalysisType.transcript_discovery,
+    "velocity": AnalysisType.velocity,
 }
 
 ANALYSIS_CHOICES = list(ANALYSIS_ALIASES.keys())

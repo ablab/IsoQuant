@@ -431,6 +431,9 @@ def parse_grouping_spec(spec_string, args, sample, chr_id, spec_index=0):
     elif key == 'barcode_barcode':
         return _make_barcode_mapping_groupers(getattr(args, 'barcode2barcode', None),
                                               'barcode2barcode', 'barcode_barcode', args, sample)
+    elif key == 'barcode_cell':
+        return _make_barcode_mapping_groupers(getattr(args, 'barcode2cellid', None),
+                                              'barcode2cellid', 'barcode_cell', args, sample)
     elif key == 'barcode':
         # Direct barcode grouping - uses barcode from read_assignment
         _require_barcoded_reads(args, sample, "barcode")
@@ -543,6 +546,10 @@ def get_grouping_pool_types(args) -> dict:
             else:
                 pool_types[grouper_index] = 'barcode_barcode'
                 grouper_index += 1
+        elif spec_type == 'barcode_cell':
+            # --barcode2cellid has a single cell id column, so always one grouper
+            pool_types[grouper_index] = 'barcode_cell'
+            grouper_index += 1
         elif spec_type == 'barcode':
             # Barcode grouper uses the barcode pool (loaded per-chromosome)
             pool_types[grouper_index] = 'barcode'
@@ -624,6 +631,8 @@ def get_grouping_strategy_names(args) -> list:
                         strategy_names.append(f"barcode_barcode_col{col_idx}")
             else:
                 strategy_names.append("barcode_barcode")
+        elif spec_type == 'barcode_cell':
+            strategy_names.append("barcode_cell")
         elif spec_type == 'barcode':
             strategy_names.append("barcode")
         elif spec_type == 'tag':
