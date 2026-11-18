@@ -157,8 +157,7 @@ Coordinate lists use `;%;` as the element separator.
 In single-cell/spatial modes IsoQuant always writes UMI-deduplication statistics to
 `SAMPLE_ID.UMI_filtered.ED{N}.stats.tsv` (independently of `--large_output`).
 
-When `--barcode2barcode` is set, the barcode column of the barcoded reads table, `read_info` and the allinfo
-output contain spot IDs, and UMI deduplication is spot-level.
+When `--barcode2barcode` is set, spot ID is used instead out barcode (output files and UMI deduplication).
 
 ### Tagged and deduplicated BAM
 
