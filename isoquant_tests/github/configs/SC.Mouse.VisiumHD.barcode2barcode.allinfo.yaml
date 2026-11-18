@@ -20,9 +20,9 @@ baselines:
     Assigned to any gene and barcoded: 586615.0
     Spliced: 563243.0
     Spliced and barcoded: 430196.0
-    Uniquely assigned: 768034.0
-    Uniquely assigned and barcoded: 586615.0
-    Uniquely assigned and spliced: 562338.0
-    Uniquely assigned and spliced and barcoded: 430196.0
+    Uniquely assigned: 710072.0
+    Uniquely assigned and barcoded: 542379.0
+    Uniquely assigned and spliced: 510258.0
+    Uniquely assigned and spliced and barcoded: 390419.0
     duplicate_triplets: 0.0
     allinfo_stats_match: 1.0
