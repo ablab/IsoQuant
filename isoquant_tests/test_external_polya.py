@@ -159,16 +159,6 @@ class TestTag:
     def test_tag(self, tags, expected):
         assert external_polya_from_tag(MockTaggedAlignment(tags), "pt") == expected
 
-    @pytest.mark.parametrize("tags, default_hint, expected", [
-        ({"pt": 46}, "+", PRESENT_FORWARD),
-        ({"pt": 46}, "-", PRESENT_REVERSE),
-        ({"pt": 46, "TS": "-"}, "+", PRESENT_REVERSE),
-        ({"pt": 46, "TS": "."}, "-", PRESENT_REVERSE),
-        ({"pt": -1}, "+", UNKNOWN),
-    ])
-    def test_tag_with_stranded_default(self, tags, default_hint, expected):
-        assert external_polya_from_tag(MockTaggedAlignment(tags), "pt", default_hint) == expected
-
     @pytest.mark.parametrize("stranded, expected", [("forward", "+"), ("reverse", "-"), ("none", None), (None, None)])
     def test_hint_from_strandedness(self, stranded, expected):
         assert hint_from_strandedness(stranded) == expected
@@ -310,10 +300,11 @@ class TestArtificialPolyA:
         _collector(mode).add_artificial_polya(read_assignment)
         assert _positions(read_assignment.polya_info) == after
 
-    def test_existing_modes_overwrite(self):
+    @pytest.mark.parametrize("mode", [PolyATrimmed.stranded, PolyATrimmed.all])
+    def test_existing_modes_keep_a_detected_tail(self, mode):
         read_assignment = _read_assignment("+", "+", _polya(ext_a=410))
-        _collector(PolyATrimmed.stranded).add_artificial_polya(read_assignment)
-        assert read_assignment.polya_info.external_polya_pos == 401
+        _collector(mode).add_artificial_polya(read_assignment)
+        assert _positions(read_assignment.polya_info) == (410, -1, -1, -1)
 
     @pytest.mark.parametrize("strand, before, after", [
         # full-length reads: the 3' end is the polyA site when no tail was found
@@ -346,55 +337,6 @@ class TestArtificialPolyA:
         read_assignment = _read_assignment("-", "+", _polya())
         _collector(mode, fl_data=True).add_artificial_polya(read_assignment, external)
         assert _positions(read_assignment.polya_info) == after
-
-
-class _RecordingAssigner:
-    def __init__(self, revised: bool = True):
-        self.reassigned = []
-        self.revised = revised
-
-    def reassign_with_polya_site(self, combined_profile, assignment, strand: str) -> bool:
-        self.reassigned.append((assignment, strand))
-        return self.revised
-
-
-class TestApplyArtificialPolyA:
-    """A site added after assignment makes the assigner classify the read again, as for a detected tail."""
-
-    @staticmethod
-    def _apply(polya: tuple, fl_data: bool = True, assigner=None):
-        read_assignment = _read_assignment("+", "+", polya)
-        alignment_info = SimpleNamespace(polya_info=read_assignment.polya_info, combined_profile=None)
-        assigner = assigner if assigner is not None else _RecordingAssigner()
-        revised = _collector(PolyATrimmed.none, fl_data).apply_artificial_polya(read_assignment, alignment_info,
-                                                                                UNKNOWN, assigner)
-        return read_assignment, assigner.reassigned, revised
-
-    def test_added_site_reclassifies_the_read(self):
-        read_assignment, reassigned, revised = self._apply(_polya())
-        assert read_assignment.polyA_found
-        assert reassigned == [(read_assignment, "+")]
-        assert revised
-
-    def test_result_of_the_assigner_is_returned(self):
-        _, reassigned, revised = self._apply(_polya(), assigner=_RecordingAssigner(revised=False))
-        assert len(reassigned) == 1
-        assert not revised
-
-    def test_detected_tail_is_not_verified_twice(self):
-        read_assignment, reassigned, revised = self._apply(_polya(int_a=380))
-        assert read_assignment.polyA_found
-        assert reassigned == [] and not revised
-
-    def test_site_added_next_to_a_tail_at_the_other_end_is_verified(self):
-        read_assignment, reassigned, revised = self._apply(_polya(int_t=110))
-        assert read_assignment.polya_info.external_polya_pos == 401
-        assert reassigned == [(read_assignment, "+")] and revised
-
-    def test_no_site_no_verification(self):
-        read_assignment, reassigned, revised = self._apply(_polya(), fl_data=False)
-        assert not read_assignment.polyA_found
-        assert reassigned == [] and not revised
 
 
 ASSIGNER_PARAMS = SimpleNamespace(
@@ -432,111 +374,139 @@ def _detected(models, read_exons, strand: str) -> tuple:
     return _summary(assigner.assign_to_isoform("read", profile))
 
 
-class TestReassignWithPolyASite:
-    """After a site is set on an assigned read, the read gets the assignment a detected tail at that site gives."""
+class _Read:
+    """The part of AlignmentInfo the collector uses around the assignment."""
+
+    def __init__(self, read_exons, polya: tuple):
+        self.read_exons = read_exons
+        self.polya_info = PolyAInfo(*polya)
+        self.combined_profile = None
+
+    def construct_profiles(self, profile_constructor):
+        self.combined_profile = profile_constructor.construct_profiles(self.read_exons, self.polya_info, [])
+
+
+def _predictor(strand):
+    return SimpleNamespace(predict=lambda read_exons, polya_info, mapped_strand: (strand, None))
+
+
+class TestMarkBeforeAssignment:
+    """The site goes in before the profiles are built, on the predicted read strand."""
+
+    @pytest.mark.parametrize("predicted, before, marked, after", [
+        ("+", _polya(), "+", (401, -1, -1, -1)),
+        ("-", _polya(), "-", (-1, 99, -1, -1)),
+        (None, _polya(), None, (-1, -1, -1, -1)),
+        # a tail found at the 3' end needs no site
+        ("+", _polya(int_a=380), None, (-1, -1, 380, -1)),
+        # a soft-clipped tail at the 5' end: the read comes from the other strand
+        ("+", _polya(ext_t=90), None, (-1, 90, -1, -1)),
+    ])
+    def test_fl_data(self, predicted, before, marked, after):
+        read = _Read([(100, 200), (300, 400)], before)
+        collector = _collector(PolyATrimmed.none, fl_data=True)
+        assert collector.mark_polya_before_assignment(_predictor(predicted), read, UNKNOWN, "+") == marked
+        assert _positions(read.polya_info) == after
+
+    def test_all_uses_the_mapped_strand(self):
+        read = _Read([(100, 200), (300, 400)], _polya())
+        collector = _collector(PolyATrimmed.all)
+        assert collector.mark_polya_before_assignment(_predictor("+"), read, UNKNOWN, "-") == "-"
+        assert _positions(read.polya_info) == (-1, 99, -1, -1)
+
+    @pytest.mark.parametrize("external, marked", [(PRESENT_NO_HINT, "-"), (UNKNOWN, None), (NO_TAIL_FOUND, None)])
+    def test_external_tail_without_a_side(self, external, marked):
+        read = _Read([(100, 200), (300, 400)], _polya())
+        assert _collector(PolyATrimmed.tag).mark_polya_before_assignment(_predictor("-"), read, external, "+") == marked
+
+    def test_nothing_without_options(self):
+        read = _Read([(100, 200), (300, 400)], _polya())
+        assert _collector(PolyATrimmed.none).mark_polya_before_assignment(None, read, UNKNOWN, "+") is None
+        assert _positions(read.polya_info) == (-1, -1, -1, -1)
+
+
+class TestMovePolyASite:
+    """After the assignment the site follows the read strand; a moved site means the read is assigned again."""
 
     @staticmethod
-    def _reassign(models, read_exons, strand: str, after_assignment=None):
-        assigner, profile_constructor = _assigner(models)
-        profile = profile_constructor.construct_profiles(read_exons, PolyAInfo(*_polya()), [])
-        read_assignment = assigner.assign_to_isoform("read", profile)
-        if after_assignment is not None:
-            # events AlignmentCollector adds before the site is set
-            after_assignment(read_assignment)
-        before = _summary(read_assignment)
-        # the profile shares polya_info with the read, as AlignmentInfo does
-        inject_external_polya(profile.polya_info, read_exons, strand)
-        revised = assigner.reassign_with_polya_site(profile, read_assignment, strand)
-        return before, _summary(read_assignment), revised
+    def _move(mode, marked, strand, fl_data=True, polya=_polya()):
+        read = _Read([(100, 200), (300, 400)], polya)
+        inject_external_polya(read.polya_info, read.read_exons, marked)
+        read_assignment = SimpleNamespace(strand=strand, mapped_strand="+")
+        moved = _collector(mode, fl_data).move_polya_site(read_assignment, read, UNKNOWN, marked)
+        return moved, _positions(read.polya_info)
 
-    def test_isoforms_contradicting_the_site_are_dropped(self):
-        # same intron chain, different 3' ends: the site resolves the ambiguity
+    def test_predicted_strand_confirmed(self):
+        assert self._move(PolyATrimmed.none, "+", "+") == (False, (401, -1, -1, -1))
+
+    def test_read_assigned_to_the_other_strand(self):
+        assert self._move(PolyATrimmed.none, "+", "-") == (True, (-1, 99, -1, -1))
+
+    def test_strand_not_predicted(self):
+        assert self._move(PolyATrimmed.none, None, "-") == (True, (-1, 99, -1, -1))
+        assert self._move(PolyATrimmed.none, None, ".") == (False, (-1, -1, -1, -1))
+
+    def test_predicted_site_dropped_for_unknown_strand(self):
+        assert self._move(PolyATrimmed.stranded, "+", ".", fl_data=False) == (True, (-1, -1, -1, -1))
+
+    def test_all_never_moves(self):
+        assert self._move(PolyATrimmed.all, "+", "-", fl_data=False) == (False, (401, -1, -1, -1))
+
+    def test_detected_tail_stays(self):
+        assert self._move(PolyATrimmed.none, None, "+", polya=_polya(int_a=380)) == (False, (-1, -1, 380, -1))
+
+
+class TestAssignAgain:
+    """A read whose site moved gets the assignment a tail found in its sequence at the new site gives."""
+
+    @staticmethod
+    def _assign(models, read_exons, predicted: str, strand: str):
+        assigner, profile_constructor = _assigner(models)
+        read = _Read(read_exons, _polya())
+        collector = _collector(PolyATrimmed.none, fl_data=True)
+        marked = collector.mark_polya_before_assignment(_predictor(predicted), read, UNKNOWN, "+")
+        read.construct_profiles(profile_constructor)
+        read_assignment = assigner.assign_to_isoform("read", read.combined_profile)
+        before = _summary(read_assignment)
+        read_assignment.strand, read_assignment.mapped_strand = strand, "+"
+        assigned_again = collector.move_polya_site(read_assignment, read, UNKNOWN, marked) and \
+            AlignmentCollector.assign_again(assigner, profile_constructor, read, read_assignment)
+        return before, _summary(read_assignment), assigned_again
+
+    def test_predicted_strand_is_the_detected_tail(self):
+        # same intron chain, different 3' ends: the site resolves the ambiguity before the assignment
         models = [_model("A", "+", EXONS_A), _model("B", "+", EXONS_B)]
-        before, after, revised = self._reassign(models, EXONS_A, "+")
+        before, after, assigned_again = self._assign(models, EXONS_A, "+", "+")
+        assert before == after == _detected(models, EXONS_A, "+")
+        assert after[0] == ReadAssignmentType.unique and "correct_polya_site_right" in after[2][0][2]
+        assert not assigned_again
+
+    def test_wrong_prediction_is_assigned_again(self):
+        models = [_model("A", "+", EXONS_A), _model("B", "+", EXONS_B)]
+        before, after, assigned_again = self._assign(models, EXONS_A, "-", "+")
         assert before[0] == ReadAssignmentType.ambiguous
         assert after == _detected(models, EXONS_A, "+")
-        assert after[0] == ReadAssignmentType.unique and after[1] == ReadAssignmentType.unique
-        assert [m[0] for m in after[2]] == ["A"] and "correct_polya_site_right" in after[2][0][2]
-        assert revised
-
-    def test_several_isoforms_agreeing_with_the_site_stay_ambiguous(self):
-        models = [_model("A", "+", EXONS_A), _model("B", "+", EXONS_B),
-                  _model("C", "+", [(1000, 1100), (1201, 1300), (1401, 1605)])]
-        _, after, _ = self._reassign(models, EXONS_A, "+")
-        assert after == _detected(models, EXONS_A, "+")
-        assert after[0] == ReadAssignmentType.ambiguous and [m[0] for m in after[2]] == ["A", "C"]
-
-    def test_minus_strand(self):
-        exons_b = [(880, 1100), (1201, 1300), (1401, 1600)]
-        models = [_model("A", "-", EXONS_A), _model("B", "-", exons_b)]
-        _, after, _ = self._reassign(models, EXONS_A, "-")
-        assert after == _detected(models, EXONS_A, "-")
-        assert after[0] == ReadAssignmentType.unique and "correct_polya_site_left" in after[2][0][2]
+        assert assigned_again
 
     def test_site_contradicting_every_isoform_makes_the_read_inconsistent(self):
         # the read ends 100 bp before the only isoform: no longer a full splice match
         models = [_model("A", "+", EXONS_A)]
         read_exons = [(1000, 1100), (1201, 1300), (1401, 1500)]
-        before, after, revised = self._reassign(models, read_exons, "+")
-        assert before[0] == ReadAssignmentType.unique
+        _, after, _ = self._assign(models, read_exons, "+", "+")
         assert after == _detected(models, read_exons, "+")
         assert after[0] == ReadAssignmentType.inconsistent_non_intronic
         assert after[2][0][1] == MatchClassification.novel_in_catalog and "fsm" not in after[2][0][2]
-        assert revised
 
-    def test_agreeing_site_only_adds_its_event(self):
-        models = [_model("A", "+", EXONS_A)]
-        before, after, revised = self._reassign(models, EXONS_A, "+")
-        assert after == _detected(models, EXONS_A, "+")
-        assert after[0] == before[0] == ReadAssignmentType.unique
-        assert after[2][0][2] == sorted(before[2][0][2] + ["correct_polya_site_right"])
-        assert revised
-
-    @pytest.mark.parametrize("read_exons", [[(1000, 1100), (1201, 1600)], [(1000, 1100), (1201, 1500)]])
-    def test_inconsistent_read_is_matched_again(self, read_exons):
-        # intron retention: the site is now part of the inconsistency penalties and events
-        models = [_model("A", "+", EXONS_A), _model("B", "+", EXONS_B)]
-        before, after, revised = self._reassign(models, read_exons, "+")
-        assert before[0].is_inconsistent()
-        assert after == _detected(models, read_exons, "+")
-        assert any("polya_site" in event for m in after[2] for event in m[2])
-        assert revised
-
-    def test_aligned_polya_tail_event_does_not_change_the_classification(self):
-        models = [_model("A", "+", EXONS_A), _model("B", "+", EXONS_B)]
-        _, after, revised = self._reassign(models, EXONS_A, "+", AlignmentCollector.mark_aligned_polya_tail)
-        detected = _detected(models, EXONS_A, "+")
-        assert after[:2] == detected[:2] == (ReadAssignmentType.unique, ReadAssignmentType.unique)
-        assert [m[0] for m in after[2]] == ["A"] and "aligned_polya_tail" in after[2][0][2]
-        assert revised
-
-    def test_antisense_match_keeps_its_classification(self):
-        # the site is on the read strand, the isoform on the other one: nothing to verify
-        def antisense(read_assignment):
-            read_assignment.strand = "+"
-            AlignmentCollector.check_antisense(read_assignment)
-
-        before, after, revised = self._reassign([_model("A", "-", EXONS_A)], EXONS_A, "+", antisense)
-        assert before == after and after[0] == ReadAssignmentType.unique
-        assert after[2][0][1] == MatchClassification.antisense and "antisense" in after[2][0][2]
-        assert revised
+    def test_minus_strand(self):
+        exons_b = [(880, 1100), (1201, 1300), (1401, 1600)]
+        models = [_model("A", "-", EXONS_A), _model("B", "-", exons_b)]
+        _, after, assigned_again = self._assign(models, EXONS_A, None, "-")
+        assert after == _detected(models, EXONS_A, "-")
+        assert after[0] == ReadAssignmentType.unique and "correct_polya_site_left" in after[2][0][2]
+        assert assigned_again
 
     def test_unassigned_read_is_kept(self):
-        before, after, revised = self._reassign([_model("A", "+", EXONS_A)], [(5000, 5100), (5201, 5300)], "+")
+        before, after, assigned_again = self._assign([_model("A", "+", EXONS_A)], [(5000, 5100), (5201, 5300)],
+                                                     None, "+")
         assert before == after and before[0] == ReadAssignmentType.noninformative
-        assert not revised
-
-    @pytest.mark.parametrize("mode, fl_data", [(PolyATrimmed.none, True), (PolyATrimmed.stranded, False),
-                                               (PolyATrimmed.all, False)])
-    def test_collector_reclassifies_with_fl_data_and_polya_trimmed(self, mode, fl_data):
-        models = [_model("A", "+", EXONS_A), _model("B", "+", EXONS_B)]
-        assigner, profile_constructor = _assigner(models)
-        profile = profile_constructor.construct_profiles(EXONS_A, PolyAInfo(*_polya()), [])
-        read_assignment = assigner.assign_to_isoform("read", profile)
-        read_assignment.polya_info = profile.polya_info
-        read_assignment.strand = read_assignment.mapped_strand = "+"
-        read_assignment.corrected_exons = EXONS_A
-        alignment_info = SimpleNamespace(polya_info=profile.polya_info, combined_profile=profile)
-        assert _collector(mode, fl_data).apply_artificial_polya(read_assignment, alignment_info, UNKNOWN, assigner)
-        assert _summary(read_assignment) == _detected(models, EXONS_A, "+")
-        assert read_assignment.polyA_found
+        assert not assigned_again

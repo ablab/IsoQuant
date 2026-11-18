@@ -70,24 +70,16 @@ _FROM_TABLE_VALUE: Dict[str, ExternalPolyA] = {
 }
 
 
-_PRESENT_WITH_HINT: Dict[Optional[str], ExternalPolyA] = {
-    None: PRESENT_NO_HINT,
-    "+": PRESENT_FORWARD,
-    "-": PRESENT_REVERSE,
-}
-
-
 def hint_from_strandedness(stranded: Optional[str]) -> Optional[str]:
     """--stranded forward/reverse gives the transcript strand relative to the read for every read."""
     return {"forward": "+", "reverse": "-"}.get(stranded)
 
 
-def external_polya_from_tag(alignment, tag: str, default_hint: Optional[str] = None,
-                            strand_tag: str = "TS") -> ExternalPolyA:
+def external_polya_from_tag(alignment, tag: str, strand_tag: str = "TS") -> ExternalPolyA:
     """Dorado style: tag >= 0 means a tail was found (0 = anchor found, length not estimated).
     -1 means the primer anchor was not found, which says nothing about the tail.
     TS:A (written only when Dorado primer trimming is on, normally absent for dRNA) gives the side;
-    without it default_hint (from --stranded) is used."""
+    without it the side comes from the predicted read strand (see ReadStrandPredictor)."""
     if not alignment.has_tag(tag):
         return UNKNOWN
     value = alignment.get_tag(tag)
@@ -99,7 +91,7 @@ def external_polya_from_tag(alignment, tag: str, default_hint: Optional[str] = N
             return PRESENT_FORWARD
         if hint == "-":
             return PRESENT_REVERSE
-    return _PRESENT_WITH_HINT[default_hint]
+    return PRESENT_NO_HINT
 
 
 def resolve_external_strand(external: ExternalPolyA, mapped_strand: str) -> Optional[str]:
@@ -163,6 +155,14 @@ def inject_external_polya(polya_info: PolyAInfo, read_exons: List[Tuple[int, int
         polya_info.external_polya_pos = read_exons[-1][1] + 1
     elif strand == "-":
         polya_info.external_polyt_pos = read_exons[0][0] - 1
+
+
+def remove_external_polya(polya_info: PolyAInfo, strand: Optional[str]) -> None:
+    """Undo inject_external_polya for the given genomic strand (it marks only an end without a found tail)."""
+    if strand == "+":
+        polya_info.external_polya_pos = -1
+    elif strand == "-":
+        polya_info.external_polyt_pos = -1
 
 
 def _normalize_list_line(line: str) -> Optional[Tuple[str, str]]:
