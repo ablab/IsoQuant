@@ -11,17 +11,17 @@ isoquant_options: '"-m visium_hd --split_molecules false --complete_genedb --bar
 edit_distance: '4'
 baselines:
   allinfo:
-    Unique gene-barcodes pairs: 527652.0
-    Total reads saved: 529012.0
-    Spliced reads saved: 387253.0
+    Unique gene-barcodes pairs: 531079.0
+    Total reads saved: 532444.0
+    Spliced reads saved: 390458.0
     Total assignments processed: 773071.0
-    Assigned to any gene: 770301.0
-    Assigned to any gene and barcoded: 609124.0
-    Spliced: 563243.0
-    Spliced and barcoded: 446743.0
-    Uniquely assigned: 768034.0
-    Uniquely assigned and barcoded: 609124.0
-    Uniquely assigned and spliced: 562338.0
-    Uniquely assigned and spliced and barcoded: 446743.0
+    Assigned to any gene: 775338.0
+    Assigned to any gene and barcoded: 613137.0
+    Spliced: 567941.0
+    Spliced and barcoded: 450478.0
+    Uniquely assigned: 710072.0
+    Uniquely assigned and barcoded: 563240.0
+    Uniquely assigned and spliced: 510258.0
+    Uniquely assigned and spliced and barcoded: 405466.0
     duplicate_triplets: 0.0
     allinfo_stats_match: 1.0
