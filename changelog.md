@@ -1,16 +1,5 @@
 # IsoQuant changelog
 
-## Unreleased
-
-- Read splitting for Visium HD: concatenated ONT reads are split into individual molecules (default `--split_molecules auto`), which doubles barcode calling recall on concatenated reads;
-  - `-m visium_hd` with aligned input (`--bam`, including `--barcoded_bam` and `--barcoded_reads`) now requires `--split_molecules false`;
-  - `isoquant_detect_barcodes.py --mode visium_hd` now reports one row per detected molecule and writes a split reads FASTA, use `--split_molecules false` for the previous output.
-- Fixed Visium HD UMI extraction when the R1 primer is not detected (the UMI was one base too long).
-- Spot-level barcode calling for Visium HD: `--barcode2barcode` is now applied during barcode calling, barcodes are reported as spot IDs, reads whose barcode is ambiguous between neighbouring 2 µm barcodes of the same spot are assigned, and barcodes are searched in a wider window, which improves recall by about 3%;
-  - exactly one spot column must be selected (e.g. `barcode2spot.tsv:0:2`), and the option requires `--mode visium_hd` with `--barcode_whitelist`;
-  - removed the extra UMI deduplication rounds of `--barcode2barcode` with their `barcode_barcode_col{C}` outputs, which were not used for quantification, and `--read_group barcode_barcode`; use `--barcode2spot` to group barcodes into spots, including with `--barcoded_reads` and `--barcoded_bam`.
-- Fixed mapping of split reads when the input is an unmapped BAM (`--unmapped_bam`): the split reads are FASTA and were passed to the aligner as BAM.
-
 ## IsoQuant 4.1.0, 20 October 2026
 
 - New options for cell barcode calling:
