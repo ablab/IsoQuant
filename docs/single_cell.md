@@ -354,16 +354,6 @@ as `true`, and also when barcodes come with the alignments (`--barcoded_bam`, e.
 or Cell Ranger BAM) or from `--barcoded_reads`: pass the raw reads if you want the molecules split
 and re-aligned, or `--split_molecules false` to analyse the alignments as they are.
 
-Splitting is worth leaving on even for libraries you do not expect to be concatenated: measured
-on non-concatenated 10x data it recovers about one extra point of recall at unchanged precision
-(87.3% → 88.3% on ONT R9, 89.6% → 90.5% on ONT cDNA R10.4), at roughly twice the barcode
-calling runtime. On simulated ONT Visium HD data splitting leaves non-concatenated reads unchanged
-(97.6% precision, 74.6% recall either way) and doubles the recall on concatenated ones
-(35.1% → 74.0% at 97.7% precision, 2.2 molecules per read on average).
-
-The superseded mode names `tenX_v3_split`, `tenX_v2_split` and `stereoseq_nosplit` still work
-and are translated to the corresponding `--mode` plus `--split_molecules` combination.
-
 ## UMI deduplication
 
 All single-cell and spatial modes perform UMI-based PCR deduplication after isoform assignment.
