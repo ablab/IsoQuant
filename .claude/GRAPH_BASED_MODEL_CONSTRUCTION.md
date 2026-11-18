@@ -387,15 +387,16 @@ def cluster_terminal_positions(position_dict, read_end=True, min_abs=1):
 ### Full-length reads (`--fl_data`)
 
 - 3' end: a read without a detected polyA tail (and without polyT soft-clipped at its 5' end) gets
-  an artificial polyA at its 3' end (`add_artificial_polya` -> `inject_external_polya`), so its end is
-  trusted when threading. As for every site set after assignment (`--polya_trimmed`, tag/list tails
-  without a side), `AlignmentCollector.apply_artificial_polya` then has
-  `LongReadAssigner.reassign_with_polya_site` classify the read as for a tail found in its sequence:
-  consistent matches on the read strand are verified (`PolyAVerifier.verify_read_ends`), matches the
-  site contradicts are dropped when others agree with it, and the read is matched again
-  (`match_inconsistent`) when the site contradicts all of them or the read was inconsistent. A revised
-  read goes through the inconsistent-MAPQ filter, exon correction and the antisense check again; the
-  site itself stays at the first corrected end.
+  an artificial polyA at its 3' end (`inject_external_polya`), so its end is trusted when threading.
+  As for every site the options add (`--polya_trimmed`, tag/list tails without a side), the site goes
+  in before the profiles are built, so the read is assigned as for a tail found in its sequence:
+  `ReadStrandPredictor` (`alignment/read_strand.py`) derives the read strand from a tail at one end,
+  annotated introns (exact) and canonical sites of the other introns, or the annotated transcripts
+  overlapping an unspliced read, with `--stranded` last;
+  `AlignmentCollector.mark_polya_before_assignment` marks that end. After assignment
+  `move_polya_site` puts the site on the strand `get_assignment_strand` gives; when it moved (strand
+  undecided or the other one, about 2% of FL reads), `assign_again` rebuilds the profiles and assigns
+  the read once more, followed by the inconsistent-MAPQ filter, exon correction and the antisense check.
 - 5' end: `IntronGraph.is_trusted_five_prime(intron, position, genomic_left)` decides whether a read
   start ('+') or end ('-') is a transcription start. It is True at a predicted TSS
   (`is_at_predicted_tss`: within `apa_delta` of any TSS predicted in the block,
