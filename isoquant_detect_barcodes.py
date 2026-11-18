@@ -73,9 +73,8 @@ def parse_args(sys_argv):
                                                    SPLIT_MOLECULES_AUTO))
     parser.add_argument("--molecule", type=str, help="MDF files with molecule description (for custom_sc mode only)")
     parser.add_argument("--barcode2barcode", type=str,
-                        help="TSV mapping barcodes to spot IDs, FILE[:barcode_col:spot_col] (visium_hd only); "
-                             "barcodes are reported as spot IDs, and a read whose barcode is ambiguous is "
-                             "still assigned when all candidates belong to the same spot")
+                        help="TSV file mapping barcodes to spot IDs, FILE[:barcode_col:spot_col]; "
+                             "works only for Visium HD, substitues barcode sequences with spot IDs")
 
     parser.add_argument("--input", "-i", nargs='+', type=str, help="input reads in [gzipped] FASTA, FASTQ, BAM",
                         required=True)
