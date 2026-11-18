@@ -162,8 +162,8 @@ def parse_args(cmd_args=None, namespace=None):
                              "file:FILE:READ_COLUMNS:GROUP_COLUMNS:DELIM (TSV file), "
                              "read_id:DELIM (read ID suffix), "
                              "file_name (filename), "
-                             "barcode_spot (barcodes to spots/cell via --barcode2spot), "
-                             "barcode (barcode--barcoded_reads), "
+                             "barcode_spot (--barcode2spot), "
+                             "barcode (--barcoded_reads/--barcoded_bam), "
                              "no_auto (only explicitly stated rules), "
                              "none (disable grouping)")
 
@@ -354,8 +354,7 @@ def parse_args(cmd_args=None, namespace=None):
                                    help='remove suffix after dash from barcodes extracted from BAM tag')
     add_additional_option_to_group(sc_args_group, "--barcode2barcode", type=str,
                                    help='TSV file mapping barcodes to spot IDs, FILE[:barcode_col:spot_col]; '
-                                        'Visium HD barcodes are reported as spot IDs of this resolution '
-                                        'during barcode calling (visium_hd with --barcode_whitelist only)')
+                                        'works only for Visium HD, substitues barcode sequences with spot IDs')
 
     # ALGORITHM
     add_additional_option_to_group(algo_args_group, "--report_novel_unspliced", "-u", type=bool_str,
