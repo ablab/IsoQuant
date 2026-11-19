@@ -73,7 +73,7 @@ class ModelReadCounter:
                 return ReadAssignment(source.read_id, source.assignment_type,
                                       self.string_pools, match=[reuse_match])
         assigner, profile_constructor = self._single_model_assigner(model, cache)
-        profile = profile_constructor.construct_profiles(source.corrected_exons, source.polya_info, [])
+        profile = profile_constructor.construct_profiles(source.corrected_exons, source.polya_info)
         ra = assigner.assign_to_isoform(source.read_id, profile)
         if (ra.assignment_type.is_consistent() and ra.isoform_matches and
                 ra.isoform_matches[0].assigned_transcript == transcript_id):
@@ -155,7 +155,7 @@ class ModelReadCounter:
                                                          self.string_pools, quick_mode=False)
                         full_profile_constructor = CombinedProfileConstructor(model_gene_info, self.args)
                     profile = full_profile_constructor.construct_profiles(source.corrected_exons,
-                                                                          source.polya_info, [])
+                                                                          source.polya_info)
                     ra = full_assigner.assign_to_isoform(read_id, profile)
                 else:
                     ra = ReadAssignment(read_id, ReadAssignmentType.noninformative, self.string_pools)

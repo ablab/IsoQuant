@@ -33,11 +33,10 @@ class AlignmentInfo:
         self.read_end = self.read_exons[-1][1]
         self.polya_info = PolyAInfo(-1, -1, -1, -1)
         self.exons_changed = False
-        self.cage_hits = []
         self.combined_profile = None
 
     def construct_profiles(self, profile_constructor):
-        self.combined_profile = profile_constructor.construct_profiles(self.read_exons, self.polya_info, self.cage_hits)
+        self.combined_profile = profile_constructor.construct_profiles(self.read_exons, self.polya_info)
 
     def set_aligned_pairs(self):
         self.aligned_pairs = self.alignment.get_aligned_pairs()
@@ -114,9 +113,6 @@ class AlignmentInfo:
                     seq += self.alignment.seq[read_pos]
             last_ref_pos = ref_pos or last_ref_pos
         return seq
-
-    def add_cage_info(self, cage_finder):
-        self.cage_hits = cage_finder.find_cage_peak(self.alignment)
 
     def add_polya_info(self, polya_finder, polya_fixer,
                        external_strand: Optional[str] = None, external_no_tail: bool = False):

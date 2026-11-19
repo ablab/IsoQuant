@@ -23,6 +23,7 @@ from isoquant_lib.assignment.isoform_assignment import (
     ReadAssignmentType,
 )
 from isoquant_lib.assignment.read_groups import DefaultReadGrouper
+from isoquant_lib.terminal_prediction.cage_peaks import DEFAULT_CAGE_SHIFT, load_cage_peaks
 from isoquant_lib.terminal_prediction.polya_finder import PolyAFinder
 from isoquant_lib.terminal_prediction.polya_verification import PolyAFixer
 from isoquant_lib.terminal_prediction.external_polya import (
@@ -293,7 +294,9 @@ class AlignmentCollector:
         self.usual_gene_max_coverage = usual_gene_max_coverage
         self.polya_finder = PolyAFinder(self.params.polya_window, self.params.polya_fraction)
         self.polya_fixer = PolyAFixer(self.params)
-        # self.cage_finder = CagePeakFinder(params.cage, params.cage_shift)
+        cage_file = getattr(params, 'cage', None)
+        self.cage_peaks = load_cage_peaks(cage_file) if cage_file else None
+        self.cage_shift = getattr(params, 'cage_shift', DEFAULT_CAGE_SHIFT)
         self.alignment_stat_counter = EnumStats()
 
     def process(self):
@@ -416,7 +419,6 @@ class AlignmentCollector:
                 read_assignment.add_match_attribute(MatchEvent(MatchEventSubtype.aligned_polya_tail))
 
             read_assignment.polya_info = alignment_info.polya_info
-            read_assignment.cage_found = len(alignment_info.cage_hits) > 0
             read_assignment.genomic_region = region
             read_assignment.exons = alignment_info.read_exons
             read_assignment.boundary_deletions = extract_relevant_deletions(
@@ -440,6 +442,7 @@ class AlignmentCollector:
             read_assignment.mapped_strand = mapped_strand
             read_assignment.strand = self.get_assignment_strand(read_assignment)
             read_assignment.chr_id = self.chr_id
+            self.set_cage_status(read_assignment)
             read_assignment.multimapper = alignment.is_secondary
             read_assignment.mapping_quality = alignment.mapping_quality
 
@@ -478,8 +481,6 @@ class AlignmentCollector:
             mapped_strand = "-" if alignment.is_reverse else "+"
             external_polya = self.get_external_polya(alignment, read_id)
             self.add_polya_info(alignment_info, external_polya, mapped_strand)
-            # if self.params.cage:
-            #    alignment_info.add_cage_info(self.cage_finder)
             alignment_info.construct_profiles(profile_constructor)
             read_assignment = assigner.assign_to_isoform(read_id, alignment_info.combined_profile)
 
@@ -493,7 +494,6 @@ class AlignmentCollector:
                 read_assignment.add_match_attribute(MatchEvent(MatchEventSubtype.aligned_polya_tail))
 
             read_assignment.polya_info = alignment_info.polya_info
-            read_assignment.cage_found = len(alignment_info.cage_hits) > 0
             read_assignment.genomic_region = region
             read_assignment.exons = alignment_info.read_exons
             read_assignment.boundary_deletions = extract_relevant_deletions(
@@ -520,6 +520,7 @@ class AlignmentCollector:
             AlignmentCollector.check_antisense(read_assignment)
             AlignmentCollector.import_bam_tags(alignment, read_assignment, self.params.bam_tags)
             read_assignment.chr_id = gene_info.chr_id
+            self.set_cage_status(read_assignment)
             read_assignment.multimapper = alignment.is_secondary
             read_assignment.mapping_quality = alignment.mapping_quality
 
@@ -534,6 +535,15 @@ class AlignmentCollector:
 
             logger.debug("=== Finished read " + read_id + " ===")
             yield read_assignment
+
+    def set_cage_status(self, read_assignment: ReadAssignment) -> None:
+        # the read start depends on the assigned strand: alignment orientation is arbitrary for unstranded reads
+        exons = read_assignment.corrected_exons
+        if self.cage_peaks is None or not exons or read_assignment.strand not in ('+', '-'):
+            return
+        position = exons[0][0] if read_assignment.strand == '+' else exons[-1][1]
+        read_assignment.cage_found = self.cage_peaks.is_confirmed(read_assignment.chr_id, read_assignment.strand,
+                                                                  position, self.cage_shift)
 
     def get_assignment_strand(self, read_assignment):
         if read_assignment.isoform_matches and read_assignment.assignment_type in \
