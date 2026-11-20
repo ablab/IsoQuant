@@ -10,6 +10,7 @@
 # reads by path. Moved verbatim out of graph_based_model_construction.
 
 from collections import defaultdict
+from typing import Iterable, Optional, Tuple
 
 from isoquant_lib.model_construction.intron_graph import TerminalVertex
 
@@ -34,7 +35,9 @@ class IntronPathStorage:
             is_end_trusted = a.strand == '+' and \
                 (a.polya_info.external_polya_pos != -1 or
                  a.polya_info.internal_polya_pos != -1)
-            terminal_vertex = self.path_processor.thread_ends(intron_path[-1], read_end, is_end_trusted)
+            is_end_tss = a.strand == '-' and self.intron_graph.is_trusted_five_prime(intron_path[-1], read_end, False)
+            terminal_vertex = self.path_processor.thread_ends(intron_path[-1], read_end, is_end_trusted,
+                                                              five_prime=is_end_tss)
             if terminal_vertex:
                 intron_path.append(terminal_vertex)
 
@@ -42,7 +45,9 @@ class IntronPathStorage:
             is_start_trusted = a.strand == '-' and \
                 (a.polya_info.external_polyt_pos != -1 or
                  a.polya_info.internal_polyt_pos != -1)
-            starting_vertex = self.path_processor.thread_starts(intron_path[0], read_start, is_start_trusted)
+            is_start_tss = a.strand == '+' and self.intron_graph.is_trusted_five_prime(intron_path[0], read_start, True)
+            starting_vertex = self.path_processor.thread_starts(intron_path[0], read_start, is_start_trusted,
+                                                                five_prime=is_start_tss)
             if starting_vertex:
                 intron_path = [starting_vertex] + intron_path
 
@@ -83,7 +88,15 @@ class IntronPathProcessor:
             path.append(self.intron_graph.intron_collector.substitute(intron))
         return path
 
-    def thread_ends(self, intron, end, trusted=False):
+    def nearest_vertex(self, vertices: Iterable[Tuple[int, int]], position: int) -> Optional[Tuple[int, int]]:
+        # the terminal vertex closest to position, if within apa_delta
+        nearest = min(vertices, key=lambda v: (abs(v[1] - position), v[1]), default=None)
+        if nearest is None or abs(nearest[1] - position) > self.params.apa_delta:
+            return None
+        return nearest
+
+    def thread_ends(self, intron, end, trusted=False, five_prime: bool = False):
+        # five_prime: the end is a trusted '-' strand 5' end (IntronGraph.is_trusted_five_prime)
         possible_polyas = self.intron_graph.get_outgoing(intron, TerminalVertex.polya)
         if trusted:
             # find closes polyA
@@ -91,13 +104,18 @@ class IntronPathProcessor:
                 if abs(v[1] - end) <= self.params.apa_delta:
                     return v
 
+        # a trusted 5' end inside the exon takes only a vertex inside it, not one past an intron leaving it
+        max_position = None
         outgoing_introns = self.intron_graph.get_outgoing(intron)
         if len(outgoing_introns) > 0:
             # intron has outgoing edges
             rightmost_exon_end = max([intron[0] for intron in outgoing_introns]) - 1
             if not trusted and end <= rightmost_exon_end + self.params.delta:
-                # read end lies within next exon and has no polyA
-                return None
+                if not five_prime:
+                    # read end lies within next exon and has no polyA
+                    return None
+                # rare novel introns do not bound the exon (as in IntronGraph.is_trusted_five_prime)
+                max_position = self.intron_graph.five_prime_vertex_limit(intron, end, False)
 
         # A confirmed 5' TSS vertex claims only the reads that actually end at it
         # (same rule as the trusted-polyA lookup above). It must NOT enter the
@@ -105,8 +123,13 @@ class IntronPathProcessor:
         # cutoff, so a 2-read TSS vertex sitting past a dominant read-end vertex
         # would otherwise disqualify the whole read-end population.
         for v in self.intron_graph.get_outgoing(intron, TerminalVertex.tss_right):
-            if abs(v[1] - end) <= self.params.apa_delta:
+            if abs(v[1] - end) <= self.params.apa_delta and (max_position is None or v[1] <= max_position):
                 return v
+        if five_prime:
+            nearest = self.nearest_vertex([v for v in self.intron_graph.get_outgoing(intron, TerminalVertex.read_end)
+                                           if max_position is None or v[1] <= max_position], end)
+            if nearest is not None:
+                return nearest
 
         # consider all terminal position available for intron (bare read ends,
         # confirmed 5' TSS ends, and confirmed polyA ends). A TSS vertex is safe
@@ -123,12 +146,14 @@ class IntronPathProcessor:
             # if we have trusted read, in cannot stop earlier that rightmost end (otherwise it should match polyA)
             return rightmost_end
         elif not trusted and end <= rightmost_end[1] + self.params.apa_delta and \
-                (len(all_possible_ends) <= 1 or end > all_possible_ends[-2][1]):
+                (len(all_possible_ends) <= 1 or end > all_possible_ends[-2][1]) and \
+                (max_position is None or rightmost_end[1] <= max_position):
             # non trusted should end before rightmost position + apa_delta but not earlier than second last
             return rightmost_end
         return None
 
-    def thread_starts(self, intron, start, trusted=False):
+    def thread_starts(self, intron, start, trusted=False, five_prime: bool = False):
+        # five_prime: the start is a trusted '+' strand 5' end (IntronGraph.is_trusted_five_prime)
         possible_polyas = self.intron_graph.get_incoming(intron, TerminalVertex.polyt)
         if trusted:
             # find closes polyT
@@ -136,17 +161,27 @@ class IntronPathProcessor:
                 if abs(v[1] - start) <= self.params.apa_delta:
                     return v
 
+        # a trusted 5' start inside the exon takes only a vertex inside it, not one past an intron entering it
+        min_position = None
         incoming_introns = self.intron_graph.get_incoming(intron)
         if len(incoming_introns) > 0:
             # intron has outgoing edges
             leftmost_exon_start = min([intron[1] for intron in incoming_introns]) + 1
             if not trusted and start >= leftmost_exon_start - self.params.delta:
-                # read start lies within previous exon and has no polyA
-                return None
+                if not five_prime:
+                    # read start lies within previous exon and has no polyA
+                    return None
+                # rare novel introns do not bound the exon (as in IntronGraph.is_trusted_five_prime)
+                min_position = self.intron_graph.five_prime_vertex_limit(intron, start, True)
 
         for v in self.intron_graph.get_incoming(intron, TerminalVertex.tss_left):
-            if abs(v[1] - start) <= self.params.apa_delta:
+            if abs(v[1] - start) <= self.params.apa_delta and (min_position is None or v[1] >= min_position):
                 return v
+        if five_prime:
+            nearest = self.nearest_vertex([v for v in self.intron_graph.get_incoming(intron, TerminalVertex.read_start)
+                                           if min_position is None or v[1] >= min_position], start)
+            if nearest is not None:
+                return nearest
 
         all_possible_starts = sorted(list(self.intron_graph.get_incoming(intron, TerminalVertex.read_start)) +
                                      list(self.intron_graph.get_incoming(intron, TerminalVertex.tss_left)) +
@@ -158,6 +193,7 @@ class IntronPathProcessor:
         if trusted and start <= leftmost_start[1] and leftmost_start[0] == TerminalVertex.read_start:
             return leftmost_start
         elif not trusted and start >= leftmost_start[1] and \
-                (len(all_possible_starts) <= 1 or start < all_possible_starts[1][1]):
+                (len(all_possible_starts) <= 1 or start < all_possible_starts[1][1]) and \
+                (min_position is None or leftmost_start[1] >= min_position):
             return leftmost_start
         return None

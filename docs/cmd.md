@@ -82,9 +82,12 @@ See more in [examples](examples.md).
 ### Other input options:
 `--stranded`
     Reads strandness type, supported values are: `forward`, `reverse`, `none`.
+    Affects: (1) read alignment; (2) strand detection in cases when strand cannot be detected using other critera (poly-A tail, canonical splice junctions, assigned isoform).
 
 `--fl_data`
     Input sequences represent full-length transcripts; both ends of the sequence are considered to be reliable.
+When no poly-A tail is detected (e.g. trimmed FLNC reads), the read 3' end is treated as a poly-A site.
+A read 5' end is treated as TSS.
 
 `--polya_trimmed`
 
@@ -109,6 +112,7 @@ Indicate that reads were poly-A trimmed. Possible values are:
   Use this option only with `flnc.bam` input (where tails are removed).
 
 Note that IsoQuant still runs sequence-based polyA tail detection for every read. If the external information and the sequence disagree, the external information is used.
+The poly-A percentage in the log counts all reads marked as having a poly-A tail.
 
 `--illumina_bam`
     Sorted and indexed BAM file(s) with short Illumina reads from the same sample. Short reads are used only for
