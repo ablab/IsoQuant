@@ -82,7 +82,7 @@ See more in [examples](examples.md).
 ### Other input options:
 `--stranded`
     Reads strandness type, supported values are: `forward`, `reverse`, `none`.
-With `forward` or `reverse`, it also places the poly-A site set by `--fl_data` or `--polya_trimmed` on reads whose strand cannot be derived from the read itself.
+    Affects: (1) read alignment; (2) strand detection in cases when strand cannot be detected using other critera (poly-A tail, canonical splice junctions, assigned isoform).
 
 `--fl_data`
     Input sequences represent full-length transcripts; both ends of the sequence are considered to be reliable.
