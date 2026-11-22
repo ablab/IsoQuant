@@ -484,8 +484,8 @@ class AlignmentCollector:
             mapped_strand = "-" if alignment.is_reverse else "+"
             external_polya = self.get_external_polya(alignment, read_id)
             self.add_polya_info(alignment_info, external_polya, mapped_strand)
-            marked_strand = self.mark_polya_before_assignment(strand_predictor, alignment_info, external_polya,
-                                                              mapped_strand)
+            marked_strand = self.set_polya_before_assignment(strand_predictor, alignment_info, external_polya,
+                                                             mapped_strand)
             # if self.params.cage:
             #    alignment_info.add_cage_info(self.cage_finder)
             alignment_info.construct_profiles(profile_constructor)
@@ -530,7 +530,7 @@ class AlignmentCollector:
 
             if self.move_polya_site(read_assignment, alignment_info, external_polya, marked_strand) and \
                     AlignmentCollector.assign_again(assigner, profile_constructor, alignment_info, read_assignment):
-                # the site is not where it was before the assignment (the strand was not predicted or the read
+                # the strand is not the same as it was before the assignment (the strand was not predicted or the read
                 # was assigned to the other strand): the read was assigned again, redo the steps that depend on it
                 if self.is_low_mapq_inconsistent(read_assignment, alignment):
                     continue
@@ -657,18 +657,18 @@ class AlignmentCollector:
         # None when nothing is marked, including a tail already found at that end
         if not self.adds_polya_site(polya_info, external_polya):
             return None
-        site = mapped_strand if self.params.polya_trimmed == PolyATrimmed.all else strand
-        if site not in ('+', '-') or has_polya_on_strand(polya_info, site):
+        inferred_strand = mapped_strand if self.params.polya_trimmed == PolyATrimmed.all else strand
+        if inferred_strand not in ('+', '-') or has_polya_on_strand(polya_info, inferred_strand):
             return None
-        if self.params.polya_trimmed == PolyATrimmed.none and has_soft_clipped_polya_at_5_prime(polya_info, site):
+        if self.params.polya_trimmed == PolyATrimmed.none and has_soft_clipped_polya_at_5_prime(polya_info, inferred_strand):
             # --fl_data: a genomic A-run at the 5' end does not count as a tail,
             # but a soft-clipped tail there means the read comes from the other strand
             return None
-        return site
+        return inferred_strand
 
-    def mark_polya_before_assignment(self, strand_predictor: Optional[ReadStrandPredictor],
-                                     alignment_info: AlignmentInfo, external_polya: ExternalPolyA,
-                                     mapped_strand: str) -> Optional[str]:
+    def set_polya_before_assignment(self, strand_predictor: Optional[ReadStrandPredictor],
+                                    alignment_info: AlignmentInfo, external_polya: ExternalPolyA,
+                                    mapped_strand: str) -> Optional[str]:
         # marks the site on the predicted read strand before the profiles are built, as for a tail found
         # in the sequence; returns the marked end
         if strand_predictor is None or not self.adds_polya_site(alignment_info.polya_info, external_polya):
@@ -676,24 +676,24 @@ class AlignmentCollector:
         strand = None
         if self.params.polya_trimmed != PolyATrimmed.all:
             strand, _ = strand_predictor.predict(alignment_info.read_exons, alignment_info.polya_info, mapped_strand)
-        site = self.artificial_polya_strand(alignment_info.polya_info, external_polya, strand, mapped_strand)
-        inject_external_polya(alignment_info.polya_info, alignment_info.read_exons, site)
-        return site
+        marked_strand = self.artificial_polya_strand(alignment_info.polya_info, external_polya, strand, mapped_strand)
+        inject_external_polya(alignment_info.polya_info, alignment_info.read_exons, marked_strand)
+        return marked_strand
 
     def move_polya_site(self, read_assignment: ReadAssignment, alignment_info: AlignmentInfo,
                         external_polya: ExternalPolyA, marked_strand: Optional[str]) -> bool:
         # puts the site where the read strand from the assignment says, when it differs from the one marked
         # before the assignment; returns True when the site changed
         remove_external_polya(alignment_info.polya_info, marked_strand)
-        site = self.artificial_polya_strand(alignment_info.polya_info, external_polya, read_assignment.strand,
-                                            read_assignment.mapped_strand)
-        inject_external_polya(alignment_info.polya_info, alignment_info.read_exons, site)
-        return site != marked_strand
+        polya_strand_after_assignment = self.artificial_polya_strand(alignment_info.polya_info, external_polya, read_assignment.strand,
+                                                           read_assignment.mapped_strand)
+        inject_external_polya(alignment_info.polya_info, alignment_info.read_exons, polya_strand_after_assignment)
+        return polya_strand_after_assignment != marked_strand
 
     @staticmethod
     def assign_again(assigner: LongReadAssigner, profile_constructor: CombinedProfileConstructor,
                      alignment_info: AlignmentInfo, read_assignment: ReadAssignment) -> bool:
-        # the polyA site changed after the read was assigned: assign it again, as for a tail found in its
+        # the polyA side changed after the read was assigned: assign it again, as for a tail found in its
         # sequence; reads without an assigned isoform keep their assignment (returns False)
         if not any(m.assigned_transcript is not None for m in read_assignment.isoform_matches):
             return False

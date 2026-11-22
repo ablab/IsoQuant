@@ -405,23 +405,23 @@ class TestMarkBeforeAssignment:
     def test_fl_data(self, predicted, before, marked, after):
         read = _Read([(100, 200), (300, 400)], before)
         collector = _collector(PolyATrimmed.none, fl_data=True)
-        assert collector.mark_polya_before_assignment(_predictor(predicted), read, UNKNOWN, "+") == marked
+        assert collector.set_polya_before_assignment(_predictor(predicted), read, UNKNOWN, "+") == marked
         assert _positions(read.polya_info) == after
 
     def test_all_uses_the_mapped_strand(self):
         read = _Read([(100, 200), (300, 400)], _polya())
         collector = _collector(PolyATrimmed.all)
-        assert collector.mark_polya_before_assignment(_predictor("+"), read, UNKNOWN, "-") == "-"
+        assert collector.set_polya_before_assignment(_predictor("+"), read, UNKNOWN, "-") == "-"
         assert _positions(read.polya_info) == (-1, 99, -1, -1)
 
     @pytest.mark.parametrize("external, marked", [(PRESENT_NO_HINT, "-"), (UNKNOWN, None), (NO_TAIL_FOUND, None)])
     def test_external_tail_without_a_side(self, external, marked):
         read = _Read([(100, 200), (300, 400)], _polya())
-        assert _collector(PolyATrimmed.tag).mark_polya_before_assignment(_predictor("-"), read, external, "+") == marked
+        assert _collector(PolyATrimmed.tag).set_polya_before_assignment(_predictor("-"), read, external, "+") == marked
 
     def test_nothing_without_options(self):
         read = _Read([(100, 200), (300, 400)], _polya())
-        assert _collector(PolyATrimmed.none).mark_polya_before_assignment(None, read, UNKNOWN, "+") is None
+        assert _collector(PolyATrimmed.none).set_polya_before_assignment(None, read, UNKNOWN, "+") is None
         assert _positions(read.polya_info) == (-1, -1, -1, -1)
 
 
@@ -464,7 +464,7 @@ class TestAssignAgain:
         assigner, profile_constructor = _assigner(models)
         read = _Read(read_exons, _polya())
         collector = _collector(PolyATrimmed.none, fl_data=True)
-        marked = collector.mark_polya_before_assignment(_predictor(predicted), read, UNKNOWN, "+")
+        marked = collector.set_polya_before_assignment(_predictor(predicted), read, UNKNOWN, "+")
         read.construct_profiles(profile_constructor)
         read_assignment = assigner.assign_to_isoform("read", read.combined_profile)
         before = _summary(read_assignment)
