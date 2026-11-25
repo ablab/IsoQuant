@@ -458,7 +458,7 @@ class AlignmentCollector:
         exon_corrector = ExonCorrector(gene_info, self.params, self.chr_record)
         # a polyA site the options add goes in before the profiles are built, on the predicted read strand
         strand_predictor = ReadStrandPredictor(gene_info, self.chr_record, getattr(self.params, 'stranded', None)) \
-            if self.adds_polya_sites() else None
+            if self.options_add_polya_sites() else None
 
         counter = 0
         for bam_index, alignment in alignment_storage:
@@ -635,13 +635,13 @@ class AlignmentCollector:
                                       external_strand=resolve_external_strand(external_polya, mapped_strand),
                                       external_no_tail=external_polya.status == ExternalPolyAStatus.no_tail)
 
-    def adds_polya_sites(self) -> bool:
+    def options_add_polya_sites(self) -> bool:
         # whether the options can mark a polyA site on reads without a tail found in the sequence
         return (self.params.polya_trimmed in (PolyATrimmed.all, PolyATrimmed.stranded)
                 or self.params.polya_trimmed.uses_external_source()
                 or (self.params.polya_trimmed == PolyATrimmed.none and self.params.fl_data))
 
-    def adds_polya_site(self, polya_info: PolyAInfo, external_polya: ExternalPolyA) -> bool:
+    def adds_polya_site_to_read(self, polya_info: PolyAInfo, external_polya: ExternalPolyA) -> bool:
         # whether the options mark a polyA site on this read (wherever it goes)
         if self.params.polya_trimmed in (PolyATrimmed.all, PolyATrimmed.stranded):
             return True
@@ -655,7 +655,7 @@ class AlignmentCollector:
                                 strand: Optional[str], mapped_strand: str) -> Optional[str]:
         # the read end (as the transcript strand) the options mark as a polyA site for a read on the given strand;
         # None when nothing is marked, including a tail already found at that end
-        if not self.adds_polya_site(polya_info, external_polya):
+        if not self.adds_polya_site_to_read(polya_info, external_polya):
             return None
         inferred_strand = mapped_strand if self.params.polya_trimmed == PolyATrimmed.all else strand
         if inferred_strand not in ('+', '-') or has_polya_on_strand(polya_info, inferred_strand):
@@ -671,7 +671,7 @@ class AlignmentCollector:
                                     mapped_strand: str) -> Optional[str]:
         # marks the site on the predicted read strand before the profiles are built, as for a tail found
         # in the sequence; returns the marked end
-        if strand_predictor is None or not self.adds_polya_site(alignment_info.polya_info, external_polya):
+        if strand_predictor is None or not self.adds_polya_site_to_read(alignment_info.polya_info, external_polya):
             return None
         strand = None
         if self.params.polya_trimmed != PolyATrimmed.all:

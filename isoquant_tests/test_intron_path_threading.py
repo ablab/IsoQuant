@@ -99,7 +99,7 @@ def test_read_start_at_a_tss_inside_an_exon_with_incoming_introns_is_threaded():
     intron = (1000, 2000)
     p = _processor(intron, incoming=[(400, 600), (TerminalVertex.tss_left, 700)])
     assert p.thread_starts(intron, 710, trusted=False) is None
-    assert p.thread_starts(intron, 710, trusted=False, five_prime=True) == (TerminalVertex.tss_left, 700)
+    assert p.thread_starts(intron, 710, trusted=False, trusted_five_prime=True) == (TerminalVertex.tss_left, 700)
 
 
 def test_read_end_at_a_tss_inside_an_exon_with_outgoing_introns_is_threaded():
@@ -107,7 +107,7 @@ def test_read_end_at_a_tss_inside_an_exon_with_outgoing_introns_is_threaded():
     intron = (100, 200)
     p = _processor(intron, outgoing=[(1500, 1700), (TerminalVertex.tss_right, 1300)])
     assert p.thread_ends(intron, 1290, trusted=False) is None
-    assert p.thread_ends(intron, 1290, trusted=False, five_prime=True) == (TerminalVertex.tss_right, 1300)
+    assert p.thread_ends(intron, 1290, trusted=False, trusted_five_prime=True) == (TerminalVertex.tss_right, 1300)
 
 
 def test_read_start_at_a_tss_claims_the_nearest_read_start_vertex():
@@ -116,38 +116,38 @@ def test_read_start_at_a_tss_claims_the_nearest_read_start_vertex():
     p = _processor(intron, incoming=[(400, 600), (TerminalVertex.read_start, 700),
                                      (TerminalVertex.read_start, 760)])
     assert p.thread_starts(intron, 745, trusted=False) is None
-    assert p.thread_starts(intron, 745, trusted=False, five_prime=True) == (TerminalVertex.read_start, 760)
-    assert p.thread_starts(intron, 710, trusted=False, five_prime=True) == (TerminalVertex.read_start, 700)
+    assert p.thread_starts(intron, 745, trusted=False, trusted_five_prime=True) == (TerminalVertex.read_start, 760)
+    assert p.thread_starts(intron, 710, trusted=False, trusted_five_prime=True) == (TerminalVertex.read_start, 700)
 
 
 def test_read_end_at_a_tss_claims_the_nearest_read_end_vertex():
     intron = (100, 200)
     p = _processor(intron, outgoing=[(1500, 1700), (TerminalVertex.read_end, 1300)])
     assert p.thread_ends(intron, 1280, trusted=False) is None
-    assert p.thread_ends(intron, 1280, trusted=False, five_prime=True) == (TerminalVertex.read_end, 1300)
+    assert p.thread_ends(intron, 1280, trusted=False, trusted_five_prime=True) == (TerminalVertex.read_end, 1300)
 
 
 def test_trusted_start_inside_an_exon_is_not_threaded_past_the_incoming_intron():
     # the only read start vertex lies before the intron entering the exon (reads retaining that intron)
     intron = (1000, 2000)
     p = _processor(intron, incoming=[(400, 600), (TerminalVertex.read_start, 300)])
-    assert p.thread_starts(intron, 800, trusted=False, five_prime=True) is None
+    assert p.thread_starts(intron, 800, trusted=False, trusted_five_prime=True) is None
     # nor to a TSS vertex there
     p = _processor(intron, incoming=[(400, 600), (TerminalVertex.tss_left, 580)])
-    assert p.thread_starts(intron, 610, trusted=False, five_prime=True) is None
+    assert p.thread_starts(intron, 610, trusted=False, trusted_five_prime=True) is None
     # a vertex inside the exon takes the start even further than apa_delta away, as for an outer start
     p = _processor(intron, incoming=[(400, 600), (TerminalVertex.read_start, 700)])
-    assert p.thread_starts(intron, 800, trusted=False, five_prime=True) == (TerminalVertex.read_start, 700)
+    assert p.thread_starts(intron, 800, trusted=False, trusted_five_prime=True) == (TerminalVertex.read_start, 700)
 
 
 def test_trusted_end_inside_an_exon_is_not_threaded_past_the_outgoing_intron():
     intron = (100, 200)
     p = _processor(intron, outgoing=[(1500, 1700), (TerminalVertex.read_end, 1900)])
-    assert p.thread_ends(intron, 1200, trusted=False, five_prime=True) is None
+    assert p.thread_ends(intron, 1200, trusted=False, trusted_five_prime=True) is None
     p = _processor(intron, outgoing=[(1500, 1700), (TerminalVertex.tss_right, 1520)])
-    assert p.thread_ends(intron, 1490, trusted=False, five_prime=True) is None
+    assert p.thread_ends(intron, 1490, trusted=False, trusted_five_prime=True) is None
     p = _processor(intron, outgoing=[(1500, 1700), (TerminalVertex.read_end, 1300)])
-    assert p.thread_ends(intron, 1200, trusted=False, five_prime=True) == (TerminalVertex.read_end, 1300)
+    assert p.thread_ends(intron, 1200, trusted=False, trusted_five_prime=True) == (TerminalVertex.read_end, 1300)
 
 
 def test_rare_novel_intron_does_not_bound_the_exon_of_a_trusted_start():
@@ -155,12 +155,12 @@ def test_rare_novel_intron_does_not_bound_the_exon_of_a_trusted_start():
     intron = (1000, 2000)
     incoming = [(400, 600), (TerminalVertex.read_start, 594)]
     p = _processor(intron, incoming=incoming, coverage={(400, 600): 1})
-    assert p.thread_starts(intron, 601, trusted=False, five_prime=True) == (TerminalVertex.read_start, 594)
+    assert p.thread_starts(intron, 601, trusted=False, trusted_five_prime=True) == (TerminalVertex.read_start, 594)
     # an annotated or well-supported intron still bounds it
     p = _processor(intron, incoming=incoming, coverage={(400, 600): 1}, known_introns=[(400, 600)])
-    assert p.thread_starts(intron, 601, trusted=False, five_prime=True) is None
+    assert p.thread_starts(intron, 601, trusted=False, trusted_five_prime=True) is None
     p = _processor(intron, incoming=incoming)
-    assert p.thread_starts(intron, 601, trusted=False, five_prime=True) is None
+    assert p.thread_starts(intron, 601, trusted=False, trusted_five_prime=True) is None
     # an untrusted start stays rejected, as on master
     p = _processor(intron, incoming=incoming, coverage={(400, 600): 1})
     assert p.thread_starts(intron, 601, trusted=False) is None
@@ -170,10 +170,10 @@ def test_rare_novel_intron_does_not_bound_the_exon_of_a_trusted_end():
     intron = (100, 200)
     outgoing = [(1500, 1700), (TerminalVertex.read_end, 1506)]
     p = _processor(intron, outgoing=outgoing, coverage={(1500, 1700): 1})
-    assert p.thread_ends(intron, 1499, trusted=False, five_prime=True) == (TerminalVertex.read_end, 1506)
+    assert p.thread_ends(intron, 1499, trusted=False, trusted_five_prime=True) == (TerminalVertex.read_end, 1506)
     p = _processor(intron, outgoing=outgoing, coverage={(1500, 1700): 1}, known_introns=[(1500, 1700)])
-    assert p.thread_ends(intron, 1499, trusted=False, five_prime=True) is None
+    assert p.thread_ends(intron, 1499, trusted=False, trusted_five_prime=True) is None
     p = _processor(intron, outgoing=outgoing)
-    assert p.thread_ends(intron, 1499, trusted=False, five_prime=True) is None
+    assert p.thread_ends(intron, 1499, trusted=False, trusted_five_prime=True) is None
     p = _processor(intron, outgoing=outgoing, coverage={(1500, 1700): 1})
     assert p.thread_ends(intron, 1499, trusted=False) is None

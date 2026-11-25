@@ -397,8 +397,8 @@ def cluster_terminal_positions(position_dict, read_end=True, min_abs=1):
   `set_polya_after_assignment` puts the site on the strand `get_assignment_strand` gives; when it moved (strand
   undecided or the other one, about 2% of FL reads), `assign_again` rebuilds the profiles and assigns
   the read once more, followed by the inconsistent-MAPQ filter, exon correction and the antisense check.
-- 5' end: `IntronGraph.is_trusted_five_prime(intron, position, genomic_left)` decides whether a read
-  start ('+') or end ('-') is a transcription start. It is True at a predicted TSS
+- 5' end: `IntronGraph.is_trusted_five_prime(intron, position, is_genomic_forward)` decides whether a read
+  start ('+', `is_genomic_forward=True`) or end ('-', `False`) is a transcription start. It is True at a predicted TSS
   (`is_at_predicted_tss`: within `apa_delta` of any TSS predicted in the block,
   `predicted_tss_positions`, all predictions, not only admissible ones: minimap2 often truncates the
   first exons behind long introns, so the read starts at a later exon). With `--fl_data` it is also
@@ -414,7 +414,7 @@ def cluster_terminal_positions(position_dict, read_end=True, min_abs=1):
   (`is_start_internal`/`is_end_internal`), but an intron has a single read-start/end vertex at its
   outermost terminus, so a terminus inside the exon of a supported intron makes it only when no read
   starts (ends) outside the exon; one inside the exon only by noise introns counts as outside.
-  `thread_starts`/`thread_ends(five_prime=True)` skip the "inside the previous exon" rejection and claim
+  `thread_starts`/`thread_ends(trusted_five_prime=True)` skip the "inside the previous exon" rejection and claim
   a TSS vertex or the nearest read-start/read-end vertex within `apa_delta`, else fall back to the
   outermost vertex; for a terminus inside the exon of a supported intron every candidate must lie
   inside the exon too (`five_prime_vertex_limit`, the `is_start_internal` bound over supported

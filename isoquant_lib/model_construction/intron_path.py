@@ -35,9 +35,10 @@ class IntronPathStorage:
             is_end_trusted = a.strand == '+' and \
                 (a.polya_info.external_polya_pos != -1 or
                  a.polya_info.internal_polya_pos != -1)
-            is_end_tss = a.strand == '-' and self.intron_graph.is_trusted_five_prime(intron_path[-1], read_end, False)
+            is_end_trusted_five_prime = a.strand == '-' and \
+                self.intron_graph.is_trusted_five_prime(intron_path[-1], read_end, is_genomic_forward=False)
             terminal_vertex = self.path_processor.thread_ends(intron_path[-1], read_end, is_end_trusted,
-                                                              five_prime=is_end_tss)
+                                                              trusted_five_prime=is_end_trusted_five_prime)
             if terminal_vertex:
                 intron_path.append(terminal_vertex)
 
@@ -45,9 +46,10 @@ class IntronPathStorage:
             is_start_trusted = a.strand == '-' and \
                 (a.polya_info.external_polyt_pos != -1 or
                  a.polya_info.internal_polyt_pos != -1)
-            is_start_tss = a.strand == '+' and self.intron_graph.is_trusted_five_prime(intron_path[0], read_start, True)
+            is_start_trusted_five_prime = a.strand == '+' and \
+                self.intron_graph.is_trusted_five_prime(intron_path[0], read_start, is_genomic_forward=True)
             starting_vertex = self.path_processor.thread_starts(intron_path[0], read_start, is_start_trusted,
-                                                                five_prime=is_start_tss)
+                                                                trusted_five_prime=is_start_trusted_five_prime)
             if starting_vertex:
                 intron_path = [starting_vertex] + intron_path
 
@@ -95,8 +97,8 @@ class IntronPathProcessor:
             return None
         return nearest
 
-    def thread_ends(self, intron, end, trusted=False, five_prime: bool = False):
-        # five_prime: the end is a trusted '-' strand 5' end (IntronGraph.is_trusted_five_prime)
+    def thread_ends(self, intron, end, trusted=False, trusted_five_prime: bool = False):
+        # trusted_five_prime: the end is a trusted '-' strand 5' end (IntronGraph.is_trusted_five_prime)
         possible_polyas = self.intron_graph.get_outgoing(intron, TerminalVertex.polya)
         if trusted:
             # find closes polyA
@@ -111,11 +113,11 @@ class IntronPathProcessor:
             # intron has outgoing edges
             rightmost_exon_end = max([intron[0] for intron in outgoing_introns]) - 1
             if not trusted and end <= rightmost_exon_end + self.params.delta:
-                if not five_prime:
+                if not trusted_five_prime:
                     # read end lies within next exon and has no polyA
                     return None
                 # rare novel introns do not bound the exon (as in IntronGraph.is_trusted_five_prime)
-                max_position = self.intron_graph.five_prime_vertex_limit(intron, end, False)
+                max_position = self.intron_graph.five_prime_vertex_limit(intron, end, is_genomic_forward=False)
 
         # A confirmed 5' TSS vertex claims only the reads that actually end at it
         # (same rule as the trusted-polyA lookup above). It must NOT enter the
@@ -125,7 +127,7 @@ class IntronPathProcessor:
         for v in self.intron_graph.get_outgoing(intron, TerminalVertex.tss_right):
             if abs(v[1] - end) <= self.params.apa_delta and (max_position is None or v[1] <= max_position):
                 return v
-        if five_prime:
+        if trusted_five_prime:
             nearest = self.nearest_vertex([v for v in self.intron_graph.get_outgoing(intron, TerminalVertex.read_end)
                                            if max_position is None or v[1] <= max_position], end)
             if nearest is not None:
@@ -152,8 +154,8 @@ class IntronPathProcessor:
             return rightmost_end
         return None
 
-    def thread_starts(self, intron, start, trusted=False, five_prime: bool = False):
-        # five_prime: the start is a trusted '+' strand 5' end (IntronGraph.is_trusted_five_prime)
+    def thread_starts(self, intron, start, trusted=False, trusted_five_prime: bool = False):
+        # trusted_five_prime: the start is a trusted '+' strand 5' end (IntronGraph.is_trusted_five_prime)
         possible_polyas = self.intron_graph.get_incoming(intron, TerminalVertex.polyt)
         if trusted:
             # find closes polyT
@@ -168,16 +170,16 @@ class IntronPathProcessor:
             # intron has outgoing edges
             leftmost_exon_start = min([intron[1] for intron in incoming_introns]) + 1
             if not trusted and start >= leftmost_exon_start - self.params.delta:
-                if not five_prime:
+                if not trusted_five_prime:
                     # read start lies within previous exon and has no polyA
                     return None
                 # rare novel introns do not bound the exon (as in IntronGraph.is_trusted_five_prime)
-                min_position = self.intron_graph.five_prime_vertex_limit(intron, start, True)
+                min_position = self.intron_graph.five_prime_vertex_limit(intron, start, is_genomic_forward=True)
 
         for v in self.intron_graph.get_incoming(intron, TerminalVertex.tss_left):
             if abs(v[1] - start) <= self.params.apa_delta and (min_position is None or v[1] >= min_position):
                 return v
-        if five_prime:
+        if trusted_five_prime:
             nearest = self.nearest_vertex([v for v in self.intron_graph.get_incoming(intron, TerminalVertex.read_start)
                                            if min_position is None or v[1] >= min_position], start)
             if nearest is not None:
