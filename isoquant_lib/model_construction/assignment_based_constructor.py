@@ -118,9 +118,9 @@ class AssignmentBasedConstructor:
         # logger.debug("PolyT terminal exons: " + str(polyt_exons))
         return polya_exons, polyt_exons
 
-    def is_internal_monoexonic_read(self, alignment, terminal_exons, forward=True):
+    def is_internal_monoexonic_read(self, alignment, terminal_exons, is_genomic_forward: bool = True) -> bool:
         read_coordinates = alignment.corrected_exons[0]
-        if forward:
+        if is_genomic_forward:
             for e in terminal_exons:
                 if abs(e[1] - alignment.corrected_exons[-1][1]) <= self.args.apa_delta and \
                         read_coordinates[0] >= e[0] - self.args.delta:
@@ -139,19 +139,19 @@ class AssignmentBasedConstructor:
         polyt_reads = defaultdict(list)
         for a in novel_mono_exon_reads:
             if a.polya_info.external_polya_pos != -1:
-                if not self.is_internal_monoexonic_read(a, polya_exons, forward=True):
+                if not self.is_internal_monoexonic_read(a, polya_exons, is_genomic_forward=True):
                     polya_reads[a.polya_info.external_polya_pos].append(a)
             if a.polya_info.external_polyt_pos != -1:
-                if not self.is_internal_monoexonic_read(a, polyt_exons, forward=False):
+                if not self.is_internal_monoexonic_read(a, polyt_exons, is_genomic_forward=False):
                     polyt_reads[a.polya_info.external_polyt_pos].append(a)
 
         novel_monoexon = set()
         clustered_polya_reads = self.cluster_monoexons(polya_reads)
-        novel_monoexon.update(self.generate_monoexon_from_clustered(clustered_polya_reads, True))
+        novel_monoexon.update(self.generate_monoexon_from_clustered(clustered_polya_reads, is_genomic_forward=True))
         clustered_polyt_reads = self.cluster_monoexons(polyt_reads)
-        novel_monoexon.update(self.generate_monoexon_from_clustered(clustered_polyt_reads, False))
+        novel_monoexon.update(self.generate_monoexon_from_clustered(clustered_polyt_reads, is_genomic_forward=False))
 
-    def generate_monoexon_from_clustered(self, clustered_reads, forward=True):
+    def generate_monoexon_from_clustered(self, clustered_reads, is_genomic_forward: bool = True):
         cutoff = self.args.min_novel_count
         result = set()
         for three_prime_pos in clustered_reads.keys():
@@ -159,13 +159,13 @@ class AssignmentBasedConstructor:
             if count < cutoff:
                 continue
             # TODO improve
-            if forward:
+            if is_genomic_forward:
                 five_prime_pos = min([a.corrected_exons[0][0] for a in clustered_reads[three_prime_pos]])
             else:
                 five_prime_pos = max([a.corrected_exons[-1][1] for a in clustered_reads[three_prime_pos]])
 
-            strand = '+' if forward else '-'
-            coordinates = (five_prime_pos, three_prime_pos) if forward else (three_prime_pos, five_prime_pos)
+            strand = '+' if is_genomic_forward else '-'
+            coordinates = (five_prime_pos, three_prime_pos) if is_genomic_forward else (three_prime_pos, five_prime_pos)
             new_transcript_id = TranscriptNaming.transcript_prefix + str(self.ctx.get_transcript_id())
             transcript_gene = (TranscriptNaming.novel_gene_prefix + self.gene_info.chr_id +
                                "_" + str(self.ctx.get_transcript_id()))
