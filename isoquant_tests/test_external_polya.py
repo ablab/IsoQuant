@@ -286,7 +286,7 @@ class TestArtificialPolyA:
     @pytest.mark.parametrize("mode", [PolyATrimmed.tag, PolyATrimmed.list, PolyATrimmed.flnc])
     def test_external_modes(self, mode, external, strand, before, after):
         read_assignment = _read_assignment(strand, "+", before)
-        _collector(mode).add_artificial_polya(read_assignment, external)
+        _collector(mode).set_artificial_polya_for_intergenic(read_assignment, external)
         assert _positions(read_assignment.polya_info) == after
 
     @pytest.mark.parametrize("mode, strand, mapped_strand, after", [
@@ -297,13 +297,13 @@ class TestArtificialPolyA:
     ])
     def test_existing_modes(self, mode, strand, mapped_strand, after):
         read_assignment = _read_assignment(strand, mapped_strand, _polya())
-        _collector(mode).add_artificial_polya(read_assignment)
+        _collector(mode).set_artificial_polya_for_intergenic(read_assignment)
         assert _positions(read_assignment.polya_info) == after
 
     @pytest.mark.parametrize("mode", [PolyATrimmed.stranded, PolyATrimmed.all])
     def test_existing_modes_keep_a_detected_tail(self, mode):
         read_assignment = _read_assignment("+", "+", _polya(ext_a=410))
-        _collector(mode).add_artificial_polya(read_assignment)
+        _collector(mode).set_artificial_polya_for_intergenic(read_assignment)
         assert _positions(read_assignment.polya_info) == (410, -1, -1, -1)
 
     @pytest.mark.parametrize("strand, before, after", [
@@ -323,7 +323,7 @@ class TestArtificialPolyA:
     ])
     def test_fl_data(self, strand, before, after):
         read_assignment = _read_assignment(strand, "+", before)
-        _collector(PolyATrimmed.none, fl_data=True).add_artificial_polya(read_assignment)
+        _collector(PolyATrimmed.none, fl_data=True).set_artificial_polya_for_intergenic(read_assignment)
         assert _positions(read_assignment.polya_info) == after
 
     @pytest.mark.parametrize("mode, external, after", [
@@ -335,7 +335,7 @@ class TestArtificialPolyA:
     ])
     def test_fl_data_with_polya_trimmed(self, mode, external, after):
         read_assignment = _read_assignment("-", "+", _polya())
-        _collector(mode, fl_data=True).add_artificial_polya(read_assignment, external)
+        _collector(mode, fl_data=True).set_artificial_polya_for_intergenic(read_assignment, external)
         assert _positions(read_assignment.polya_info) == after
 
 

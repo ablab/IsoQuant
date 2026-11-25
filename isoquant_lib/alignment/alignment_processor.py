@@ -446,7 +446,7 @@ class AlignmentCollector:
             read_assignment.multimapper = alignment.is_secondary
             read_assignment.mapping_quality = alignment.mapping_quality
 
-            self.add_artificial_polya(read_assignment, external_polya)
+            self.set_artificial_polya_for_intergenic(read_assignment, external_polya)
             read_assignment.polyA_found = has_any_polya(alignment_info.polya_info)
 
             AlignmentCollector.import_bam_tags(alignment, read_assignment, self.params.bam_tags)
@@ -711,7 +711,7 @@ class AlignmentCollector:
                                                         ReadAssignmentType.ambiguous]
                 and alignment.mapping_quality < self.params.inconsistent_mapq_cutoff)
 
-    def add_artificial_polya(self, read_assignment, external_polya: ExternalPolyA = UNKNOWN) -> None:
+    def set_artificial_polya_for_intergenic(self, read_assignment, external_polya: ExternalPolyA = UNKNOWN) -> None:
         # intergenic reads: the site goes on the read strand once it is known
         polya_strand = self.artificial_polya_strand(read_assignment.polya_info, external_polya, read_assignment.strand,
                                                     read_assignment.mapped_strand)
