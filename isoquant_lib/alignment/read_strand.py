@@ -42,7 +42,7 @@ class ReadStrandPredictor:
     def __init__(self, gene_info, chr_record, stranded: Optional[str] = None):
         self.chr_record = chr_record
         # per region: reads share their introns, and chr_record is usually read from disk (pyfaidx)
-        self.canonical_strands: Dict[Tuple[int, int], str] = {}
+        self.splice_site_strands: Dict[Tuple[int, int], str] = {}
         self.library_hint: Optional[str] = hint_from_strandedness(stranded)
         self.intron_strands: Dict[Tuple[int, int], Set[str]] = {}
         for isoform_id, introns in gene_info.all_isoforms_introns.items():
@@ -91,10 +91,10 @@ class ReadStrandPredictor:
             if annotated:
                 strands.update(annotated)
             elif self.chr_record is not None:
-                strand = self.canonical_strands.get(intron)
+                strand = self.splice_site_strands.get(intron)
                 if strand is None:
                     strand = get_intron_strand(intron, self.chr_record)
-                    self.canonical_strands[intron] = strand
+                    self.splice_site_strands[intron] = strand
                 if strand != ".":
                     strands.add(strand)
             if len(strands) > 1:
