@@ -9,7 +9,7 @@ import logging
 from typing import Optional
 
 from isoquant_lib.common import get_read_blocks
-from isoquant_lib.terminal_prediction.external_polya import inject_external_polya, reconcile_polya
+from isoquant_lib.terminal_prediction.external_polya import add_artificial_polya_site, reconcile_polya
 from isoquant_lib.terminal_prediction.polya_finder import PolyAInfo
 from isoquant_lib.terminal_prediction.polya_verification import shift_polya, shift_polyt
 
@@ -152,4 +152,4 @@ class AlignmentInfo:
             self.read_start = self.read_exons[0][0]
             self.read_end = self.read_exons[-1][1]
 
-        inject_external_polya(self.polya_info, self.read_exons, external_strand)
+        add_artificial_polya_site(self.polya_info, self.read_exons, external_strand)
