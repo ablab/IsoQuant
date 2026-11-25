@@ -528,7 +528,7 @@ class AlignmentCollector:
             read_assignment.multimapper = alignment.is_secondary
             read_assignment.mapping_quality = alignment.mapping_quality
 
-            if self.move_polya_site(read_assignment, alignment_info, external_polya, marked_strand) and \
+            if self.set_polya_after_assignment(read_assignment, alignment_info, external_polya, marked_strand) and \
                     AlignmentCollector.assign_again(assigner, profile_constructor, alignment_info, read_assignment):
                 # the strand is not the same as it was before the assignment (the strand was not predicted or the read
                 # was assigned to the other strand): the read was assigned again, redo the steps that depend on it
@@ -680,13 +680,14 @@ class AlignmentCollector:
         inject_external_polya(alignment_info.polya_info, alignment_info.read_exons, marked_strand)
         return marked_strand
 
-    def move_polya_site(self, read_assignment: ReadAssignment, alignment_info: AlignmentInfo,
-                        external_polya: ExternalPolyA, marked_strand: Optional[str]) -> bool:
+    def set_polya_after_assignment(self, read_assignment: ReadAssignment, alignment_info: AlignmentInfo,
+                                   external_polya: ExternalPolyA, marked_strand: Optional[str]) -> bool:
         # puts the site where the read strand from the assignment says, when it differs from the one marked
-        # before the assignment; returns True when the site changed
+        # before the assignment; returns True when the polyA strand changed
         remove_external_polya(alignment_info.polya_info, marked_strand)
-        polya_strand_after_assignment = self.artificial_polya_strand(alignment_info.polya_info, external_polya, read_assignment.strand,
-                                                           read_assignment.mapped_strand)
+        polya_strand_after_assignment = self.artificial_polya_strand(alignment_info.polya_info, external_polya,
+                                                                     read_assignment.strand,
+                                                                     read_assignment.mapped_strand)
         inject_external_polya(alignment_info.polya_info, alignment_info.read_exons, polya_strand_after_assignment)
         return polya_strand_after_assignment != marked_strand
 
@@ -712,9 +713,9 @@ class AlignmentCollector:
 
     def add_artificial_polya(self, read_assignment, external_polya: ExternalPolyA = UNKNOWN) -> None:
         # intergenic reads: the site goes on the read strand once it is known
-        site = self.artificial_polya_strand(read_assignment.polya_info, external_polya, read_assignment.strand,
-                                            read_assignment.mapped_strand)
-        inject_external_polya(read_assignment.polya_info, read_assignment.corrected_exons, site)
+        polya_strand = self.artificial_polya_strand(read_assignment.polya_info, external_polya, read_assignment.strand,
+                                                    read_assignment.mapped_strand)
+        inject_external_polya(read_assignment.polya_info, read_assignment.corrected_exons, polya_strand)
 
     @staticmethod
     def split_coverage_regions(genomic_region, alignment_storage):
