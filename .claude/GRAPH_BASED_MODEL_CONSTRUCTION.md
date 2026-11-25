@@ -393,8 +393,8 @@ def cluster_terminal_positions(position_dict, read_end=True, min_abs=1):
   `ReadStrandPredictor` (`alignment/read_strand.py`) derives the read strand from a tail at one end,
   annotated introns (exact) and canonical sites of the other introns, or the annotated transcripts
   overlapping an unspliced read, with `--stranded` last;
-  `AlignmentCollector.mark_polya_before_assignment` marks that end. After assignment
-  `move_polya_site` puts the site on the strand `get_assignment_strand` gives; when it moved (strand
+  `AlignmentCollector.set_polya_before_assignment` marks that end. After assignment
+  `set_polya_after_assignment` puts the site on the strand `get_assignment_strand` gives; when it moved (strand
   undecided or the other one, about 2% of FL reads), `assign_again` rebuilds the profiles and assigns
   the read once more, followed by the inconsistent-MAPQ filter, exon correction and the antisense check.
 - 5' end: `IntronGraph.is_trusted_five_prime(intron, position, genomic_left)` decides whether a read

@@ -390,7 +390,7 @@ def _predictor(strand):
     return SimpleNamespace(predict=lambda read_exons, polya_info, mapped_strand: (strand, None))
 
 
-class TestMarkBeforeAssignment:
+class TestSetPolyABeforeAssignment:
     """The site goes in before the profiles are built, on the predicted read strand."""
 
     @pytest.mark.parametrize("predicted, before, marked, after", [
@@ -425,7 +425,7 @@ class TestMarkBeforeAssignment:
         assert _positions(read.polya_info) == (-1, -1, -1, -1)
 
 
-class TestMovePolyASite:
+class TestSetPolyAAfterAssignment:
     """After the assignment the site follows the read strand; a moved site means the read is assigned again."""
 
     @staticmethod
@@ -433,7 +433,7 @@ class TestMovePolyASite:
         read = _Read([(100, 200), (300, 400)], polya)
         inject_external_polya(read.polya_info, read.read_exons, marked)
         read_assignment = SimpleNamespace(strand=strand, mapped_strand="+")
-        moved = _collector(mode, fl_data).move_polya_site(read_assignment, read, UNKNOWN, marked)
+        moved = _collector(mode, fl_data).set_polya_after_assignment(read_assignment, read, UNKNOWN, marked)
         return moved, _positions(read.polya_info)
 
     def test_predicted_strand_confirmed(self):
@@ -469,7 +469,7 @@ class TestAssignAgain:
         read_assignment = assigner.assign_to_isoform("read", read.combined_profile)
         before = _summary(read_assignment)
         read_assignment.strand, read_assignment.mapped_strand = strand, "+"
-        assigned_again = collector.move_polya_site(read_assignment, read, UNKNOWN, marked) and \
+        assigned_again = collector.set_polya_after_assignment(read_assignment, read, UNKNOWN, marked) and \
             AlignmentCollector.assign_again(assigner, profile_constructor, read, read_assignment)
         return before, _summary(read_assignment), assigned_again
 
