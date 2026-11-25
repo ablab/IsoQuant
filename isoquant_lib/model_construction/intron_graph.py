@@ -660,8 +660,9 @@ class IntronGraph:
                 polyt_starts[starting_intron][read_start] += 1
             elif not self.is_start_internal(starting_intron, read_start):
                 read_starts[starting_intron][read_start] += 1
-            elif assignment.strand == '+' and self.is_trusted_five_prime(starting_intron, read_start, True):
-                if self.five_prime_vertex_limit(starting_intron, read_start, True) is None:
+            elif assignment.strand == '+' and \
+                    self.is_trusted_five_prime(starting_intron, read_start, is_genomic_forward=True):
+                if self.five_prime_vertex_limit(starting_intron, read_start, is_genomic_forward=True) is None:
                     # inside the exon only by rare novel introns
                     read_starts[starting_intron][read_start] += 1
                 else:
@@ -679,8 +680,9 @@ class IntronGraph:
                 polya_ends[terminating_intron][read_end] += 1
             elif not self.is_end_internal(terminating_intron, read_end):
                 read_ends[terminating_intron][read_end] += 1
-            elif assignment.strand == '-' and self.is_trusted_five_prime(terminating_intron, read_end, False):
-                if self.five_prime_vertex_limit(terminating_intron, read_end, False) is None:
+            elif assignment.strand == '-' and \
+                    self.is_trusted_five_prime(terminating_intron, read_end, is_genomic_forward=False):
+                if self.five_prime_vertex_limit(terminating_intron, read_end, is_genomic_forward=False) is None:
                     read_ends[terminating_intron][read_end] += 1
                 else:
                     internal_read_ends[terminating_intron][read_end] += 1
@@ -753,37 +755,41 @@ class IntronGraph:
         return any(abs(self.predicted_tss_positions[j] - position) <= self.params.apa_delta
                    for j in (i - 1, i) if 0 <= j < len(self.predicted_tss_positions))
 
-    def is_trusted_five_prime(self, intron: Tuple[int, int], position: int, genomic_left: bool) -> bool:
+    def is_trusted_five_prime(self, intron: Tuple[int, int], position: int, is_genomic_forward: bool) -> bool:
         # a 5' end at a predicted TSS is a transcription start; with --fl_data so is any other 5' end,
         # except near the acceptor of an annotated or well-supported intron entering this exon, where reads
-        # whose short first exon was soft-clipped by the aligner start
+        # whose short first exon was soft-clipped by the aligner start;
+        # is_genomic_forward: '+' strand read, its 5' end is the read start (smaller coordinate),
+        # otherwise '-' strand read, its 5' end is the read end
         if self.is_at_predicted_tss(position):
             return True
         if not getattr(self.params, 'fl_data', False):
             return False
-        for v in self.supported_neighbours(intron, genomic_left):
-            acceptor = v[1] + 1 if genomic_left else v[0] - 1
+        for v in self.supported_neighbours(intron, is_genomic_forward):
+            acceptor = v[1] + 1 if is_genomic_forward else v[0] - 1
             if abs(position - acceptor) <= self.params.apa_delta:
                 return False
         return True
 
-    def supported_neighbours(self, intron: Tuple[int, int], genomic_left: bool) -> List[Tuple[int, int]]:
-        # annotated or well-supported introns entering (genomic_left) or leaving the exon next to intron;
+    def supported_neighbours(self, intron: Tuple[int, int], is_genomic_forward: bool) -> List[Tuple[int, int]]:
+        # annotated or well-supported introns entering (is_genomic_forward) or leaving the exon next to intron;
         # rare novel introns are alignment noise and do not bound the exon
         collector = self.intron_collector
         min_coverage = max(self.params.min_novel_count,
                            self.params.min_novel_count_rel * collector.clustered_introns[intron])
-        neighbours = self.get_incoming(intron) if genomic_left else self.get_outgoing(intron)
+        neighbours = self.get_incoming(intron) if is_genomic_forward else self.get_outgoing(intron)
         return [v for v in neighbours if v in collector.known_introns or collector.clustered_introns[v] >= min_coverage]
 
-    def five_prime_vertex_limit(self, intron: Tuple[int, int], position: int, genomic_left: bool) -> Optional[int]:
+    def five_prime_vertex_limit(self, intron: Tuple[int, int], position: int,
+                                is_genomic_forward: bool) -> Optional[int]:
         # a trusted 5' end inside the exon that a supported intron enters (leaves) takes only a vertex inside
         # that exon: the outermost vertex position it may take, with the bound of is_start_internal
         # (is_end_internal); None when no supported intron makes the end internal
-        boundaries = [v[1] if genomic_left else v[0] for v in self.supported_neighbours(intron, genomic_left)]
+        boundaries = [v[1] if is_genomic_forward else v[0]
+                      for v in self.supported_neighbours(intron, is_genomic_forward)]
         if not boundaries:
             return None
-        if genomic_left:
+        if is_genomic_forward:
             limit = min(boundaries) - self.params.delta
             return limit if position >= limit else None
         limit = max(boundaries) + self.params.delta

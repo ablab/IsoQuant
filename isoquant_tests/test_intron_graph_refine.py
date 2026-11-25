@@ -346,5 +346,5 @@ def test_is_trusted_five_prime_window_is_apa_delta():
         upstream = (400, 700 - acceptor_offset - 1)
         downstream = (2300 + acceptor_offset + 1, 2700)
         g = _terminal_graph([], [], fl_data=True, upstream=upstream, downstream=downstream)
-        assert g.is_trusted_five_prime(INNER_INTRON, 700, True) is trusted
-        assert g.is_trusted_five_prime(INNER_INTRON, 2300, False) is trusted
+        assert g.is_trusted_five_prime(INNER_INTRON, 700, is_genomic_forward=True) is trusted
+        assert g.is_trusted_five_prime(INNER_INTRON, 2300, is_genomic_forward=False) is trusted
