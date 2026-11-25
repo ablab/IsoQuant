@@ -146,8 +146,8 @@ def reconcile_polya(polya_info: PolyAInfo, external_strand: Optional[str], exter
         polya_info.internal_polya_pos = -1
 
 
-def inject_external_polya(polya_info: PolyAInfo, read_exons: List[Tuple[int, int]],
-                          strand: Optional[str]) -> None:
+def add_artificial_polya_site(polya_info: PolyAInfo, read_exons: List[Tuple[int, int]],
+                              strand: Optional[str]) -> None:
     """Mark a tail at the read end of the given genomic strand, unless the sequence already found one there."""
     if has_polya_on_strand(polya_info, strand):
         return
@@ -157,8 +157,8 @@ def inject_external_polya(polya_info: PolyAInfo, read_exons: List[Tuple[int, int
         polya_info.external_polyt_pos = read_exons[0][0] - 1
 
 
-def remove_external_polya(polya_info: PolyAInfo, strand: Optional[str]) -> None:
-    """Undo inject_external_polya for the given genomic strand (it marks only an end without a found tail)."""
+def remove_artificial_polya_site(polya_info: PolyAInfo, strand: Optional[str]) -> None:
+    """Undo add_artificial_polya_site for the given genomic strand (it marks only an end without a found tail)."""
     if strand == "+":
         polya_info.external_polya_pos = -1
     elif strand == "-":

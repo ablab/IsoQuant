@@ -387,7 +387,7 @@ def cluster_terminal_positions(position_dict, read_end=True, min_abs=1):
 ### Full-length reads (`--fl_data`)
 
 - 3' end: a read without a detected polyA tail (and without polyT soft-clipped at its 5' end) gets
-  an artificial polyA at its 3' end (`inject_external_polya`), so its end is trusted when threading.
+  an artificial polyA at its 3' end (`add_artificial_polya_site`), so its end is trusted when threading.
   As for every site the options add (`--polya_trimmed`, tag/list tails without a side), the site goes
   in before the profiles are built, so the read is assigned as for a tail found in its sequence:
   `ReadStrandPredictor` (`alignment/read_strand.py`) derives the read strand from a tail at one end,

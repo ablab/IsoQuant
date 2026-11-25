@@ -23,10 +23,10 @@ from isoquant_lib.terminal_prediction.external_polya import (
     PRESENT_REVERSE,
     UNKNOWN,
     ExternalPolyAStatus,
+    add_artificial_polya_site,
     external_polya_from_tag,
     has_any_polya,
     hint_from_strandedness,
-    inject_external_polya,
     load_polya_read_dict,
     normalize_polya_reads,
     reconcile_polya,
@@ -220,7 +220,7 @@ class TestReconcile:
     ])
     def test_inject(self, before, strand, after):
         info = PolyAInfo(*before)
-        inject_external_polya(info, [(100, 200), (300, 400)], strand)
+        add_artificial_polya_site(info, [(100, 200), (300, 400)], strand)
         assert _positions(info) == after
 
 
@@ -431,7 +431,7 @@ class TestSetPolyAAfterAssignment:
     @staticmethod
     def _move(mode, marked, strand, fl_data=True, polya=_polya()):
         read = _Read([(100, 200), (300, 400)], polya)
-        inject_external_polya(read.polya_info, read.read_exons, marked)
+        add_artificial_polya_site(read.polya_info, read.read_exons, marked)
         read_assignment = SimpleNamespace(strand=strand, mapped_strand="+")
         moved = _collector(mode, fl_data).set_polya_after_assignment(read_assignment, read, UNKNOWN, marked)
         return moved, _positions(read.polya_info)
