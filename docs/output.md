@@ -66,10 +66,10 @@ use `isoquant_lib/scripts/exon_splice_site_to_group_lists.py`.
 #### RNA velocity counts
 
 When `velocity` analysis is enabled (by default in `tenX_v3`/`tenX_v2` modes and with `--barcode2cellid`,
-see [`--analysis`](cmd.md#pipeline-options)) and an annotation is given,
+see [`--analysis`](cmd.md#pipeline-options)),
 IsoQuant writes spliced/unspliced counts per cell and gene for downstream RNA velocity analysis.
-Cells are cell ids from `--barcode2cellid` (`barcode_cell` grouping) if provided, and barcodes (`barcode` grouping) otherwise;
-spots and cell types (`barcode_spot`) never get velocity output:
+
+In single-cell 10x modes barcodes are treated as cells. In other modes use `--barcode2cellid` (`barcode_cell` grouping) to set correspondance between spatial barcodes and cell ids.
 
 * `SAMPLE_ID.RNA_velocity_grouped_<strategy>` - tab-separated `cell_id`, `gene_id`, `spliced`, `unspliced`, `ambiguous`;
 * `SAMPLE_ID.RNA_velocity_grouped_<strategy>.loom` - the same counts as a velocyto-style loom file
@@ -80,8 +80,7 @@ or it retains one (an intron retention event against the isoform it matched; par
 least 50 intronic bases). A read matching only mature isoforms is **spliced**. A read that looks retained
 against one isoform and mature against another is **ambiguous**.
 
-Reads with no detected barcode, reads that could not be attributed to a gene or overlap a gene body without resembling any isoform are
-not counted.
+Reads with no detected barcode and reads that could not be attributed to a gene are not counted.
 
 
 #### Grouped counts in matrix formats
