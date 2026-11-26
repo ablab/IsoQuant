@@ -725,15 +725,27 @@ python3 isoquant_tests/github/update_defaults.py \
 1. Reads YAML config to find test name and existing baselines
 2. Locates output directory: `{output}/{branch}/{test_name}/`
 3. For each baseline section present in the YAML, loads the corresponding output file:
-   - `baselines.transcripts` ← `gffcompare/new_gtf_etalon.tsv`
+   - `baselines.transcripts` / `transcripts_td50` / `transcripts_td10` ← `gffcompare/new_gtf_etalon.tsv`
+     (one file for all three, keys prefixed `<section>.`)
    - `baselines.quantification_ref` ← `ref.quantification.tsv`
    - `baselines.quantification_novel` ← `novel.quantification.tsv`
    - `baselines.quantification_gene` ← `gene.quantification.tsv`
    - `baselines.assignment` ← `new_assignment_etalon.tsv`
-   - `baselines.performance` ← `new_performance_baseline.tsv`
+   - `baselines.performance` ← `new_performance_baseline.tsv` (`max_rss` only; `cpu_time`/`clock_time`
+     only with `--timing`, from a run on an idle machine)
    - `baselines.allinfo` ← `new_allinfo_etalon.tsv`
+   - `baselines.summary` ← `new_summary_etalon.tsv`
+   - `baselines.polya_prediction` / `tss_prediction` ← `new_{polya,tss}_prediction_etalon.tsv`
    - `baselines.barcode` ← `{run_name}.new_etalon.tsv` (at `{output}/{branch}/` level)
-4. Updates the `baselines:` section in the YAML file in-place (preserving all other config keys)
+4. Rewrites changed values in the `baselines:` block line by line; comments and the rest of the
+   file are untouched (re-dumping the YAML would rewrap long option strings and drop comments).
+   Only metrics already listed in a section are updated, so the checked set never changes implicitly.
+
+Options: `--sections a,b` limits the update to those sections, `--dry_run` prints the changes
+without writing. Several configs share one test name and output folder (e.g.
+`SIRVs.Set4.R10.yaml` and `SIRVs.Set4.R10.ubam.yaml` are both `SRIV.Set4.ONT_R10`), and
+the RESUME/GROUP SIRV R10 configs expect the same numbers as `SIRVs.Set4.R10.yaml`: when one
+of them moves, update all of them.
 
 **Workflow for updating baselines**:
 
