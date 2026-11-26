@@ -385,6 +385,15 @@ class TestUpdateYamlBaselines(unittest.TestCase):
             for k, v in data.items():
                 f.write("%s\t%.2f\n" % (k, v))
 
+    def _write_gtf_etalon(self, data: dict) -> None:
+        # run_pipeline.py writes all gffcompare tolerances to one file, keyed "<section>.<metric>"
+        self._write_tsv(os.path.join(self.pipeline_dir, "gffcompare", "new_gtf_etalon.tsv"), data)
+
+    def _update(self, config_path: str, **kwargs) -> dict:
+        update_yaml_baselines(config_path, self.run_name, os.path.join(self.test_dir, "output"), **kwargs)
+        with open(config_path) as f:
+            return yaml.safe_load(f)
+
     def test_pipeline_baselines_updated(self):
         config_path = self._write_yaml_config({
             "name": self.run_name,
@@ -392,19 +401,98 @@ class TestUpdateYamlBaselines(unittest.TestCase):
                 "transcripts": {"full_recall": 80.0, "full_precision": 90.0},
             },
         })
-        # Write new values
-        self._write_tsv(
-            os.path.join(self.pipeline_dir, "gffcompare", "new_gtf_etalon.tsv"),
-            {"full_recall": 85.0, "full_precision": 95.0},
-        )
+        self._write_gtf_etalon({"transcripts.full_recall": 85.0, "transcripts.full_precision": 95.0})
 
-        base_output_dir = os.path.join(self.test_dir, "output")
-        update_yaml_baselines(config_path, self.run_name, base_output_dir)
-
-        with open(config_path) as f:
-            updated = yaml.safe_load(f)
+        updated = self._update(config_path)
         self.assertAlmostEqual(updated["baselines"]["transcripts"]["full_recall"], 85.0)
         self.assertAlmostEqual(updated["baselines"]["transcripts"]["full_precision"], 95.0)
+
+    def test_terminal_delta_sections_split(self):
+        config_path = self._write_yaml_config({
+            "name": self.run_name,
+            "baselines": {
+                "transcripts": {"full_recall": 80.0},
+                "transcripts_td50": {"full_recall": 70.0},
+                "transcripts_td10": {"full_recall": 60.0},
+            },
+        })
+        self._write_gtf_etalon({"transcripts.full_recall": 81.0,
+                                "transcripts_td50.full_recall": 71.0,
+                                "transcripts_td10.full_recall": 61.0})
+
+        updated = self._update(config_path)["baselines"]
+        self.assertEqual(updated["transcripts"], {"full_recall": 81.0})
+        self.assertEqual(updated["transcripts_td50"], {"full_recall": 71.0})
+        self.assertEqual(updated["transcripts_td10"], {"full_recall": 61.0})
+
+    def test_only_listed_metrics_updated(self):
+        config_path = self._write_yaml_config({
+            "name": self.run_name,
+            "baselines": {"summary": {"transcript_models/known": 42.0, "assignment/unique": 100.0}},
+        })
+        # the run summary holds every metric; only those in the baseline are checked
+        self._write_tsv(os.path.join(self.pipeline_dir, "new_summary_etalon.tsv"),
+                        {"transcript_models/known": 43.0, "alignment/primary": 500.0})
+
+        updated = self._update(config_path)["baselines"]["summary"]
+        self.assertEqual(updated, {"transcript_models/known": 43.0, "assignment/unique": 100.0})
+
+    def test_performance_timing_kept_by_default(self):
+        config_path = self._write_yaml_config({
+            "name": self.run_name,
+            "baselines": {"performance": {"max_rss": 1000.0, "cpu_time": 10.0, "clock_time": 5.0}},
+        })
+        self._write_tsv(os.path.join(self.pipeline_dir, "new_performance_baseline.tsv"),
+                        {"max_rss": 1100.0, "cpu_time": 20.0, "clock_time": 8.0})
+
+        updated = self._update(config_path)["baselines"]["performance"]
+        self.assertEqual(updated, {"max_rss": 1100.0, "cpu_time": 10.0, "clock_time": 5.0})
+        updated = self._update(config_path, timing=True)["baselines"]["performance"]
+        self.assertEqual(updated, {"max_rss": 1100.0, "cpu_time": 20.0, "clock_time": 8.0})
+
+    def test_sections_filter(self):
+        config_path = self._write_yaml_config({
+            "name": self.run_name,
+            "baselines": {"transcripts": {"full_recall": 80.0}, "summary": {"transcript_models/known": 42.0}},
+        })
+        self._write_gtf_etalon({"transcripts.full_recall": 85.0})
+        self._write_tsv(os.path.join(self.pipeline_dir, "new_summary_etalon.tsv"), {"transcript_models/known": 43.0})
+
+        updated = self._update(config_path, sections={"summary"})["baselines"]
+        self.assertAlmostEqual(updated["transcripts"]["full_recall"], 80.0)
+        self.assertAlmostEqual(updated["summary"]["transcript_models/known"], 43.0)
+
+    def test_dry_run_leaves_file(self):
+        config_path = self._write_yaml_config({
+            "name": self.run_name,
+            "baselines": {"transcripts": {"full_recall": 80.0}},
+        })
+        self._write_gtf_etalon({"transcripts.full_recall": 85.0})
+        with open(config_path) as f:
+            before = f.read()
+
+        self._update(config_path, dry_run=True)
+        with open(config_path) as f:
+            self.assertEqual(f.read(), before)
+
+    def test_formatting_and_comments_preserved(self):
+        config_path = os.path.join(self.test_dir, "config.yaml")
+        long_options = "-t 8 --complete_genedb --barcode_whitelist " + "/very/long/path/" * 8 + "whitelist.tsv"
+        text = ("# a comment that a YAML re-dump would drop\n"
+                "name: %s\n"
+                "isoquant_options: '\"%s\"'\n"
+                "baselines:\n"
+                "  transcripts:\n"
+                "    full_recall: 80.0\n"
+                "    full_precision: 97.10\n") % (self.run_name, long_options)
+        with open(config_path, "w") as f:
+            f.write(text)
+        self._write_gtf_etalon({"transcripts.full_recall": 85.0, "transcripts.full_precision": 97.1})
+
+        self._update(config_path)
+        with open(config_path) as f:
+            # only the changed value differs; the unchanged 97.10 keeps its spelling
+            self.assertEqual(f.read(), text.replace("full_recall: 80.0", "full_recall: 85.0"))
 
     def test_barcode_baselines_updated(self):
         config_path = self._write_yaml_config({
@@ -436,16 +524,9 @@ class TestUpdateYamlBaselines(unittest.TestCase):
             },
         })
         # Only write transcripts output, not performance
-        self._write_tsv(
-            os.path.join(self.pipeline_dir, "gffcompare", "new_gtf_etalon.tsv"),
-            {"full_recall": 85.0},
-        )
+        self._write_gtf_etalon({"transcripts.full_recall": 85.0})
 
-        base_output_dir = os.path.join(self.test_dir, "output")
-        update_yaml_baselines(config_path, self.run_name, base_output_dir)
-
-        with open(config_path) as f:
-            updated = yaml.safe_load(f)
+        updated = self._update(config_path)
         # transcripts updated
         self.assertAlmostEqual(updated["baselines"]["transcripts"]["full_recall"], 85.0)
         # performance unchanged
@@ -460,16 +541,10 @@ class TestUpdateYamlBaselines(unittest.TestCase):
                 "transcripts": {"full_recall": 80.0},
             },
         })
-        self._write_tsv(
-            os.path.join(self.pipeline_dir, "gffcompare", "new_gtf_etalon.tsv"),
-            {"full_recall": 85.0},
-        )
+        self._write_gtf_etalon({"transcripts.full_recall": 85.0})
 
-        base_output_dir = os.path.join(self.test_dir, "output")
-        update_yaml_baselines(config_path, self.run_name, base_output_dir)
-
-        with open(config_path) as f:
-            updated = yaml.safe_load(f)
+        updated = self._update(config_path)
+        self.assertAlmostEqual(updated["baselines"]["transcripts"]["full_recall"], 85.0)
         self.assertEqual(updated["name"], self.run_name)
         self.assertEqual(updated["output"], "/some/path")
         self.assertEqual(updated["datatype"], "ont")
