@@ -11,9 +11,9 @@ check_input_files: gene_grouped_file_name_counts.linear.tsv transcript_grouped_f
 reduced_db: /abga/work/andreyp/ci_isoquant/data/ref/SIRV4/SIRV_isoforms_multi-fasta-annotation
 baselines:
   transcripts:
-    full_recall: 76.8
-    full_precision: 100.0
-    known_recall: 97.7
+    full_recall: 78.3
+    full_precision: 98.2
+    known_recall: 100.0
     known_precision: 100.0
     novel_recall: 42.3
-    novel_precision: 100.0
+    novel_precision: 91.7

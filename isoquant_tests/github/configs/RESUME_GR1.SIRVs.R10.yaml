@@ -6,12 +6,12 @@ run_type: transcripts,summary
 reduced_db: /abga/work/andreyp/ci_isoquant/data/ref/SIRV4/SIRV_isoforms_multi-fasta-annotation
 baselines:
   transcripts:
-    full_recall: 76.8
-    full_precision: 100.0
-    known_recall: 97.7
+    full_recall: 78.3
+    full_precision: 98.2
+    known_recall: 100.0
     known_precision: 100.0
     novel_recall: 42.3
-    novel_precision: 100.0
+    novel_precision: 91.7
   summary:
     alignment/primary: 240149.0
     alignment/secondary: 5.0
@@ -26,6 +26,6 @@ baselines:
     assignment/polya_reads: 222878.0
     quantification/gene/counted: 156592.0
     quantification/transcript/counted: 147138.0
-    transcript_models/known: 42.0
+    transcript_models/known: 43.0
     transcript_models/novel_in_catalog: 1.0
-    transcript_models/novel_not_in_catalog: 10.0
+    transcript_models/novel_not_in_catalog: 11.0

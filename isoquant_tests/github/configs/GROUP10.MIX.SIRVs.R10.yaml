@@ -17,9 +17,9 @@ isoquant_options: '"-t 8 --complete_genedb --force --read_group tag:RG tag:CB fi
 reduced_db: /abga/work/andreyp/ci_isoquant/data/ref/SIRV4/SIRV_isoforms_multi-fasta-annotation
 baselines:
   transcripts:
-    full_recall: 59.4
+    full_recall: 60.9
     full_precision: 100.0
-    known_recall: 95.3
+    known_recall: 97.7
     known_precision: 100.0
     novel_recall: -1.0
     novel_precision: -1.0
