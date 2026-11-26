@@ -69,7 +69,7 @@ When `velocity` analysis is enabled (by default in `tenX_v3`/`tenX_v2` modes and
 see [`--analysis`](cmd.md#pipeline-options)),
 IsoQuant writes spliced/unspliced counts per cell and gene for downstream RNA velocity analysis.
 
-In single-cell 10x modes barcodes are treated as cells. In other modes use `--barcode2cellid` (`barcode_cell` grouping) to set correspondance between spatial barcodes and cell ids.
+In single-cell 10x modes barcodes are treated as cells. In other modes use `--barcode2cellid` (`barcode_cell` grouping) to set correspondence between spatial barcodes and cell ids.
 
 * `SAMPLE_ID.RNA_velocity_grouped_<strategy>` - tab-separated `cell_id`, `gene_id`, `spliced`, `unspliced`, `ambiguous`;
 * `SAMPLE_ID.RNA_velocity_grouped_<strategy>.loom` - the same counts as a velocyto-style loom file
