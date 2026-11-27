@@ -307,7 +307,7 @@ def convert_profile_to_mtx(input_linear_counts: str, output_file_prefix: str,
                 output_file_prefix)
 
 
-def get_normalization_factors(counts, usable_reads_per_group=None):
+def get_normalization_factors(counts, usable_reads_per_group=None) -> dict:
     if not usable_reads_per_group:
         total_group_counts = defaultdict(float)
         for _, row in counts.iterrows():
@@ -317,7 +317,10 @@ def get_normalization_factors(counts, usable_reads_per_group=None):
     else:
         total_group_counts = usable_reads_per_group
 
-    return {group_id: 1000000.0 / total_group_counts[group_id] for group_id in total_group_counts.keys()}
+    return {
+        group_id: (1000000.0 / count if count > 0 else 0.0)
+        for group_id, count in total_group_counts.items()
+    }
 
 
 def load_gene_name_map(genedb):
