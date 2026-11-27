@@ -9,36 +9,36 @@ reduced_db: /abga/work/andreyp/ci_isoquant/data/ref/mouse/no_db/mouse.gencode.M2
 reference_tpm: /abga/work/andreyp/ci_isoquant/data/mouse/Mouse.ONT.R9.4.trunc.simulated.counts.tsv
 baselines:
   transcripts:
-    full_recall: 59.6
-    full_precision: 93.5
+    full_recall: 66.7
+    full_precision: 93.9
     known_recall: -1.0
     known_precision: -1.0
-    novel_recall: 59.6
-    novel_precision: 93.5
+    novel_recall: 66.7
+    novel_precision: 93.9
   transcripts_td50:
-    full_recall: 55.3
-    full_precision: 86.7
+    full_recall: 61.9
+    full_precision: 87.1
     known_recall: -1.0
     known_precision: -1.0
-    novel_recall: 55.3
-    novel_precision: 86.7
+    novel_recall: 61.9
+    novel_precision: 87.1
   transcripts_td10:
-    full_recall: 33.1
-    full_precision: 52.0
+    full_recall: 34.0
+    full_precision: 47.8
     known_recall: -1.0
     known_precision: -1.0
-    novel_recall: 33.1
-    novel_precision: 52.0
+    novel_recall: 34.0
+    novel_precision: 47.8
   quantification_novel:
-    reported_overlap: 21128.0
-    corr_overlap: 0.937
-    good_matches_overlap: 87.0
-    fair_matches_overlap: 164.0
+    reported_overlap: 23663.0
+    corr_overlap: 0.968
+    good_matches_overlap: 973.0
+    fair_matches_overlap: 2655.0
     false_reports_overlap: 0.0
     missed_overlap: 0.0
-    reported_full: 22596.0
-    corr_full: 0.1127
-    good_matches_full: 87.0
-    fair_matches_full: 164.0
-    false_reports_full: 1468.0
-    missed_full: 14424.0
+    reported_full: 25197.0
+    corr_full: 0.3316
+    good_matches_full: 973.0
+    fair_matches_full: 2655.0
+    false_reports_full: 1534.0
+    missed_full: 11889.0
